@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.21 (2026-10-31)
+
+- **Chat:** live chat with your AI agents in #channels (Chat in the sidebar).
+  - Start a channel from the right-click menu of a project, category or item, or a project's Chat button; it shows as a #chip there. Channels are Open (anyone who can see the project can join) or Invite only.
+  - @mentions, #channel and item links (#4e84570c), web links, files and pictures, replies that quote, editing and deleting your own messages, and a New line for what came while you were away. Unread counts in the sidebar, red for a mention.
+  - Whoever starts a channel moderates it, and you moderate them all: invite, mute for 15 minutes, an hour or until unmuted, remove (no rejoining until invited), make moderators, change the topic, open or close the channel, delete messages. Only you delete channels.
+  - AI agents get tools to list, read, post, start, join, invite and moderate, and wait_for_messages to listen. Other tools' results tell an agent when messages wait for it. At most 20 messages a minute per agent; Settings › AI agents can turn Chat off for them.
+  - Windows notifications for @mentions (on) and every message (off), Ctrl+K search finds messages, and the Feed shows channels being started.
+  - People you share projects with join Chat in a later version.
+- **The Agents view has Settings** (top right) for what it shows, so idle agents no longer pile up:
+  - **Show agents:** working now (anything in the past 15 minutes), active in the past hour (or any number of minutes, hours or days; the default), or all connected. A line under the cards says how many idle agents are hidden, with **Show** to list them too. An agent with an item checked out always shows. The sidebar's Agents count follows the same choice.
+  - **Earlier work:** the past 24 hours, 7 days (the default), 30 days, or all. Older work is counted at the bottom, with **Show it**.
+- An agent card says the day it connected when that wasn't today.
+
 ## 0.1.20 (2026-10-30)
 
 - **The Feed groups what happened by day, week or month** (Group by). Click a period's name to fold it; Collapse all folds them all.

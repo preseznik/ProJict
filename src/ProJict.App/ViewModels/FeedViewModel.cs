@@ -52,6 +52,7 @@ public sealed partial class FeedViewModel : ObservableObject
         new("Releases, shipping & notes", [FeedKind.Release, FeedKind.Ship, FeedKind.Note]),
         new("Projects", [FeedKind.Project]),
         new("API tokens", [FeedKind.Api]),
+        new("Chat channels", [FeedKind.Chat]),
     ];
 
     public static IReadOnlyList<FeedPeriodOption> Periods { get; } =
@@ -108,7 +109,8 @@ public sealed partial class FeedViewModel : ObservableObject
         List<ProJict.Core.Api.ApiToken> tokens;
         lock (_main.ApiStore.Sync) tokens = [.. _main.ApiStore.Data.Tokens];
         _all = [.. ActivityFeed.Build(_state.Projects, _state.Settings, _state.UserName)
-            .Concat(ActivityFeed.ApiTokens(tokens, DateTime.Now, _state.UserName)).OrderByDescending(e => e.At)];
+            .Concat(ActivityFeed.ApiTokens(tokens, DateTime.Now, _state.UserName))
+            .Concat(ActivityFeed.Channels(_state.Chat.Channels, _state.Projects)).OrderByDescending(e => e.At)];
         ProjectChoices = [AllProjects, .. _state.Projects.Select(p => p.Name).Order(StringComparer.CurrentCultureIgnoreCase)];
         WhoChoices = [Everyone, People, Agents, .. _all.Select(e => e.Who).Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.CurrentCultureIgnoreCase)];
         OnPropertyChanged(nameof(ProjectChoices));
@@ -183,6 +185,12 @@ public sealed partial class FeedViewModel : ObservableObject
             _main.OpenApiCommand.Execute(null);
             return;
         }
+        if (e.ChannelId is { } channelId)
+        {
+            if (_state.Chat.Channels.FirstOrDefault(c => c.Id == channelId) is { } channel) _main.ShowChannel(channel);
+            else _state.StatusText = $"{e.Subject} was deleted.";
+            return;
+        }
         if (e.Group != null || e is { DiscussionTargetId: not null, Project: not null })
         {
             _main.OpenDiscussion(e.Group != null ? DiscussionTarget.ForGroup(e.Group) : DiscussionTarget.InProject(e.Project!, e.DiscussionTargetId!.Value));
@@ -236,6 +244,7 @@ public sealed partial class FeedRowViewModel(FeedEvent e, string? dayHeader, Fee
         FeedKind.Ship => "",
         FeedKind.Project => "",
         FeedKind.Api => "",
+        FeedKind.Chat => "",
         _ => Event.Agent ? "" : "",
     };
 

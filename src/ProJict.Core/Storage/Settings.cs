@@ -4,7 +4,7 @@ using ProJict.Core.Model;
 namespace ProJict.Core.Storage;
 
 /// <summary>What can notify you (Settings › Notifications).</summary>
-public enum NotificationKind { Review, Comment, ShipPlan, JoinRequest, CheckOut, AnyComment, TokenExpiring, Update }
+public enum NotificationKind { Review, Comment, ShipPlan, JoinRequest, CheckOut, AnyComment, TokenExpiring, Update, ChatMention, ChatMessage }
 
 /// <summary>Which Windows notifications you want, and the projects you muted.</summary>
 public sealed class NotificationSettings
@@ -21,6 +21,10 @@ public sealed class NotificationSettings
     public bool AnyComment { get; set; }
     public bool TokenExpiring { get; set; }
     public bool Update { get; set; }
+    /// <summary>Someone @mentioned you in a chat channel.</summary>
+    public bool ChatMention { get; set; } = true;
+    /// <summary>Every new message in your chat channels.</summary>
+    public bool ChatMessage { get; set; }
     public List<Guid> MutedProjects { get; set; } = [];
 
     public bool Allows(NotificationKind kind) => kind switch
@@ -32,6 +36,8 @@ public sealed class NotificationSettings
         NotificationKind.CheckOut => CheckOut,
         NotificationKind.AnyComment => AnyComment,
         NotificationKind.TokenExpiring => TokenExpiring,
+        NotificationKind.ChatMention => ChatMention,
+        NotificationKind.ChatMessage => ChatMessage,
         _ => Update,
     };
 }
@@ -49,6 +55,8 @@ public sealed class AppSettings
     public bool CheckForUpdates { get; set; } = true;
     /// <summary>Let AI agents (MCP clients started with ProJict.exe --mcp) read and update projects.</summary>
     public bool AllowAgents { get; set; } = true;
+    /// <summary>Let AI agents read and post in Chat (Settings › AI agents).</summary>
+    public bool AgentsUseChat { get; set; } = true;
     /// <summary>How you sign comments and history entries; empty means the Windows user name.</summary>
     public string? UserName { get; set; }
     /// <summary>Ask the GitHub CLI (gh) for its sign-in, so release checks include private repositories.</summary>
@@ -68,7 +76,8 @@ public sealed class AppSettings
     public ProJict.Core.Features.ActivityGrouping FeedGrouping { get; set; }
     /// <summary>How the Agents view groups its earlier agent work.</summary>
     public ProJict.Core.Features.ActivityGrouping AgentsGrouping { get; set; }
-
+    /// <summary>Which agents the Agents view shows and how far back its earlier work goes.</summary>
+    public AgentsViewSettings AgentsView { get; set; } = new();
     public static string DefaultPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ProJict", "settings.json");
 

@@ -57,6 +57,8 @@
             </Expander.Header>
             <StackPanel Style="{StaticResource Body}">
                 <CheckBox x:Name="AllowAgents" Content="Let AI agents (Claude Code and other MCP clients) work in ProJict" />
+                <CheckBox x:Name="AgentsUseChat" Content="AI agents may use Chat (read, post and start channels)" Margin="0,4,0,0"
+                          IsEnabled="{Binding IsChecked, ElementName=AllowAgents}" ToolTip="Each agent can post at most 20 messages a minute" />
                 <TextBlock Style="{StaticResource MutedText}" Margin="2,4,0,0" TextWrapping="Wrap"
                            Text="Agents can check out and complete items, add items, comment, attach files and write notes, but never delete anything; what they finish waits for your review, and Ctrl+Z undoes their changes." />
                 <!-- Which items agents may work on, by priority; the check boxes' Tag is the Priority. -->
@@ -137,6 +139,8 @@
                     <CheckBox Content="Every new comment" Tag="AnyComment" ToolTip="Also in discussions you're not part of" />
                     <CheckBox Content="API tokens about to expire" Tag="TokenExpiring" />
                     <CheckBox Content="ProJict updates" Tag="Update" />
+                    <CheckBox Content="Chat: you're @mentioned" Tag="ChatMention" ToolTip="In a channel you can see" />
+                    <CheckBox Content="Chat: every message" Tag="ChatMessage" ToolTip="Every new message in your channels" />
                 </UniformGrid>
                 <TextBlock x:Name="MutedText" Style="{StaticResource MutedText}" Margin="2,2,0,0" TextWrapping="Wrap" />
                 <TextBlock Style="{StaticResource MutedText}" Margin="2,4,0,0" TextWrapping="Wrap"

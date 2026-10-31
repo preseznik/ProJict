@@ -4,7 +4,7 @@ using ProJict.Core.Storage;
 
 namespace ProJict.Core.Features;
 
-public enum FeedKind { Added, Done, History, Comment, Release, Note, Project, Ship, Api }
+public enum FeedKind { Added, Done, History, Comment, Release, Note, Project, Ship, Api, Chat }
 
 /// <summary>
 /// Something that happened in ProJict: who did it, what they did (<see cref="Action"/>), to what (<see cref="Subject"/>),
@@ -24,6 +24,8 @@ public sealed record FeedEvent(DateTime At, FeedKind Kind, string Who, bool Agen
     public Release? Release { get; init; }
     public ShipRequest? Ship { get; init; }
     public ApiToken? Token { get; init; }
+    /// <summary>A chat channel that was started.</summary>
+    public Guid? ChannelId { get; init; }
 
     /// <summary>Everything the Feed's search looks in.</summary>
     public string SearchText => $"{Who} {Action} {Subject} {Detail} {Project?.Name} {Category?.Name} {Group}";
@@ -99,6 +101,25 @@ public static class ActivityFeed
                 events.Add(new FeedEvent(comment.At, FeedKind.Comment, comment.By, comment.Agent, "commented on the group", group, CommentDetail(comment)) { Group = group, CommentId = comment.Id });
 
         return events.OrderByDescending(e => e.At).ToList();
+    }
+
+    /// <summary>Chat channels being started (not every message).</summary>
+    public static IEnumerable<FeedEvent> Channels(IEnumerable<ProJict.Core.Chat.ChatChannel> channels, IEnumerable<Project> projects)
+    {
+        var byId = projects.ToDictionary(p => p.Id);
+        foreach (var channel in channels)
+        {
+            var project = channel.Link != null ? byId.GetValueOrDefault(channel.Link.ProjectId) : null;
+            var item = channel.Link?.ItemId is { } i ? project?.Find(i)?.Item : null;
+            yield return new FeedEvent(channel.CreatedAt, FeedKind.Chat, channel.CreatedBy, channel.CreatedByAgent, "started the chat channel", "#" + channel.Name,
+                channel.Topic ?? (item != null ? $"About “{item.DisplayText()}”" : null))
+            {
+                Project = project,
+                Category = channel.Link?.CategoryId is { } c ? project?.Categories.FirstOrDefault(x => x.Id == c) : null,
+                Item = item,
+                ChannelId = channel.Id,
+            };
+        }
     }
 
     /// <summary>API tokens you made or renewed, and the ones about to expire (a week ahead) or expired.</summary>

@@ -93,7 +93,7 @@ public sealed record ActivityStats(
     private static readonly (FeedKind Kind, string Label)[] KindNames =
     [
         (FeedKind.Added, "Added"), (FeedKind.Done, "Finished"), (FeedKind.Comment, "Comments"), (FeedKind.History, "Check-outs & reviews"),
-        (FeedKind.Release, "Releases"), (FeedKind.Ship, "Shipping"), (FeedKind.Note, "Notes"), (FeedKind.Project, "Projects"), (FeedKind.Api, "API tokens"),
+        (FeedKind.Release, "Releases"), (FeedKind.Ship, "Shipping"), (FeedKind.Note, "Notes"), (FeedKind.Project, "Projects"), (FeedKind.Api, "API tokens"), (FeedKind.Chat, "Chat channels"),
     ];
 
     public static ActivityStats Of(IReadOnlyCollection<FeedEvent> events, DateTime start, ActivityGrouping grouping, CultureInfo culture, int top = 5)

@@ -119,7 +119,20 @@ public sealed partial class ItemRowViewModel : ObservableObject
         _ => "New comments",
     };
     /// <summary>The second line shows when there is something on it.</summary>
-    public bool HasDetails => Item.Activity is { Count: > 0 } || CommentCount > 0;
+    public bool HasDetails => Item.Activity is { Count: > 0 } || CommentCount > 0 || HasChannels;
+
+    /// <summary>Chat channels about this item.</summary>
+    public List<ChannelChip> Channels => Owner.Main.ChannelChips(Owner.Project.Id, itemId: Item.Id);
+    public bool HasChannels => Owner.Main.ChannelsFor(Owner.Project.Id, itemId: Item.Id).Count > 0;
+
+    public void RefreshChannels()
+    {
+        OnPropertyChanged(nameof(Channels));
+        OnPropertyChanged(nameof(HasChannels));
+        OnPropertyChanged(nameof(HasDetails));
+    }
+
+    [RelayCommand] private void StartChannel() => Owner.Main.StartChannel(Owner.Project, Category.Model, Item);
 
     private string ContributorToolTip(string name)
     {

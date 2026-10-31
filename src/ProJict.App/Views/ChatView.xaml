@@ -1,0 +1,394 @@
+<UserControl x:Class="ProJict.App.Views.ChatView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:ProJict.App.ViewModels"
+             xmlns:local="clr-namespace:ProJict.App.Views">
+    <UserControl.Resources>
+        <ItemsPanelTemplate x:Key="Wrap">
+            <WrapPanel />
+        </ItemsPanelTemplate>
+
+        <!-- A channel in the list: bold with a count while messages wait for you, red when one mentions you. -->
+        <DataTemplate x:Key="ChannelRow" DataType="{x:Type vm:ChannelRowViewModel}">
+            <Border x:Name="Row" Padding="8,5" Margin="0,0,0,1" CornerRadius="4" Background="Transparent" Cursor="Hand"
+                    ToolTip="{Binding ToolTip}" AutomationProperties.Name="{Binding Name}">
+                <Border.InputBindings>
+                    <MouseBinding MouseAction="LeftClick" Command="{Binding DataContext.OpenCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                  CommandParameter="{Binding}" />
+                </Border.InputBindings>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock x:Name="Name" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE72E;" FontSize="10" Margin="6,2,0,0" Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                       ToolTip="Invite only" Visibility="{Binding IsInviteOnly, Converter={StaticResource BoolToVis}}" />
+                        </StackPanel>
+                        <TextBlock Text="{Binding LinkText}" Style="{StaticResource MutedText}" FontSize="11" TextTrimming="CharacterEllipsis"
+                                   Visibility="{Binding LinkText, Converter={StaticResource EmptyToVis}}" />
+                    </StackPanel>
+                    <Border x:Name="Count" Grid.Column="1" CornerRadius="8" Padding="6,0" MinWidth="18" VerticalAlignment="Center" Margin="6,0,0,0"
+                            Background="{DynamicResource SubtleFillColorTertiaryBrush}" Visibility="{Binding HasUnread, Converter={StaticResource BoolToVis}}">
+                        <TextBlock x:Name="CountText" Text="{Binding Unread}" FontSize="11" HorizontalAlignment="Center" />
+                    </Border>
+                </Grid>
+            </Border>
+            <DataTemplate.Triggers>
+                <Trigger SourceName="Row" Property="IsMouseOver" Value="True">
+                    <Setter TargetName="Row" Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}" />
+                </Trigger>
+                <DataTrigger Binding="{Binding HasUnread}" Value="True">
+                    <Setter TargetName="Name" Property="FontWeight" Value="SemiBold" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding HasMention}" Value="True">
+                    <Setter TargetName="Count" Property="Background" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                    <Setter TargetName="CountText" Property="Foreground" Value="White" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                    <Setter TargetName="Row" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
+        <DataTemplate x:Key="ChatFile" DataType="{x:Type vm:AttachmentViewModel}">
+            <Button Style="{StaticResource SubtleButton}" Padding="0" Margin="0,0,6,4" Command="{Binding OpenCommand}"
+                    ToolTip="{Binding ShortToolTip}" AutomationProperties.Name="{Binding FileName}">
+                <Border Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                        BorderThickness="1" CornerRadius="4" Padding="6,3">
+                    <Grid>
+                        <Image Source="{Binding Thumbnail}" MaxHeight="160" MaxWidth="280" Stretch="Uniform" Margin="-4,-1"
+                               Visibility="{Binding ShowsThumbnail, Converter={StaticResource BoolToVis}}" />
+                        <StackPanel Orientation="Horizontal" Visibility="{Binding ShowsThumbnail, Converter={StaticResource InvBoolToVis}}">
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE8A5;" FontSize="12" Margin="0,0,6,0" />
+                            <TextBlock Text="{Binding FileName}" FontSize="12" MaxWidth="200" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding SizeText}" Style="{StaticResource MutedText}" FontSize="11" Margin="6,0,0,0" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </Button>
+        </DataTemplate>
+
+        <DataTemplate x:Key="PendingFile" DataType="{x:Type vm:PendingFile}">
+            <Border Background="{DynamicResource SubtleFillColorSecondaryBrush}" CornerRadius="4" Padding="6,2,2,2" Margin="0,4,6,0">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Style="{StaticResource Icon}" Text="&#xE723;" FontSize="11" Margin="0,0,5,0" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding Name}" FontSize="12" MaxWidth="170" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding SizeText}" Style="{StaticResource MutedText}" FontSize="11" Margin="5,0,0,0" VerticalAlignment="Center" />
+                    <Button Style="{StaticResource SubtleIconButton}" Content="&#xE711;" FontSize="9" Padding="4" Margin="2,0,0,0" Command="{Binding RemoveCommand}"
+                            ToolTip="Leave this file out" AutomationProperties.Name="Leave out" />
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+
+        <!--
+            A message: the day above the first of a day, a "New" line above the first you hadn't read, the badge and name
+            above a run of messages by the same person, the message it answers, its text and files. Lines from ProJict
+            ("Codex joined") show small. Reply, Edit, Delete and Copy appear on hover.
+        -->
+        <DataTemplate x:Key="ChatMessage" DataType="{x:Type vm:ChatMessageViewModel}">
+            <StackPanel>
+                <Grid Margin="0,14,0,6" Visibility="{Binding DayHeader, Converter={StaticResource EmptyToVis}}">
+                    <Border Height="1" Background="{DynamicResource DividerStrokeColorDefaultBrush}" VerticalAlignment="Center" />
+                    <Border HorizontalAlignment="Center" Padding="10,0" Background="{DynamicResource SolidBackgroundFillColorBaseBrush}">
+                        <TextBlock Text="{Binding DayHeader}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                    </Border>
+                </Grid>
+                <Grid Margin="0,6,0,4" Visibility="{Binding IsFirstUnread, Converter={StaticResource BoolToVis}}">
+                    <Border Height="1" Background="{DynamicResource SystemFillColorCriticalBrush}" VerticalAlignment="Center" />
+                    <Border HorizontalAlignment="Right" Padding="6,0" Background="{DynamicResource SolidBackgroundFillColorBaseBrush}">
+                        <TextBlock Text="New" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource SystemFillColorCriticalBrush}" />
+                    </Border>
+                </Grid>
+                <TextBlock Text="{Binding NoticeText}" ToolTip="{Binding WhenToolTip}" Style="{StaticResource MutedText}" FontSize="12" FontStyle="Italic" Margin="46,3,0,3"
+                           TextWrapping="Wrap" Visibility="{Binding IsNotice, Converter={StaticResource BoolToVis}}" />
+                <Border x:Name="Body" CornerRadius="6" Padding="6,2,6,2" Background="Transparent" Visibility="{Binding IsNotice, Converter={StaticResource InvBoolToVis}}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="40" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Border x:Name="Badge" Width="30" Height="30" CornerRadius="15" Background="{Binding Badge.Background}" VerticalAlignment="Top" HorizontalAlignment="Left"
+                                Margin="0,4,0,0">
+                            <TextBlock Text="{Binding Badge.Initials}" Foreground="White" FontWeight="SemiBold" FontSize="11.5" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <TextBlock x:Name="SideTime" Text="{Binding Time}" ToolTip="{Binding WhenToolTip}" FontSize="10.5" Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                   Margin="0,3,0,0" Visibility="Collapsed" />
+                        <StackPanel Grid.Column="1">
+                            <TextBlock x:Name="Header" Margin="0,2,0,1" ToolTip="{Binding WhenToolTip}">
+                                <Run x:Name="ByRun" Text="{Binding By, Mode=OneWay}" FontWeight="SemiBold" /><Run Text="  " /><Run Text="{Binding Time, Mode=OneWay}" FontSize="11" Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                            </TextBlock>
+                            <Button Style="{StaticResource SubtleButton}" HorizontalAlignment="Left" Padding="0" Margin="0,1,0,3" Command="{Binding ShowRepliedCommand}"
+                                    ToolTip="Show the message it answers" Visibility="{Binding HasReply, Converter={StaticResource BoolToVis}}">
+                                <Border BorderThickness="2,0,0,0" BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}" Padding="8,1,4,1">
+                                    <TextBlock FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis">
+                                        <Run Text="{Binding ReplyBy, Mode=OneWay}" FontWeight="SemiBold" /><Run Text=": " /><Run Text="{Binding ReplySnippet, Mode=OneWay}" />
+                                    </TextBlock>
+                                </Border>
+                            </Button>
+                            <local:ChatTextBlock x:Name="Text" Segments="{Binding Segments}" TextWrapping="Wrap" Margin="0,0,0,2" />
+                            <TextBlock Text="{Binding EditedText}" FontSize="11" Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                       Visibility="{Binding EditedText, Converter={StaticResource EmptyToVis}}" />
+                            <ItemsControl ItemsSource="{Binding Attachments}" ItemTemplate="{StaticResource ChatFile}" ItemsPanel="{StaticResource Wrap}"
+                                          Focusable="False" Margin="0,4,0,0" Visibility="{Binding HasAttachments, Converter={StaticResource BoolToVis}}" />
+                        </StackPanel>
+                        <StackPanel x:Name="Actions" Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Top" Opacity="0">
+                            <Button Style="{StaticResource SubtleIconButton}" FontSize="12" Padding="5,3" Content="&#xE97A;" ToolTip="Reply" AutomationProperties.Name="Reply"
+                                    Command="{Binding ReplyCommand}" />
+                            <Button Style="{StaticResource SubtleIconButton}" FontSize="12" Padding="5,3" Content="&#xE70F;" ToolTip="Edit (or Up in an empty box)" AutomationProperties.Name="Edit"
+                                    Command="{Binding EditCommand}" Visibility="{Binding CanEdit, Converter={StaticResource BoolToVis}}" />
+                            <Button Style="{StaticResource SubtleIconButton}" FontSize="12" Padding="5,3" Content="&#xE8C8;" ToolTip="Copy the message" AutomationProperties.Name="Copy"
+                                    Command="{Binding CopyCommand}" />
+                            <Button Style="{StaticResource SubtleIconButton}" FontSize="12" Padding="5,3" Content="&#xE74D;" ToolTip="Delete" AutomationProperties.Name="Delete message"
+                                    Command="{Binding DeleteCommand}" Visibility="{Binding CanDelete, Converter={StaticResource BoolToVis}}" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </StackPanel>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding ShowHeader}" Value="False">
+                    <Setter TargetName="Badge" Property="Visibility" Value="Collapsed" />
+                    <Setter TargetName="Header" Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+                <Trigger SourceName="Body" Property="IsMouseOver" Value="True">
+                    <Setter TargetName="Actions" Property="Opacity" Value="1" />
+                    <Setter TargetName="Body" Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}" />
+                </Trigger>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding ShowHeader}" Value="False" />
+                        <Condition Binding="{Binding IsMouseOver, ElementName=Body}" Value="True" />
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="SideTime" Property="Visibility" Value="Visible" />
+                </MultiDataTrigger>
+                <DataTrigger Binding="{Binding IsAgent}" Value="True">
+                    <Setter TargetName="ByRun" Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding MentionsMe}" Value="True">
+                    <Setter TargetName="Body" Property="Background" Value="{DynamicResource SystemFillColorCautionBackgroundBrush}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsHighlighted}" Value="True">
+                    <Setter TargetName="Body" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsDeleted}" Value="True">
+                    <Setter TargetName="Text" Property="FontStyle" Value="Italic" />
+                    <Setter TargetName="Text" Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
+        <!-- A member: badge, name, role, muted; moderators get a ⋯ menu (mute, remove, moderator). -->
+        <DataTemplate x:Key="Member" DataType="{x:Type vm:ChatMemberViewModel}">
+            <DockPanel Margin="0,0,0,8">
+                <Button DockPanel.Dock="Right" Style="{StaticResource SubtleIconButton}" Content="&#xE712;" FontSize="12" Padding="5,3" VerticalAlignment="Center"
+                        ToolTip="Mute, remove or make moderator" AutomationProperties.Name="Moderate" Click="MemberMore_Click"
+                        Visibility="{Binding CanModerate, Converter={StaticResource BoolToVis}}" />
+                <Border DockPanel.Dock="Left" Width="26" Height="26" CornerRadius="13" Background="{Binding Badge.Background}" Margin="0,0,10,0" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Badge.Initials}" Foreground="White" FontWeight="SemiBold" FontSize="10.5" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="{Binding RoleText}" Style="{StaticResource MutedText}" FontSize="11" Visibility="{Binding RoleText, Converter={StaticResource EmptyToVis}}" />
+                    <TextBlock Text="{Binding MutedText}" FontSize="11" Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                               Visibility="{Binding MutedText, Converter={StaticResource EmptyToVis}}" />
+                </StackPanel>
+            </DockPanel>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="250" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+
+        <!-- Channels -->
+        <Border BorderThickness="0,0,1,0" BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}">
+            <DockPanel Margin="16,20,12,12">
+                <DockPanel DockPanel.Dock="Top">
+                    <Button x:Name="NewChannelButton" DockPanel.Dock="Right" Style="{StaticResource SubtleIconButton}" Content="&#xE710;" VerticalAlignment="Center"
+                            Command="{Binding NewChannelCommand}" ToolTip="Start a channel" AutomationProperties.Name="Start a channel" />
+                    <TextBlock Text="Chat" FontSize="28" FontWeight="SemiBold" />
+                </DockPanel>
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="-4,12,-4,0">
+                    <StackPanel Margin="4,0">
+                        <TextBlock Text="No channels yet. Start one with + above, or from the right-click menu of a project, category or item."
+                                   Style="{StaticResource MutedText}" TextWrapping="Wrap" Visibility="{Binding HasNoChannels, Converter={StaticResource BoolToVis}}" />
+                        <ItemsControl x:Name="YourChannelList" ItemsSource="{Binding YourChannels}" ItemTemplate="{StaticResource ChannelRow}" Focusable="False" />
+                        <TextBlock Text="Other channels" Style="{StaticResource MutedText}" FontSize="12" Margin="8,14,0,4"
+                                   Visibility="{Binding HasOtherChannels, Converter={StaticResource BoolToVis}}" ToolTip="Channels you're not in" />
+                        <ItemsControl x:Name="OtherChannelList" ItemsSource="{Binding OtherChannels}" ItemTemplate="{StaticResource ChannelRow}" Focusable="False" />
+                    </StackPanel>
+                </ScrollViewer>
+            </DockPanel>
+        </Border>
+
+        <!-- Nothing open -->
+        <StackPanel Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="420"
+                    Visibility="{Binding ShowEmptyPane, Converter={StaticResource BoolToVis}}">
+            <TextBlock Text="Live chat with your AI agents" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center" />
+            <TextBlock Style="{StaticResource MutedText}" TextWrapping="Wrap" TextAlignment="Center" Margin="0,6,0,12"
+                       Text="Start a #channel about a project, category or item, or about anything. Agents connected to ProJict can read, post and listen in it." />
+            <Button Style="{StaticResource AccentButtonStyle}" Content="Start a channel" HorizontalAlignment="Center" Command="{Binding NewChannelCommand}" />
+        </StackPanel>
+
+        <!-- Starting a channel -->
+        <ScrollViewer x:Name="NewChannelPane" Grid.Column="1" VerticalScrollBarVisibility="Auto" Visibility="{Binding IsCreating, Converter={StaticResource BoolToVis}}">
+            <StackPanel Margin="28,20,28,20" MaxWidth="560" HorizontalAlignment="Left">
+                <TextBlock Text="Start a channel" FontSize="22" FontWeight="SemiBold" />
+                <TextBlock Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,4,0,0"
+                           Text="Live chat with AI agents. You moderate every channel; whoever starts one moderates it too." />
+                <TextBlock Text="Name" FontWeight="SemiBold" Margin="0,18,0,4" />
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Left" Text="#" FontSize="16" VerticalAlignment="Center" Margin="0,0,6,0" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    <TextBox x:Name="NewNameBox" Text="{Binding NewName, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Channel name" />
+                </DockPanel>
+                <TextBlock x:Name="NewNameProblem" Text="{Binding NewNameProblem}" FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap"
+                           Foreground="{DynamicResource SystemFillColorCriticalBrush}" Visibility="{Binding NewNameProblem, Converter={StaticResource EmptyToVis}}" />
+                <TextBlock Text="Topic" FontWeight="SemiBold" Margin="0,14,0,4" />
+                <TextBox Text="{Binding NewTopic, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Topic" />
+                <StackPanel Margin="0,14,0,0" Visibility="{Binding HasNewLink, Converter={StaticResource BoolToVis}}">
+                    <TextBlock Text="About" FontWeight="SemiBold" Margin="0,0,0,4" />
+                    <DockPanel>
+                        <Button DockPanel.Dock="Right" Style="{StaticResource SubtleButton}" Content="Unlink" Command="{Binding UnlinkCommand}"
+                                ToolTip="A channel about nothing in particular" />
+                        <TextBlock x:Name="NewLinkText" Text="{Binding NewLinkText}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                    </DockPanel>
+                    <TextBlock Style="{StaticResource MutedText}" FontSize="12" Margin="0,2,0,0" TextWrapping="Wrap"
+                               Text="It shows as a #chip there, and agents find it from there." />
+                </StackPanel>
+                <TextBlock Text="Who can join" FontWeight="SemiBold" Margin="0,14,0,4" />
+                <RadioButton x:Name="NewOpenRadio" GroupName="NewAccess" IsChecked="{Binding NewOpen}" Content="Open: anyone who can see its project can read and join" />
+                <RadioButton x:Name="NewInviteRadio" GroupName="NewAccess" IsChecked="{Binding NewInviteOnly}" Content="Invite only: just you and those invited" Margin="0,4,0,0" />
+                <StackPanel Orientation="Horizontal" Margin="0,20,0,0">
+                    <Button x:Name="CreateButton" Style="{StaticResource AccentButtonStyle}" Content="Start channel" Command="{Binding CreateChannelCommand}" />
+                    <Button Content="Cancel" Margin="8,0,0,0" Command="{Binding CancelNewChannelCommand}" />
+                </StackPanel>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- The open channel -->
+        <DockPanel x:Name="ChannelPane" Grid.Column="1" Margin="20,16,16,12" Visibility="{Binding ShowChannelPane, Converter={StaticResource BoolToVis}}">
+            <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">
+                    <Button x:Name="JoinButton" Style="{StaticResource AccentButtonStyle}" Content="Join" Command="{Binding JoinCommand}" Margin="0,0,8,0"
+                            ToolTip="Join to see what's new here and be notified" Visibility="{Binding IsMember, Converter={StaticResource InvBoolToVis}}" />
+                    <ToggleButton x:Name="MembersToggle" Style="{StaticResource SubtleToggle}" IsChecked="{Binding ShowMembers}" ToolTip="Show or hide the members"
+                                  AutomationProperties.Name="Members">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE716;" FontSize="13" Margin="0,1,6,0" />
+                            <TextBlock Text="{Binding MembersText}" />
+                        </StackPanel>
+                    </ToggleButton>
+                    <Button Style="{StaticResource SubtleIconButton}" Content="&#xE712;" Margin="4,0,0,0" ToolTip="Leave, open or close the channel, delete it"
+                            AutomationProperties.Name="Channel menu" Click="ChannelMore_Click" />
+                </StackPanel>
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock x:Name="ChannelTitle" Text="{Binding Title}" FontSize="22" FontWeight="SemiBold" />
+                        <Border Style="{StaticResource TagChip}" Background="{DynamicResource SubtleFillColorSecondaryBrush}" Margin="10,0,0,0" VerticalAlignment="Center"
+                                ToolTip="{Binding AccessToolTip}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Style="{StaticResource Icon}" Text="&#xE72E;" FontSize="10" Margin="0,1,4,0" Visibility="{Binding IsInviteOnly, Converter={StaticResource BoolToVis}}" />
+                                <TextBlock Text="{Binding AccessText}" FontSize="11" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                    <TextBox x:Name="TopicBox" Style="{StaticResource HoverHintTextBox}" Tag="topic…" Margin="-2,2,0,0" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                             Text="{Binding TopicText, UpdateSourceTrigger=LostFocus}" IsReadOnly="{Binding IsModerator, Converter={StaticResource InvBool}}"
+                             AutomationProperties.Name="Topic" />
+                    <TextBlock FontSize="12" Margin="0,2,0,0" Foreground="{DynamicResource TextFillColorTertiaryBrush}">
+                        <Hyperlink x:Name="LinkHyperlink" Command="{Binding OpenLinkCommand}" ToolTip="Show it on its board"><Run Text="{Binding LinkText, Mode=OneWay}" /></Hyperlink><Run Text="{Binding LinkSeparator, Mode=OneWay}" /><Run Text="{Binding StartedText, Mode=OneWay}" />
+                    </TextBlock>
+                </StackPanel>
+            </DockPanel>
+
+            <!-- Writing -->
+            <StackPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
+                <Border CornerRadius="6" Padding="10,5" Margin="0,0,0,4" Background="{DynamicResource SubtleFillColorSecondaryBrush}"
+                        Visibility="{Binding IsReplying, Converter={StaticResource BoolToVis}}">
+                    <DockPanel>
+                        <Button DockPanel.Dock="Right" Style="{StaticResource SubtleIconButton}" Content="&#xE711;" FontSize="10" Padding="5,3" Command="{Binding CancelReplyCommand}"
+                                ToolTip="Don't reply (Esc)" AutomationProperties.Name="Cancel reply" />
+                        <TextBlock FontSize="12" TextTrimming="CharacterEllipsis" VerticalAlignment="Center">
+                            <Run Text="Replying to " /><Run Text="{Binding ReplyTo.By, Mode=OneWay}" FontWeight="SemiBold" /><Run Text=": " /><Run Text="{Binding ReplyTo.Model.Text, Mode=OneWay}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                        </TextBlock>
+                    </DockPanel>
+                </Border>
+                <Border CornerRadius="6" Padding="10,5" Margin="0,0,0,4" Background="{DynamicResource SubtleFillColorSecondaryBrush}"
+                        Visibility="{Binding IsEditing, Converter={StaticResource BoolToVis}}">
+                    <DockPanel>
+                        <Button DockPanel.Dock="Right" Style="{StaticResource SubtleIconButton}" Content="&#xE711;" FontSize="10" Padding="5,3" Command="{Binding CancelReplyCommand}"
+                                ToolTip="Don't change it (Esc)" AutomationProperties.Name="Cancel edit" />
+                        <TextBlock Text="Editing your message" FontSize="12" VerticalAlignment="Center" />
+                    </DockPanel>
+                </Border>
+                <TextBlock x:Name="ComposerNote" Text="{Binding ComposerNote}" Style="{StaticResource MutedText}" Margin="2,0,0,6"
+                           Visibility="{Binding ComposerNote, Converter={StaticResource EmptyToVis}}" />
+                <Grid IsEnabled="{Binding CanWrite}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="DraftBox" Text="{Binding Draft, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="40" MaxHeight="180"
+                             VerticalScrollBarVisibility="Auto" AutomationProperties.Name="Message" PreviewKeyDown="DraftBox_PreviewKeyDown"
+                             AllowDrop="True" PreviewDragOver="Draft_PreviewDragOver" PreviewDrop="Draft_PreviewDrop" />
+                    <Button Grid.Column="1" Style="{StaticResource SubtleIconButton}" Content="&#xE723;" Margin="6,0,0,0" VerticalAlignment="Bottom"
+                            Command="{Binding AttachFilesCommand}" ToolTip="Attach files (or paste or drop them in the box)" AutomationProperties.Name="Attach files" />
+                    <Button x:Name="SendButton" Grid.Column="2" Style="{StaticResource AccentButtonStyle}" Content="Send" Margin="6,0,0,0" VerticalAlignment="Bottom"
+                            Command="{Binding SendCommand}" ToolTip="Enter (Shift+Enter for a new line)" />
+                </Grid>
+                <ItemsControl ItemsSource="{Binding Pending}" ItemTemplate="{StaticResource PendingFile}" ItemsPanel="{StaticResource Wrap}" Focusable="False"
+                              Visibility="{Binding HasPending, Converter={StaticResource BoolToVis}}" />
+                <TextBlock Style="{StaticResource MutedText}" FontSize="11.5" Margin="2,5,0,0" TextWrapping="Wrap"
+                           Text="Enter sends, Shift+Enter starts a new line, Up edits your last message. @name mentions someone, #name links a channel, # and an item's id (#4e84570c) links the item." />
+            </StackPanel>
+
+            <!-- Messages -->
+            <ScrollViewer x:Name="MessageScroller" VerticalScrollBarVisibility="Auto" ScrollChanged="MessageScroller_ScrollChanged">
+                <StackPanel Margin="0,0,6,6">
+                    <Button Content="Show earlier messages" HorizontalAlignment="Center" Margin="0,4,0,8" Command="{Binding ShowEarlierCommand}"
+                            Visibility="{Binding HasEarlier, Converter={StaticResource BoolToVis}}" />
+                    <ItemsControl x:Name="MessageList" ItemsSource="{Binding Messages}" ItemTemplate="{StaticResource ChatMessage}" Focusable="False" />
+                </StackPanel>
+            </ScrollViewer>
+        </DockPanel>
+
+        <!-- Members -->
+        <Border x:Name="MembersPane" Grid.Column="2" Width="250" BorderThickness="1,0,0,0" BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                    <Style.Triggers>
+                        <MultiDataTrigger>
+                            <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding ShowMembers}" Value="True" />
+                                <Condition Binding="{Binding ShowChannelPane}" Value="True" />
+                            </MultiDataTrigger.Conditions>
+                            <Setter Property="Visibility" Value="Visible" />
+                        </MultiDataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+            <DockPanel Margin="14,22,12,12">
+                <TextBlock DockPanel.Dock="Top" Text="Members" Style="{StaticResource SectionTitle}" Margin="0,0,0,10" />
+                <StackPanel DockPanel.Dock="Bottom" Margin="0,10,0,0" Visibility="{Binding CanInvite, Converter={StaticResource BoolToVis}}">
+                    <TextBlock Text="Invite an agent or person" Style="{StaticResource MutedText}" FontSize="12" Margin="0,0,0,4" />
+                    <DockPanel>
+                        <Button DockPanel.Dock="Right" Content="Invite" Margin="6,0,0,0" Command="{Binding InviteCommand}" />
+                        <ComboBox x:Name="InviteBox" IsEditable="True" ItemsSource="{Binding InviteChoices}" Text="{Binding InviteName, UpdateSourceTrigger=PropertyChanged}"
+                                  AutomationProperties.Name="Who to invite" />
+                    </DockPanel>
+                </StackPanel>
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <ItemsControl x:Name="MemberList" ItemsSource="{Binding Members}" ItemTemplate="{StaticResource Member}" Focusable="False" />
+                </ScrollViewer>
+            </DockPanel>
+        </Border>
+    </Grid>
+</UserControl>

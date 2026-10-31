@@ -12,11 +12,12 @@ public partial class SearchWindow : Window
     private readonly AppState _state;
     private readonly MainViewModel _main;
 
-    public sealed record ResultRow(SearchHit Hit)
+    /// <summary>An item, note, or chat message that matches.</summary>
+    public sealed record ResultRow(SearchHit? Hit, ProJict.Core.Chat.ChatHit? Chat = null)
     {
-        public string Snippet => Hit.Snippet;
-        public string Location => Hit.Location;
-        public string StateText => Hit.Item switch
+        public string Snippet => Hit?.Snippet ?? Chat!.Snippet;
+        public string Location => Hit?.Location ?? $"Chat › #{Chat!.Channel.Name} › {Chat.Message.By}, {Chat.Message.At:d MMM HH:mm}";
+        public string StateText => Hit?.Item switch
         {
             null => "",
             { IsDone: true } => " · done",
@@ -37,9 +38,11 @@ public partial class SearchWindow : Window
     {
         QueryHint.Visibility = Query.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
         var hits = GlobalSearch.Search(_state.Projects, Query.Text, 150);
-        Results.ItemsSource = hits.Select(h => new ResultRow(h)).ToList();
-        Count.Text = Query.Text.Trim().Length == 0 ? "" : hits.Count == 150 ? "150+ results" : $"{hits.Count} result(s)";
-        if (hits.Count > 0) Results.SelectedIndex = 0;
+        var chat = ProJict.Core.Chat.ChatSearch.Search(_state.Chat.Channels, Query.Text, 50);
+        var rows = hits.Select(h => new ResultRow(h)).Concat(chat.Select(c => new ResultRow(null, c))).ToList();
+        Results.ItemsSource = rows;
+        Count.Text = Query.Text.Trim().Length == 0 ? "" : hits.Count == 150 ? "150+ results" : $"{rows.Count} result(s)";
+        if (rows.Count > 0) Results.SelectedIndex = 0;
     }
 
     private void Query_PreviewKeyDown(object sender, KeyEventArgs e)
@@ -83,6 +86,7 @@ public partial class SearchWindow : Window
         if (Results.SelectedItem is not ResultRow row) return;
         Close();
         Owner?.Activate();
-        _main.Navigate(row.Hit);
+        if (row.Hit != null) _main.Navigate(row.Hit);
+        else _main.ShowChannel(row.Chat!.Channel, row.Chat.Message.Id);
     }
 }

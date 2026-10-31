@@ -169,6 +169,8 @@
                                     </StackPanel>
                                 </Border>
                             </Button>
+                            <ItemsControl DockPanel.Dock="Left" ItemsSource="{Binding Channels}" ItemTemplate="{StaticResource ChannelChipTemplate}" ItemsPanel="{StaticResource HorizontalPanel}"
+                                          Focusable="False" Margin="0,0,2,0" Visibility="{Binding HasChannels, Converter={StaticResource BoolToVis}}" />
                             <TextBlock Text="{Binding ActivityText}" ToolTip="{Binding ActivityToolTip}" Style="{StaticResource MutedText}" FontSize="11.5"
                                        TextTrimming="CharacterEllipsis" Margin="2,0,0,0" Visibility="{Binding ActivityText, Converter={StaticResource EmptyToVis}}" />
                         </DockPanel>
@@ -239,6 +241,8 @@
                         <TextBlock Text="{Binding CountsText}" Style="{StaticResource MutedText}" VerticalAlignment="Center" />
                     </StackPanel>
                     <StackPanel Grid.Column="5" Orientation="Horizontal">
+                        <ItemsControl ItemsSource="{Binding Channels}" ItemTemplate="{StaticResource ChannelChipTemplate}" ItemsPanel="{StaticResource HorizontalPanel}"
+                                      Focusable="False" VerticalAlignment="Center" Visibility="{Binding HasChannels, Converter={StaticResource BoolToVis}}" />
                         <Button Style="{StaticResource SubtleButton}" Command="{Binding OpenDiscussionCommand}" ToolTip="{Binding DiscussionToolTip}" AutomationProperties.Name="Discussion">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Style="{StaticResource Icon}" Text="&#xE8BD;" />
@@ -352,6 +356,8 @@
                     <Ellipse Width="8" Height="8" Fill="{Binding Status, Converter={StaticResource StatusToBrush}}" Margin="0,0,8,0" />
                     <ComboBox ItemsSource="{x:Static vm:ProjectViewModel.Statuses}" SelectedItem="{Binding Status}" Width="130" ToolTip="Status" IsEnabled="{Binding IsOwnProject}" />
                     <ComboBox ItemsSource="{Binding Groups}" Text="{Binding Group, UpdateSourceTrigger=LostFocus}" IsEditable="True" Width="150" Margin="8,0,0,0" ToolTip="Group" IsEnabled="{Binding IsOwnProject}" />
+                    <ItemsControl x:Name="ProjectChannels" ItemsSource="{Binding Channels}" ItemTemplate="{StaticResource ChannelChipTemplate}" ItemsPanel="{StaticResource HorizontalPanel}"
+                                  Focusable="False" Margin="10,0,0,0" VerticalAlignment="Center" Visibility="{Binding HasChannels, Converter={StaticResource BoolToVis}}" />
                 </StackPanel>
                 <TextBlock Margin="2,6,0,0" Style="{StaticResource MutedText}" TextWrapping="Wrap"
                            Text="Ideas and loose notes. Promote an item to a project from its right-click menu."
@@ -369,6 +375,9 @@
                 </Button>
                 <Button Style="{StaticResource SubtleButton}" AutomationProperties.Name="GitHub" Command="{Binding OpenGitHubCommand}" ToolTip="Open the GitHub page" Visibility="{Binding IsNotInbox, Converter={StaticResource BoolToVis}}">
                     <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource Icon}" Text="&#xE774;" /><TextBlock Text="GitHub" Margin="6,0,0,0" /></StackPanel>
+                </Button>
+                <Button Style="{StaticResource SubtleButton}" AutomationProperties.Name="Chat" Command="{Binding OpenChatCommand}" ToolTip="Live chat about this project with AI agents: its #channel, or start one" Visibility="{Binding IsOwnProject, Converter={StaticResource BoolToVis}}">
+                    <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource Icon}" Text="&#xE8F2;" /><TextBlock Text="Chat" Margin="6,0,0,0" /></StackPanel>
                 </Button>
                 <Button Style="{StaticResource SubtleButton}" AutomationProperties.Name="Copy prompt" Command="{Binding CopyPromptCommand}"
                         ToolTip="Copy selected items (Ctrl+Space / Ctrl+click the grip) — or all open items — as a prompt for Claude/Codex (Ctrl+Shift+C)">

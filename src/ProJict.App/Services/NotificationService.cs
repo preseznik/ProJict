@@ -56,6 +56,7 @@ public sealed class NotificationService
             foreach (var project in state.Projects.Where(p => !_seen.ContainsKey(p.Id))) _seen[project.Id] = Keys(EventsOf(project));
         };
         state.GroupCommentsChanged += _ => CheckOthers();
+        state.Chat.Changed += _ => CheckOthers();
         main.Host.Requests.CollectionChanged += (_, _) => CheckOthers();
         main.Updates.PropertyChanged += (_, e) =>
         {
@@ -155,6 +156,17 @@ public sealed class NotificationService
     private List<Event> OtherEvents()
     {
         var events = new List<Event>();
+        // Chat: what you haven't read in your channels; an @mention is its own kind.
+        foreach (var channel in _state.Chat.Channels)
+            foreach (var message in ProJict.Core.Chat.ChatRoom.Unread(channel, _state.UserName))
+            {
+                var mention = ProJict.Core.Chat.ChatText.Mentions(message.Text, _state.UserName);
+                var where = "#" + channel.Name;
+                var open = () => _main.ShowChannel(channel, message.Id);
+                events.Add(new Event(mention ? NotificationKind.ChatMention : NotificationKind.ChatMessage, $"chat:{message.Id}", channel.Link?.ProjectId, where,
+                    mention ? $"{message.By} mentioned you in {where}" : $"{message.By} in {where}",
+                    message.Text.Length > 0 ? Short(message.Text, 120) : "Posted a file.", open));
+            }
         foreach (var group in _state.Settings.Groups)
         {
             var threads = _state.Settings.CommentsFor(group);

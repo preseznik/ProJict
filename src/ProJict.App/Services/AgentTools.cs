@@ -19,7 +19,7 @@ namespace ProJict.App.Services;
 /// agent checked out can't be changed by another unless it takes over (which is logged), nothing here deletes, and
 /// what an agent finishes waits for your review.
 /// </summary>
-public sealed class AgentTools : IMcpToolHost
+public sealed partial class AgentTools : IMcpToolHost
 {
     private delegate string Handler(McpSession session, Args args, List<Attachment> files);
 
@@ -156,6 +156,7 @@ public sealed class AgentTools : IMcpToolHost
             "Ends an approved ship request: shipped, or failed with the reason.",
             Schema(ProjectArg, ("outcome", "enum:shipped|failed", "Whether it shipped.", true), ("summary", "string", "A sentence or two for the user.", true)),
             FinishShip);
+        AddChatTools();
     }
 
     public IReadOnlyList<McpTool> Tools => _tools;
@@ -183,7 +184,9 @@ public sealed class AgentTools : IMcpToolHost
         "When a project shows a shipRequest, the user wants it committed, built, packaged, pushed or released: read it with ship_request, post your " +
         "plan with plan_ship and wait for their approval in ProJict; only then run the steps, report each with report_ship and end with finish_ship " +
         "(record a published release with draft_release save=true). " +
-        "Ids (items and comments) may be shortened to their first 8 characters.";
+        "The user and agents also talk live in Chat #channels (list_channels, read_channel, post_message, create_channel): when a result " +
+        "says chat messages wait for you, read them with read_channel and answer if they're for you; to listen, call wait_for_messages. " +
+        "Ids (items, comments and messages) may be shortened to their first 8 characters.";
 
     public void SessionStarted(McpSession session)
     {
@@ -203,6 +206,7 @@ public sealed class AgentTools : IMcpToolHost
 
     public async Task<string> CallAsync(McpSession session, string name, JsonElement arguments)
     {
+        if (name == "wait_for_messages") return await WaitForMessagesAsync(session, arguments);
         var (run, filesArgument) = _handlers[name];
         var args = new Args(arguments);
         if (session.ReadOnly && Changes(name, arguments))
@@ -219,7 +223,7 @@ public sealed class AgentTools : IMcpToolHost
             {
                 var result = run(session, args, files);
                 Record(session, name, args);
-                return ((string?)result, (Exception?)null);
+                return ((string?)WithChatNote(session, name, result), (Exception?)null);
             }
             catch (Exception ex) { return (null, ex); }
             finally { _caller = null; }
@@ -249,6 +253,7 @@ public sealed class AgentTools : IMcpToolHost
                 // Group discussions are outside a token limited to some projects.
                 var attachment = LocalProjects.SelectMany(p => p.Attachments())
                     .Concat(session.Projects == null ? _state.Settings.GroupAttachments() : [])
+                    .Concat(Chat.Visible(ActorOf(session)).SelectMany(c => c.Messages).SelectMany(m => m.Attachments ?? []))
                     .FirstOrDefault(a => a.Id == id);
                 return attachment == null ? ((Attachment, string)?)null : (attachment, _state.Store.AttachmentPath(attachment));
             }
@@ -260,6 +265,24 @@ public sealed class AgentTools : IMcpToolHost
     /// <summary>Notes what the agent just did, in a few words, for the Agents view.</summary>
     private void Record(McpSession session, string tool, Args args)
     {
+        if (ChatTools.Contains(tool))
+        {
+            var channel = args.String("channel") is { } key ? Chat.Find(key)
+                : tool == "create_channel" ? Chat.Channels.LastOrDefault(c => string.Equals(c.CreatedBy, session.AgentName, StringComparison.OrdinalIgnoreCase)) : null;
+            var name = "#" + (channel?.Name ?? args.String("channel")?.Trim().TrimStart('#') ?? "a channel");
+            RecordText(session, tool switch
+            {
+                "list_channels" => "Looked at the chat channels",
+                "create_channel" => $"Started {name}",
+                "read_channel" => $"Read {name}",
+                "post_message" => $"Wrote in {name}",
+                "edit_message" => args.Bool("delete") == true ? $"Deleted a message in {name}" : $"Edited a message in {name}",
+                "join_channel" => args.Bool("leave") == true ? $"Left {name}" : $"Joined {name}",
+                "invite_to_channel" => $"Invited {args.String("who")} to {name}",
+                _ => $"Moderated {name} ({args.String("action")?.Replace('_', ' ')})",
+            }, channel);
+            return;
+        }
         (Project Project, ItemLocation Loc)? found = null;
         if ((args.String("id") ?? args.String("item")) is { } id)
         {
@@ -299,7 +322,15 @@ public sealed class AgentTools : IMcpToolHost
             "finish_ship" => args.String("outcome") == "shipped" ? "Shipped it" : "Couldn't ship it",
             _ => tool.Replace('_', ' '),
         };
-        var action = new AgentAction(DateTime.Now, text, project?.Id, item?.Id);
+        Remember(session, new AgentAction(DateTime.Now, text, project?.Id, item?.Id));
+    }
+
+    /// <summary>Notes a chat action, in the channel's project.</summary>
+    private void RecordText(McpSession session, string text, ProJict.Core.Chat.ChatChannel? channel) =>
+        Remember(session, new AgentAction(DateTime.Now, text, channel?.Link?.ProjectId, channel?.Link?.ItemId));
+
+    private void Remember(McpSession session, AgentAction action)
+    {
         session.LastActive = action.At;
         session.Recent.Add(action);
         if (session.Recent.Count > McpSession.KeptActions) session.Recent.RemoveRange(0, session.Recent.Count - McpSession.KeptActions);

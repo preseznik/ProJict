@@ -52,7 +52,11 @@ public sealed partial class ProjectListItemViewModel(Project project, MainViewMo
     {
         OnPropertyChanged(nameof(TemplateSources));
         OnPropertyChanged(nameof(GroupChoices));
+        OnPropertyChanged(nameof(ChatHeader));
     }
+
+    /// <summary>"Open #grid2vr" when the project has a channel, else "Start a channel…".</summary>
+    public string ChatHeader => main.ChannelsFor(Project.Id).FirstOrDefault() is { } channel ? $"Open #{channel.Name}" : "Start a chat channel…";
 
     /// <summary>Used as the accessible name of the sidebar entry.</summary>
     public override string ToString() => Name;
@@ -107,9 +111,22 @@ public sealed partial class MainViewModel : ObservableObject
         Dashboard = new DashboardViewModel(state, this);
         Feed = new FeedViewModel(state, this);
         AgentActivity = new AgentActivityViewModel(state, this);
+        Chat = new ChatViewModel(state, this);
+        Chat.CountsChanged += () =>
+        {
+            foreach (var name in new[] { nameof(ChatUnread), nameof(HasChatUnread), nameof(ChatHasMention), nameof(ChatToolTip) })
+                OnPropertyChanged(name);
+            RefreshChannelChips();
+        };
+        AgentActivity.CountChanged += () =>
+        {
+            OnPropertyChanged(nameof(LiveAgentCount));
+            OnPropertyChanged(nameof(LiveAgentToolTip));
+        };
         AgentTools.Recorded += (session, action) =>
         {
             if (CurrentView == AgentActivity) AgentActivity.OnRecorded(session);
+            AgentActivity.CheckCount();
             if (action.ProjectId is { } id) ProjectItems.FirstOrDefault(i => i.Project.Id == id)?.RefreshWorkers();
         };
         Api.Changed += () =>
@@ -123,6 +140,7 @@ public sealed partial class MainViewModel : ObservableObject
             if (CurrentView == AgentActivity) AgentActivity.Refresh();
             CurrentProject?.RefreshWorkingOnHint();
             OnPropertyChanged(nameof(LiveAgentCount));
+            OnPropertyChanged(nameof(LiveAgentToolTip));
         };
         GitHub.Updated += () =>
         {
@@ -201,7 +219,16 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>The Agents view: what connected agents are doing, and what they did.</summary>
     public AgentActivityViewModel AgentActivity { get; }
     /// <summary>Connected agents, for the count next to Agents in the sidebar.</summary>
-    public int LiveAgentCount => Agents.Sessions.Count;
+    public ChatViewModel Chat { get; }
+    /// <summary>The sidebar's Chat count: unread messages in your channels.</summary>
+    public string ChatUnread => Chat.UnreadCount is > 0 and var n ? n.ToString(System.Globalization.CultureInfo.CurrentCulture) : "";
+    public bool HasChatUnread => Chat.UnreadCount > 0;
+    public bool ChatHasMention => Chat.HasMention;
+    public string ChatToolTip => Chat.UnreadToolTip;
+
+    /// <summary>The agents the Agents view shows (by default those active in the past hour).</summary>
+    public int LiveAgentCount => AgentActivity.ShownCount;
+    public string LiveAgentToolTip => AgentActivity.CountToolTip;
     /// <summary>Which AI agents are connected and where they work.</summary>
     public Services.AgentPresence Agents { get; } = new();
     public ObservableCollection<ProjectListItemViewModel> ProjectItems { get; } = [];
@@ -219,10 +246,13 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty] private bool _isDashboardActive;
     [ObservableProperty] private bool _isFeedActive;
     [ObservableProperty] private bool _isAgentsActive;
+    [ObservableProperty] private bool _isChatActive;
 
     partial void OnCurrentViewChanged(object? oldValue, object? newValue)
     {
         if (oldValue == AgentActivity && newValue != AgentActivity) AgentActivity.Hide();
+        if (oldValue == Chat && newValue != Chat) Chat.Hide();
+        if (newValue != Chat) IsChatActive = false;
     }
     [ObservableProperty] private bool _isInboxActive;
 
@@ -469,6 +499,66 @@ public sealed partial class MainViewModel : ObservableObject
         _syncingSelection = true;
         SelectedProjectItem = null;
         _syncingSelection = false;
+    }
+
+    // ───────────── Chat ─────────────
+
+    /// <summary>The Chat view, at a channel or where you were.</summary>
+    [RelayCommand]
+    public void ShowChat(object? target) => ShowChannel(target as ProJict.Core.Chat.ChatChannel);
+
+    public void ShowChannel(ProJict.Core.Chat.ChatChannel? channel, Guid? message = null)
+    {
+        CurrentView = Chat;
+        IsChatActive = true;
+        IsAgentsActive = false;
+        IsDashboardActive = false;
+        IsFeedActive = false;
+        IsInboxActive = false;
+        _syncingSelection = true;
+        SelectedProjectItem = null;
+        _syncingSelection = false;
+        Chat.Show(channel, message);
+    }
+
+    /// <summary>Opens Chat with the form to start a channel about a project, category or item, its name suggested from it.</summary>
+    public void StartChannel(Project project, Category? category = null, TodoItem? item = null)
+    {
+        var link = new ProJict.Core.Chat.ChannelLink { ProjectId = project.Id, CategoryId = category?.Id, ItemId = item?.Id };
+        if (item != null && link.CategoryId == null) link.CategoryId = project.Find(item.Id)?.Category.Id;
+        var name = State.Chat.SuggestName(project.Name, item == null ? category?.Name : null, item?.DisplayText());
+        ShowChannel(null);
+        Chat.BeginNewChannel(link, name);
+    }
+
+    /// <summary>Channels linked to exactly this project, category or item.</summary>
+    public List<ProJict.Core.Chat.ChatChannel> ChannelsFor(Guid projectId, Guid? categoryId = null, Guid? itemId = null) =>
+        State.Chat.Channels.Where(c => c.Link is { } l && l.ProjectId == projectId &&
+                                       (itemId != null ? l.ItemId == itemId : l.ItemId == null && l.CategoryId == categoryId))
+            .OrderBy(c => c.Name, StringComparer.Ordinal).ToList();
+
+    public List<ChannelChip> ChannelChips(Guid projectId, Guid? categoryId = null, Guid? itemId = null) =>
+        ChannelsFor(projectId, categoryId, itemId).Select(c => new ChannelChip(c, this, ProJict.Core.Chat.ChatRoom.Unread(c, State.UserName).Any())).ToList();
+
+    private string _chipSignature = "";
+
+    /// <summary>The #channel chips on the boards follow channels being started, renamed, deleted or read.</summary>
+    public void RefreshChannelChips()
+    {
+        var signature = string.Join("|", State.Chat.Channels.Where(c => c.Link != null)
+            .Select(c => $"{c.Id}:{c.Name}:{c.Link!.ProjectId}:{c.Link.CategoryId}:{c.Link.ItemId}:{ProJict.Core.Chat.ChatRoom.Unread(c, State.UserName).Any()}"));
+        if (signature == _chipSignature) return;
+        _chipSignature = signature;
+        foreach (var vm in _projectViewModels.Values) vm.RefreshChannels();
+    }
+
+    /// <summary>Right-click a project › its chat channel: opens it, or starts one.</summary>
+    [RelayCommand]
+    private void ProjectChat(ProjectListItemViewModel? item)
+    {
+        if (item == null) return;
+        if (ChannelsFor(item.Project.Id).FirstOrDefault() is { } channel) ShowChannel(channel);
+        else StartChannel(item.Project);
     }
 
     [RelayCommand]

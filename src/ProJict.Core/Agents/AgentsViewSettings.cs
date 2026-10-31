@@ -1,0 +1,80 @@
+namespace ProJict.Core.Agents;
+
+/// <summary>Which connected agents the Agents view gives a card.</summary>
+public enum AgentsShown { WorkingNow, ActiveWithin, AllConnected }
+
+public enum AgeUnit { Minutes, Hours, Days }
+
+/// <summary>
+/// What the Agents view shows (its Settings panel), kept in the app settings. Each Claude Code session stays connected
+/// until it's closed, so by default only agents that did something in the past hour get a card.
+/// </summary>
+public sealed class AgentsViewSettings
+{
+    /// <summary>"Working now": called a tool or said what it's doing this recently.</summary>
+    public static readonly TimeSpan WorkingNowFor = TimeSpan.FromMinutes(15);
+
+    public AgentsShown Show { get; set; } = AgentsShown.ActiveWithin;
+    public int ActiveWithin { get; set; } = 1;
+    public AgeUnit ActiveWithinUnit { get; set; } = AgeUnit.Hours;
+    /// <summary>How many days back Earlier goes; 0 for all of it.</summary>
+    public int EarlierDays { get; set; } = 7;
+
+    /// <summary>How recently an agent must have done something to get a card; null when every connected one does.</summary>
+    public TimeSpan? ActiveSpan => Show switch
+    {
+        AgentsShown.WorkingNow => WorkingNowFor,
+        AgentsShown.ActiveWithin => Span(ActiveWithin, ActiveWithinUnit),
+        _ => null,
+    };
+
+    public static TimeSpan Span(int count, AgeUnit unit)
+    {
+        count = Math.Max(1, count);
+        return unit switch
+        {
+            AgeUnit.Minutes => TimeSpan.FromMinutes(count),
+            AgeUnit.Hours => TimeSpan.FromHours(count),
+            _ => TimeSpan.FromDays(count),
+        };
+    }
+
+    /// <summary>When the agent last did anything: called a tool, set its status, or connected.</summary>
+    public static DateTime LastSeen(McpSession session)
+    {
+        var last = session.ConnectedAt;
+        if (session.LastActive > last) last = session.LastActive.Value;
+        if (session.StatusAt > last) last = session.StatusAt.Value;
+        return last;
+    }
+
+    /// <summary>Whether a connected agent gets a card; one holding checked-out items always does, so you see who has them.</summary>
+    public bool Shows(McpSession session, DateTime now, bool holdsItems) =>
+        holdsItems || ActiveSpan is not { } span || now - LastSeen(session) < span;
+
+    /// <summary>Where Earlier starts, or null for all of it.</summary>
+    public DateTime? EarlierSince(DateTime now) => EarlierDays > 0 ? now.AddDays(-EarlierDays) : null;
+
+    /// <summary>"the past hour", "the past 3 days", "the past 15 minutes".</summary>
+    public static string Past(int count, AgeUnit unit) => count <= 1
+        ? "the past " + Unit(unit, 1)
+        : $"the past {count} {Unit(unit, count)}";
+
+    public static string Unit(AgeUnit unit, int count) => (unit, count == 1) switch
+    {
+        (AgeUnit.Minutes, true) => "minute",
+        (AgeUnit.Minutes, false) => "minutes",
+        (AgeUnit.Hours, true) => "hour",
+        (AgeUnit.Hours, false) => "hours",
+        (_, true) => "day",
+        _ => "days",
+    };
+
+    /// <summary>The time frame in words: "the past 15 minutes" for Working now, "the past hour", or null for all connected.</summary>
+    public string? Within => Show switch
+    {
+        AgentsShown.WorkingNow => Past((int)WorkingNowFor.TotalMinutes, AgeUnit.Minutes),
+        AgentsShown.ActiveWithin => Past(ActiveWithin, ActiveWithinUnit),
+        _ => null,
+    };
+}

@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
+using ProJict.Core.Chat;
 using ProJict.Core.Export;
 using ProJict.Core.Features;
 using ProJict.Core.Model;
@@ -8,12 +9,13 @@ using ProJict.Core.Storage;
 
 namespace ProJict.App;
 
-/// <summary>Owns the loaded workspace and persists it: debounced autosave, periodic backups and the optional TXT mirror.</summary>
+/// <summary>Owns the loaded workspace and chat and persists them: debounced autosave, periodic backups and the optional TXT mirror.</summary>
 public sealed partial class AppState : ObservableObject
 {
     private static readonly TimeSpan BackupInterval = TimeSpan.FromMinutes(30);
     private readonly HashSet<Project> _dirty = [];
     private readonly HashSet<Project> _mirrorPending = [];
+    private readonly HashSet<ChatChannel> _dirtyChannels = [];
     private readonly DispatcherTimer _saveTimer;
     private readonly bool _persistAppSettings;
     private bool _settingsDirty;
@@ -27,6 +29,18 @@ public sealed partial class AppState : ObservableObject
         Workspace = store.Load();
         _saveTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _saveTimer.Tick += (_, _) => SaveNow();
+        Chat = new ChatRoom(store.LoadChannels(), () => UserName);
+        Chat.Changed += channel =>
+        {
+            _dirtyChannels.Add(channel);
+            RestartTimer();
+        };
+        Chat.Removed += channel =>
+        {
+            _dirtyChannels.Remove(channel);
+            try { Store.DeleteChannel(channel); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { StatusText = $"#{channel.Name}: {ex.Message}"; }
+        };
         if (AppSettings.UnreadSince == null)
         {
             AppSettings.UnreadSince = DateTime.Now;
@@ -42,6 +56,10 @@ public sealed partial class AppState : ObservableObject
     public WorkspaceSettings Settings => Workspace.Settings;
     public IReadOnlyList<Project> Projects => Workspace.Projects;
     public Project Inbox => Workspace.Inbox;
+    /// <summary>The chat channels, saved one file each under &lt;data&gt;/chat.</summary>
+    public ChatRoom Chat { get; }
+    /// <summary>You in Chat: the owner of the workspace, who moderates every channel.</summary>
+    public ChatActor ChatMe => new(UserName, false, Owner: true);
 
     [ObservableProperty] private string _statusText = "";
 
@@ -238,6 +256,19 @@ public sealed partial class AppState : ObservableObject
             }
         }
 
+        foreach (var channel in _dirtyChannels.ToList())
+        {
+            try
+            {
+                Store.SaveChannel(channel);
+                _dirtyChannels.Remove(channel);
+            }
+            catch (Exception ex)
+            {
+                failed.Add($"#{channel.Name}: {ex.Message}");
+            }
+        }
+
         if (_settingsDirty)
         {
             try
@@ -309,7 +340,8 @@ public sealed partial class AppState : ObservableObject
     /// <summary>Deletes stored attachments nothing refers to any more; off the UI thread, since it may read through the backups.</summary>
     public void CleanUpAttachments()
     {
-        var inUse = Projects.SelectMany(p => p.Attachments()).Concat(Settings.GroupAttachments()).Select(a => a.Id).ToHashSet();
+        var inUse = Projects.SelectMany(p => p.Attachments()).Concat(Settings.GroupAttachments())
+            .Concat(Chat.Channels.SelectMany(c => c.Messages).SelectMany(m => m.Attachments ?? [])).Select(a => a.Id).ToHashSet();
         var started = DateTime.Now;
         Task.Run(() =>
         {

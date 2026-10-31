@@ -18,6 +18,9 @@
         <DataTemplate DataType="{x:Type vm:AgentActivityViewModel}">
             <views:AgentActivityView />
         </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:ChatViewModel}">
+            <views:ChatView />
+        </DataTemplate>
     </Window.Resources>
     <Window.InputBindings>
         <KeyBinding Gesture="Ctrl+K" Command="{Binding SearchCommand}" />
@@ -87,7 +90,43 @@
                             </Grid.ColumnDefinitions>
                             <TextBlock Style="{StaticResource Icon}" Text="&#xE99A;" HorizontalAlignment="Left" />
                             <TextBlock Grid.Column="1" Text="Agents" />
-                            <TextBlock Grid.Column="2" Text="{Binding LiveAgentCount}" Style="{StaticResource MutedText}" ToolTip="Connected now" />
+                            <TextBlock Grid.Column="2" Text="{Binding LiveAgentCount}" Style="{StaticResource MutedText}" ToolTip="{Binding LiveAgentToolTip}" />
+                        </Grid>
+                    </Button>
+                    <Button x:Name="ChatNav" Style="{StaticResource NavButton}" Command="{Binding ShowChatCommand}" Tag="{Binding IsChatActive}" ToolTip="{Binding ChatToolTip}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="26" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE8F2;" HorizontalAlignment="Left" />
+                            <TextBlock Grid.Column="1" Text="Chat" />
+                            <!-- Unread messages in your channels; red when one @mentions you. -->
+                            <Border x:Name="ChatCount" Grid.Column="2" CornerRadius="8" Padding="6,0" MinWidth="18" VerticalAlignment="Center"
+                                    Visibility="{Binding HasChatUnread, Converter={StaticResource BoolToVis}}">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding ChatHasMention}" Value="True">
+                                                <Setter Property="Background" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <TextBlock x:Name="ChatCountText" Text="{Binding ChatUnread}" FontSize="11" HorizontalAlignment="Center">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding ChatHasMention}" Value="True">
+                                                    <Setter Property="Foreground" Value="White" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Border>
                         </Grid>
                     </Button>
                     <Button Style="{StaticResource NavButton}" Command="{Binding ShowInboxCommand}" Tag="{Binding IsInboxActive}">
@@ -238,6 +277,8 @@
                                             <MenuItem Header="Rename…" Command="{Binding PlacementTarget.Tag.RenameProjectCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" />
                                             <MenuItem Header="Agents" Command="{Binding PlacementTarget.Tag.ShowAgentsCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"
                                                       ToolTip="What AI agents are doing in this project, and what they did" />
+                                            <MenuItem Header="{Binding ChatHeader}" Command="{Binding PlacementTarget.Tag.ProjectChatCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"
+                                                      ToolTip="Live chat about this project with AI agents" />
                                             <MenuItem Header="Ship…" Command="{Binding PlacementTarget.Tag.ShipProjectCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"
                                                       ToolTip="Ask an AI agent to commit, build, package, push or release it; you approve its plan first" />
                                             <MenuItem Header="Hide" Command="{Binding PlacementTarget.Tag.HideProjectCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" />

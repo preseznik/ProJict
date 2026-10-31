@@ -1,4 +1,5 @@
 using System.Globalization;
+using ProJict.Core.Chat;
 using ProJict.Core.Model;
 
 namespace ProJict.Core.Storage;
@@ -11,8 +12,8 @@ public sealed class Workspace
 }
 
 /// <summary>
-/// One JSON file per project under &lt;dataRoot&gt;/projects, workspace.json for settings,
-/// timestamped copies under &lt;dataRoot&gt;/backups.
+/// One JSON file per project under &lt;dataRoot&gt;/projects, one per chat channel under &lt;dataRoot&gt;/chat,
+/// workspace.json for settings, timestamped copies under &lt;dataRoot&gt;/backups.
 /// </summary>
 public sealed class ProjectStore
 {
@@ -30,6 +31,7 @@ public sealed class ProjectStore
     public string BackupsDir => Path.Combine(DataRoot, "backups");
     public string WorkspacePath => Path.Combine(DataRoot, "workspace.json");
     public string AttachmentsDir => Path.Combine(DataRoot, "attachments");
+    public string ChatDir => Path.Combine(DataRoot, "chat");
     public IReadOnlyList<string> LoadErrors => _loadErrors;
 
     public Workspace Load()
@@ -117,6 +119,43 @@ public sealed class ProjectStore
         File.Move(path, Path.Combine(deletedDir, $"{DateTime.Now.ToString(BackupStampFormat, CultureInfo.InvariantCulture)}-{name}"), overwrite: true);
     }
 
+    // ───────────── Chat ─────────────
+
+    /// <summary>The chat channels; a file that can't be read is reported in <see cref="LoadErrors"/> and left alone.</summary>
+    public List<ChatChannel> LoadChannels()
+    {
+        var channels = new List<ChatChannel>();
+        if (!Directory.Exists(ChatDir)) return channels;
+        foreach (var file in Directory.EnumerateFiles(ChatDir, "*.json"))
+        {
+            try
+            {
+                if (Json.Deserialize<ChatChannel>(File.ReadAllText(file)) is { } channel) channels.Add(channel);
+            }
+            catch (Exception ex) when (ex is IOException or System.Text.Json.JsonException or UnauthorizedAccessException)
+            {
+                _loadErrors.Add($"{Path.GetFileName(file)}: {ex.Message}");
+            }
+        }
+        return channels.OrderBy(c => c.CreatedAt).ToList();
+    }
+
+    public void SaveChannel(ChatChannel channel)
+    {
+        Directory.CreateDirectory(ChatDir);
+        AtomicFile.WriteAllText(Path.Combine(ChatDir, $"{channel.Id}.json"), Json.Serialize(channel));
+    }
+
+    /// <summary>Moves the channel's file into backups/deleted instead of erasing it.</summary>
+    public void DeleteChannel(ChatChannel channel)
+    {
+        var path = Path.Combine(ChatDir, $"{channel.Id}.json");
+        if (!File.Exists(path)) return;
+        var deletedDir = Path.Combine(BackupsDir, "deleted");
+        Directory.CreateDirectory(deletedDir);
+        File.Move(path, Path.Combine(deletedDir, $"{DateTime.Now.ToString(BackupStampFormat, CultureInfo.InvariantCulture)}-chat-{channel.Name}-{channel.Id}.json"), overwrite: true);
+    }
+
     public string Backup(DateTime? now = null)
     {
         var stamp = (now ?? DateTime.Now).ToString(BackupStampFormat, CultureInfo.InvariantCulture);
@@ -129,6 +168,13 @@ public sealed class ProjectStore
                 File.Copy(file, Path.Combine(projectsBackup, Path.GetFileName(file)));
         if (File.Exists(WorkspacePath))
             File.Copy(WorkspacePath, Path.Combine(dir, "workspace.json"));
+        if (Directory.Exists(ChatDir))
+        {
+            var chatBackup = Path.Combine(dir, "chat");
+            Directory.CreateDirectory(chatBackup);
+            foreach (var file in Directory.EnumerateFiles(ChatDir, "*.json"))
+                File.Copy(file, Path.Combine(chatBackup, Path.GetFileName(file)));
+        }
         Prune(now ?? DateTime.Now);
         return dir;
     }
@@ -202,7 +248,7 @@ public sealed class ProjectStore
                 unused.Add((dir, id.ToString()));
         if (unused.Count == 0) return 0;
 
-        var files = new[] { ProjectsDir, BackupsDir }.Where(Directory.Exists)
+        var files = new[] { ProjectsDir, ChatDir, BackupsDir }.Where(Directory.Exists)
             .SelectMany(d => Directory.EnumerateFiles(d, "*.json", SearchOption.AllDirectories));
         foreach (var file in files)
         {

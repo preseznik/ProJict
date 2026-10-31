@@ -1,0 +1,76 @@
+using System.Text.Json.Serialization;
+using ProJict.Core.Model;
+
+namespace ProJict.Core.Chat;
+
+/// <summary>Open: anyone who can see its project can read and join. Invite only: just its members.</summary>
+public enum ChannelAccess { Open, InviteOnly }
+
+/// <summary>What a channel is about: a project, one of its categories, or an item.</summary>
+public sealed class ChannelLink
+{
+    public Guid ProjectId { get; set; }
+    public Guid? CategoryId { get; set; }
+    public Guid? ItemId { get; set; }
+}
+
+/// <summary>Someone in a channel: you, an AI agent (by the name it signs with), later people through sharing.</summary>
+public sealed class ChatMember
+{
+    public string Name { get; set; } = "";
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Agent { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Moderator { get; set; }
+    public DateTime JoinedAt { get; set; } = DateTime.Now;
+    /// <summary>Muted: can read but not post until then (<see cref="DateTime.MaxValue"/>: until unmuted).</summary>
+    public DateTime? MutedUntil { get; set; }
+    /// <summary>The newest message they've seen, for unread counts and what waits for an agent.</summary>
+    public DateTime? LastRead { get; set; }
+}
+
+public sealed class ChatMessage
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string By { get; set; } = "";
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Agent { get; set; }
+    public DateTime At { get; set; } = DateTime.Now;
+    public string Text { get; set; } = "";
+    /// <summary>The message this one answers; it's quoted above it.</summary>
+    public Guid? ReplyTo { get; set; }
+    public DateTime? EditedAt { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Deleted { get; set; }
+    /// <summary>A line from ProJict about the channel ("Codex joined"); <see cref="By"/> is who did it.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Notice { get; set; }
+    public List<Attachment>? Attachments { get; set; }
+}
+
+/// <summary>A #channel: its members and moderators, who was kicked, and its messages (oldest first).</summary>
+public sealed class ChatChannel
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string Name { get; set; } = "";
+    public string? Topic { get; set; }
+    public ChannelAccess Access { get; set; }
+    public ChannelLink? Link { get; set; }
+    public string CreatedBy { get; set; } = "";
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool CreatedByAgent { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.Now;
+    public List<ChatMember> Members { get; set; } = [];
+    /// <summary>Kicked out: they can't see or rejoin it until a moderator invites them again.</summary>
+    public List<string> Kicked { get; set; } = [];
+    public List<ChatMessage> Messages { get; set; } = [];
+}
+
+/// <summary>
+/// Who is acting in Chat. You, the owner of the workspace, moderate every channel. An agent reaches the projects its
+/// API token allows (null: all of them).
+/// </summary>
+public sealed record ChatActor(string Name, bool Agent, bool Owner = false, IReadOnlySet<Guid>? Projects = null);
+
+/// <summary>Something Chat doesn't allow, in words for the person or agent who tried.</summary>
+public sealed class ChatException(string message) : InvalidOperationException(message);

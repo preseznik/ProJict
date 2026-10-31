@@ -81,6 +81,18 @@ public sealed partial class CategoryViewModel : ObservableObject
     /// <summary>Done rows show when expanded, in side-by-side layout, or when a filter matches some of them.</summary>
     public bool ShowDoneRows => IsDoneExpanded || Owner.SideBySide || (Owner.IsFilterActive && DoneRows.Any(r => r.IsVisible));
 
+    /// <summary>Chat channels about this category.</summary>
+    public List<ChannelChip> Channels => Owner.Main.ChannelChips(Owner.Project.Id, Model.Id);
+    public bool HasChannels => Channels.Count > 0;
+
+    public void RefreshChannels()
+    {
+        OnPropertyChanged(nameof(Channels));
+        OnPropertyChanged(nameof(HasChannels));
+    }
+
+    [RelayCommand] private void StartChannel() => Owner.Main.StartChannel(Owner.Project, Model);
+
     public void Refresh()
     {
         var open = new List<ItemRowViewModel>();

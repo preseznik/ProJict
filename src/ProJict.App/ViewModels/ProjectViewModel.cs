@@ -187,6 +187,30 @@ public sealed partial class ProjectViewModel : ObservableObject
         if (listChanged) _state.NotifyListChanged();
     }
 
+    /// <summary>Chat channels about the project itself (its categories and items show their own).</summary>
+    public List<ChannelChip> Channels => Main.ChannelChips(Project.Id);
+    public bool HasChannels => Channels.Count > 0;
+
+    /// <summary>Channels were started, deleted or read: the chips on the header, categories and items follow.</summary>
+    public void RefreshChannels()
+    {
+        OnPropertyChanged(nameof(Channels));
+        OnPropertyChanged(nameof(HasChannels));
+        foreach (var category in Categories)
+        {
+            category.RefreshChannels();
+            foreach (var row in category.AllRows) row.RefreshChannels();
+        }
+    }
+
+    /// <summary>The header's Chat button: the project's channel, or the form to start one.</summary>
+    [RelayCommand]
+    private void OpenChat()
+    {
+        if (Main.ChannelsFor(Project.Id).FirstOrDefault() is { } channel) Main.ShowChannel(channel);
+        else Main.StartChannel(Project);
+    }
+
     /// <summary>After the GitHub check linked this project to a repository.</summary>
     public void RefreshGitHubLink()
     {

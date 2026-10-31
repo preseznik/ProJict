@@ -242,6 +242,22 @@
     <!-- Timelines grouped by period (Feed, Agents). People's activity is drawn in the accent color, AI agents' in this. -->
     <SolidColorBrush x:Key="AgentActivityBrush" Color="#D97757" />
 
+    <!-- A #channel chip on what the channel is about; a click opens it in Chat. -->
+    <DataTemplate x:Key="ChannelChipTemplate" DataType="{x:Type vm:ChannelChip}">
+        <Button Style="{StaticResource SubtleButton}" Padding="0" Margin="0,0,4,0" Command="{Binding OpenCommand}" ToolTip="{Binding ToolTip}"
+                AutomationProperties.Name="{Binding Text}">
+            <Border Style="{StaticResource TagChip}" Background="{DynamicResource SubtleFillColorSecondaryBrush}" Margin="0">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="{Binding Text}" FontSize="11" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                    <Ellipse Style="{StaticResource UnreadDot}" Margin="5,0,0,0" Visibility="{Binding HasUnread, Converter={StaticResource BoolToVis}}" />
+                </StackPanel>
+            </Border>
+        </Button>
+    </DataTemplate>
+    <ItemsPanelTemplate x:Key="HorizontalPanel">
+        <StackPanel Orientation="Horizontal" />
+    </ItemsPanelTemplate>
+
     <!-- A period's heading: a click on its name folds it; Stats opens its numbers and charts, apart from that. -->
     <DataTemplate x:Key="ActivityGroupHeader" DataType="{x:Type vm:ActivityGroupViewModel}">
         <DockPanel Margin="0,14,0,4">

@@ -12,6 +12,8 @@ public partial class MainWindow : Window
         InitializeComponent();
         DataContext = viewModel;
         RestorePlacement();
+        // Back in front: the chat channel you look at is read now.
+        Activated += (_, _) => viewModel.Chat.OnActivated();
     }
 
     private void RestorePlacement()
