@@ -68,8 +68,8 @@ public sealed partial class ChatViewModel : ObservableObject
     [ObservableProperty] private ChatChannel? _channel;
     public bool HasChannel => Channel != null;
     /// <summary>The middle shows the open channel, the form to start one, or a hint when there's neither.</summary>
-    public bool ShowChannelPane => Channel != null && !IsCreating;
-    public bool ShowEmptyPane => Channel == null && !IsCreating;
+    public bool ShowChannelPane => Channel != null && !IsCreating && !IsBrowsing;
+    public bool ShowEmptyPane => Channel == null && !IsCreating && !IsBrowsing;
 
     /// <summary>Unread messages in your channels, and whether one @mentions you.</summary>
     public int UnreadCount => Room.Channels.Sum(c => ChatRoom.Unread(c, MyName).Count());
@@ -89,6 +89,7 @@ public sealed partial class ChatViewModel : ObservableObject
     {
         IsShown = true;
         IsCreating = false;
+        IsBrowsing = false;
         if (channel != null && channel != Channel) Channel = channel;
         else if (Channel == null || !Room.Channels.Contains(Channel)) Channel = YourChannels.FirstOrDefault()?.Model ?? OtherChannels.FirstOrDefault()?.Model;
         else
@@ -166,7 +167,9 @@ public sealed partial class ChatViewModel : ObservableObject
             (ChatRoom.Member(channel, MyName) != null ? mine : others).Add(new ChannelRowViewModel(channel, this));
         YourChannels = mine;
         OtherChannels = others;
-        foreach (var name in new[] { nameof(YourChannels), nameof(OtherChannels), nameof(HasOtherChannels), nameof(HasNoChannels), nameof(UnreadCount), nameof(HasMention), nameof(UnreadToolTip) })
+        BrowseRows = Room.Channels.OrderBy(c => c.Name, StringComparer.Ordinal).Select(c => new BrowseRowViewModel(c, this)).ToList();
+        foreach (var name in new[] { nameof(YourChannels), nameof(OtherChannels), nameof(HasOtherChannels), nameof(HasNoChannels), nameof(UnreadCount), nameof(HasMention),
+                     nameof(UnreadToolTip), nameof(BrowseRows) })
             OnPropertyChanged(name);
         CountsChanged?.Invoke();
     }
@@ -174,10 +177,41 @@ public sealed partial class ChatViewModel : ObservableObject
     [RelayCommand]
     private void Open(ChannelRowViewModel? row)
     {
-        if (row == null) return;
+        if (row != null) OpenChannel(row.Model);
+    }
+
+    internal void OpenChannel(ChatChannel channel)
+    {
         IsCreating = false;
-        Channel = row.Model;
+        IsBrowsing = false;
+        Channel = channel;
         Refresh();
+    }
+
+    // ───────────── Browsing ─────────────
+
+    /// <summary>Every channel with its topic, what it's about and its members, to open or join.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowChannelPane), nameof(ShowEmptyPane))]
+    private bool _isBrowsing;
+    public List<BrowseRowViewModel> BrowseRows { get; private set; } = [];
+
+    [RelayCommand]
+    private void Browse()
+    {
+        IsShown = true;
+        IsCreating = false;
+        Refresh();
+        IsBrowsing = true;
+    }
+
+    [RelayCommand] private void CloseBrowse() => IsBrowsing = false;
+
+    /// <summary>Joins the channel if you're not in it, and opens it.</summary>
+    internal void JoinAndOpen(ChatChannel channel)
+    {
+        if (ChatRoom.Member(channel, MyName) == null && !Try(() => Room.Join(channel, Me))) return;
+        OpenChannel(channel);
     }
 
     // ───────────── The open channel ─────────────
@@ -214,9 +248,10 @@ public sealed partial class ChatViewModel : ObservableObject
     private void SyncChannel()
     {
         foreach (var name in new[] { nameof(HasChannel), nameof(Title), nameof(IsInviteOnly), nameof(AccessText), nameof(AccessToolTip), nameof(LinkText), nameof(LinkSeparator), nameof(StartedText),
-                     nameof(IsMember), nameof(IsModerator), nameof(MembersText), nameof(CanWrite), nameof(TopicText), nameof(ComposerNote), nameof(InviteChoices),
+                     nameof(IsMember), nameof(IsModerator), nameof(MembersText), nameof(CanWrite), nameof(TopicText), nameof(ComposerNote),
                      nameof(CanInvite), nameof(ShowChannelPane), nameof(ShowEmptyPane), nameof(IsOwner) })
             OnPropertyChanged(name);
+        RefreshInviteChoices();
         Members = Channel == null ? [] : Channel.Members
             .OrderByDescending(m => !m.Agent && Room.IsOwner(m.Name)).ThenByDescending(m => m.Moderator).ThenBy(m => m.Name, StringComparer.CurrentCultureIgnoreCase)
             .Select(m => new ChatMemberViewModel(m, Channel, this)).ToList();
@@ -317,8 +352,16 @@ public sealed partial class ChatViewModel : ObservableObject
     /// <summary>Moderators invite; in an Open channel any member may.</summary>
     public bool CanInvite => Channel != null && (IsModerator || (IsMember && Channel.Access == ChannelAccess.Open));
     public bool IsOwner => Me.Owner;
-    public IReadOnlyList<string> InviteChoices => Channel == null ? [] :
-        _main.AgentTools.KnownAgentNames().Where(n => ChatRoom.Member(Channel, n) == null).ToList();
+    /// <summary>Agents connected now first, then others seen before; rebuilt as agents come and go and when the list opens.</summary>
+    public IReadOnlyList<string> InviteChoices { get; private set; } = [];
+
+    public void RefreshInviteChoices()
+    {
+        var choices = Channel == null ? [] : _main.AgentTools.KnownAgentNames().Where(n => ChatRoom.Member(Channel, n) == null).ToList();
+        if (choices.SequenceEqual(InviteChoices)) return;
+        InviteChoices = choices;
+        OnPropertyChanged(nameof(InviteChoices));
+    }
 
     [RelayCommand]
     private void Invite()
@@ -327,7 +370,7 @@ public sealed partial class ChatViewModel : ObservableObject
         var name = InviteName.Trim().TrimStart('@');
         var agent = !Room.IsOwner(name);
         if (Try(() => Room.Invite(channel, Me, name, agent))) InviteName = "";
-        OnPropertyChanged(nameof(InviteChoices));
+        RefreshInviteChoices();
     }
 
     // ───────────── Writing ─────────────
@@ -487,6 +530,7 @@ public sealed partial class ChatViewModel : ObservableObject
     public void BeginNewChannel(ChannelLink? link = null, string? name = null)
     {
         IsShown = true;
+        IsBrowsing = false;
         NewLink = link;
         NewName = name ?? "";
         NewTopic = "";
@@ -537,6 +581,78 @@ public sealed partial class ChatViewModel : ObservableObject
 
     /// <summary>Who can be @mentioned in the channel: its members, and you.</summary>
     internal IEnumerable<string> MentionNames => (Channel?.Members.Select(m => m.Name) ?? []).Append(MyName);
+
+    // ───────────── @mention suggestions ─────────────
+
+    /// <summary>The channel's members matching the "@na" being typed (not you); Up/Down pick, Tab or Enter puts the name in.</summary>
+    public List<MentionChoice> MentionChoices { get; private set; } = [];
+    public bool HasMentionChoices => MentionChoices.Count > 0;
+    private int _mentionIndex;
+
+    /// <summary>The "@na" being typed just before the caret: where its @ is and what follows it; null when the caret isn't in one.</summary>
+    public static (int Start, string Query)? MentionAt(string text, int caret)
+    {
+        caret = Math.Clamp(caret, 0, text.Length);
+        if (caret == 0) return null;
+        var at = text.LastIndexOf('@', caret - 1);
+        if (at < 0 || (at > 0 && char.IsLetterOrDigit(text[at - 1]))) return null;
+        var query = text[(at + 1)..caret];
+        if (query.Length > 40 || query.Contains('\n') || query.Contains("  ", StringComparison.Ordinal)) return null;
+        return (at, query);
+    }
+
+    /// <summary>Replaces the "@na" before the caret with "@Name "; returns the text and where the caret goes.</summary>
+    public static (string Text, int Caret) InsertMention(string text, int caret, string name)
+    {
+        caret = Math.Clamp(caret, 0, text.Length);
+        if (MentionAt(text, caret) is not { } found) return (text, caret);
+        var after = text[caret..];
+        var mention = "@" + name + (after.StartsWith(' ') ? "" : " ");
+        return (text[..found.Start] + mention + after, found.Start + mention.Length);
+    }
+
+    /// <summary>Called as you type or move the caret in the box.</summary>
+    public void UpdateMentions(string text, int caret)
+    {
+        var names = new List<string>();
+        if (Channel != null && MentionAt(text, caret) is { } found)
+        {
+            var query = found.Query;
+            var candidates = Channel.Members.Select(m => m.Name).Where(n => !string.Equals(n, MyName, StringComparison.OrdinalIgnoreCase))
+                .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            // A whole name already typed, followed by a space: done.
+            if (!(query.EndsWith(' ') && candidates.Any(n => string.Equals(n, query.TrimEnd(), StringComparison.OrdinalIgnoreCase))))
+                names = candidates.Where(n => query.Length == 0 || n.StartsWith(query, StringComparison.OrdinalIgnoreCase) ||
+                                              n.Split([' ', '·'], StringSplitOptions.RemoveEmptyEntries).Any(w => w.StartsWith(query, StringComparison.OrdinalIgnoreCase)))
+                    .OrderBy(n => n.StartsWith(query, StringComparison.OrdinalIgnoreCase) ? 0 : 1).ThenBy(n => n, StringComparer.CurrentCultureIgnoreCase)
+                    .Take(8).ToList();
+        }
+        if (names.SequenceEqual(MentionChoices.Select(c => c.Name))) return;
+        MentionChoices = names.Select(n => new MentionChoice(n)).ToList();
+        _mentionIndex = 0;
+        if (MentionChoices.Count > 0) MentionChoices[0].IsSelected = true;
+        OnPropertyChanged(nameof(MentionChoices));
+        OnPropertyChanged(nameof(HasMentionChoices));
+    }
+
+    public void ClearMentions()
+    {
+        if (MentionChoices.Count == 0) return;
+        MentionChoices = [];
+        OnPropertyChanged(nameof(MentionChoices));
+        OnPropertyChanged(nameof(HasMentionChoices));
+    }
+
+    /// <summary>Up or Down in the suggestions.</summary>
+    public void MoveMention(int by)
+    {
+        if (MentionChoices.Count == 0) return;
+        MentionChoices[_mentionIndex].IsSelected = false;
+        _mentionIndex = (_mentionIndex + by + MentionChoices.Count) % MentionChoices.Count;
+        MentionChoices[_mentionIndex].IsSelected = true;
+    }
+
+    public string? SelectedMention => MentionChoices.Count > 0 ? MentionChoices[_mentionIndex].Name : null;
     internal bool IsChannelName(string name) => Room.Find(name) != null;
     internal Guid? FindItem(string prefix) =>
         _state.Projects.SelectMany(p => p.Walk()).Select(l => l.Item.Id).FirstOrDefault(id => id.ToString().StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) is { } id && id != Guid.Empty ? id : null;
@@ -571,6 +687,11 @@ public sealed partial class ChatViewModel : ObservableObject
     }
 
     internal ChatRoom RoomFor => Room;
+
+    /// <summary>What an agent runs in ("Claude Code"), when it picked a name of its own; else "AI agent".</summary>
+    internal string ClientOf(string name) =>
+        _state.Settings.AgentNames is { } names && names.FirstOrDefault(n => string.Equals(n.Key, name, StringComparison.OrdinalIgnoreCase)).Value is { } client
+            ? client : "AI agent";
     internal ChatActor MeActor => Me;
 
     /// <summary>"GRID2VR › HUD › “crash when pausing”".</summary>
@@ -606,13 +727,50 @@ public sealed partial class ChannelRowViewModel(ChatChannel model, ChatViewModel
 {
     public ChatChannel Model => model;
     public string Name => "#" + model.Name;
-    public string? LinkText => model.Link != null ? owner.LinkTextOf(model.Link) : model.Topic;
+    /// <summary>Its topic, else what it's about.</summary>
+    public string? Subtitle => model.Topic ?? (model.Link != null ? owner.LinkTextOf(model.Link) : null);
     public bool IsInviteOnly => model.Access == ChannelAccess.InviteOnly;
     public bool IsSelected => owner.Channel == model;
     public int Unread { get; } = ChatRoom.Unread(model, owner.MyName).Count();
     public bool HasUnread => Unread > 0;
     public bool HasMention { get; } = ChatRoom.UnreadMentions(model, owner.MyName).Any();
-    public string ToolTip => (model.Topic ?? (IsInviteOnly ? "Invite only" : "Open")) + (Unread > 0 ? $"\n{ChatViewModel.Count(Unread, "new message")}" : "");
+    public string ToolTip => string.Join("\n", new[]
+    {
+        model.Topic, model.Link != null ? "About " + owner.LinkTextOf(model.Link) : null, IsInviteOnly ? "Invite only" : "Open",
+        Unread > 0 ? ChatViewModel.Count(Unread, "new message") : null,
+    }.Where(s => s != null));
+}
+
+/// <summary>A channel in Browse channels: its topic, what it's about, members and last message; Open, or Join if you're not in it.</summary>
+public sealed partial class BrowseRowViewModel(ChatChannel model, ChatViewModel owner)
+{
+    public ChatChannel Model => model;
+    public string Name => "#" + model.Name;
+    public string Topic => model.Topic ?? "No topic yet.";
+    public bool HasTopic => model.Topic != null;
+    public string? LinkText => model.Link != null ? "About " + owner.LinkTextOf(model.Link) : null;
+    public string AccessText => model.Access == ChannelAccess.InviteOnly ? "Invite only" : "Open";
+    public string Details
+    {
+        get
+        {
+            var last = model.Messages.LastOrDefault(m => !m.Notice)?.At;
+            var when = last is { } at ? at.Date == DateTime.Today ? $"last message {at:HH:mm}" : $"last message {at.ToString("d MMM", CultureInfo.CurrentCulture)}" : "no messages yet";
+            return $"{ChatViewModel.Count(model.Members.Count, "member")} · {when} · started by {model.CreatedBy}";
+        }
+    }
+    public bool IsMember => ChatRoom.Member(model, owner.MyName) != null;
+    public string ActionText => IsMember ? "Open" : "Join";
+
+    [RelayCommand] private void Open() => owner.JoinAndOpen(model);
+}
+
+/// <summary>A name suggested after @ in the message box.</summary>
+public sealed partial class MentionChoice(string name) : ObservableObject
+{
+    public string Name => name;
+    public WorkerBadge Badge => WorkerBadge.For([name])[0];
+    [ObservableProperty] private bool _isSelected;
 }
 
 /// <summary>A member: their badge and name, whether they moderate or are muted, and what a moderator can do to them.</summary>
@@ -623,7 +781,8 @@ public sealed partial class ChatMemberViewModel(ChatMember model, ChatChannel ch
     public bool IsAgent => model.Agent;
     public WorkerBadge Badge => WorkerBadge.For([model.Name])[0];
     private bool IsOwner => !model.Agent && owner.RoomFor.IsOwner(model.Name);
-    public string RoleText => IsOwner ? "you · owner" : model.Moderator ? "moderator" : model.Agent ? "AI agent" : "";
+    public string RoleText => IsOwner ? "you · owner"
+        : string.Join(" · ", new[] { model.Agent ? owner.ClientOf(model.Name) : null, model.Moderator ? "moderator" : null }.Where(s => s != null));
     public string? MutedText => owner.RoomFor.MutedUntil(channel, model.Name) is { } until
         ? until == DateTime.MaxValue ? "muted until unmuted" : $"muted until {until.ToString("HH:mm", CultureInfo.CurrentCulture)}" : null;
     public bool IsMuted => MutedText != null;

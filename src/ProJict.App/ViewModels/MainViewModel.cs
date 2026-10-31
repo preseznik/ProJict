@@ -136,6 +136,7 @@ public sealed partial class MainViewModel : ObservableObject
         Agents.Changed += () =>
         {
             foreach (var item in ProjectItems) item.Refresh();
+            if (CurrentView == Chat) Chat.RefreshInviteChoices();
             if (CurrentView is DashboardViewModel) Dashboard.Refresh();
             if (CurrentView == AgentActivity) AgentActivity.Refresh();
             CurrentProject?.RefreshWorkingOnHint();

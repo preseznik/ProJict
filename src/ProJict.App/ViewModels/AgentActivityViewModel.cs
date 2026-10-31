@@ -372,7 +372,7 @@ public sealed partial class AgentActivityViewModel : ObservableObject
             var last = s.Recent.LastOrDefault(a => a.ProjectId == project.Id) ?? s.Recent.LastOrDefault();
             var doing = s.Status is { } status && s.StatusAt is { } since && now - since < TimeSpan.FromMinutes(15) ? status
                 : last != null ? $"{last.Text} ({Age(last.At, now)})" : "connected, nothing done yet";
-            return $"{s.AgentName}: {doing}";
+            return $"{s.FullName}: {doing}";
         });
         return string.Join("\n", lines) + "\nRight-click › Agents shows more.";
     }
@@ -431,7 +431,9 @@ public sealed partial class AgentCardViewModel : ObservableObject
     {
         var names = _owner.ProjectNames(Session);
         var since = Session.ConnectedAt.ToString(Session.ConnectedAt.Date == DateTime.Today ? "HH:mm" : "d MMM HH:mm", CultureInfo.CurrentCulture);
-        Where = (names.Count == 0 ? "Connected" : "In " + string.Join(", ", names)) + " · since " + since;
+        // "Claude Code · login fix · In GRID2VR · since 22:41": what it runs in (when it has a name of its own) and what it works on.
+        var about = new[] { Session.Name != null ? Session.Client : null, Session.Label }.Where(s => s != null);
+        Where = string.Join(" · ", about.Append((names.Count == 0 ? "Connected" : "In " + string.Join(", ", names)) + " · since " + since));
         var actions = Session.Recent.Where(a => _only == null || a.ProjectId == null || a.ProjectId == _only.Id).ToList();
         Recent = actions.AsEnumerable().Reverse().Take(6).Select((a, i) => new AgentActionRow(a, i == 0, _owner)).ToList();
         CheckedOut = _owner.CheckedOut(Session, _only).Select(x => new CheckoutRow(x.Project, x.Item, _owner)).ToList();

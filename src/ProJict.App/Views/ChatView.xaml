@@ -27,8 +27,8 @@
                             <TextBlock Style="{StaticResource Icon}" Text="&#xE72E;" FontSize="10" Margin="6,2,0,0" Foreground="{DynamicResource TextFillColorTertiaryBrush}"
                                        ToolTip="Invite only" Visibility="{Binding IsInviteOnly, Converter={StaticResource BoolToVis}}" />
                         </StackPanel>
-                        <TextBlock Text="{Binding LinkText}" Style="{StaticResource MutedText}" FontSize="11" TextTrimming="CharacterEllipsis"
-                                   Visibility="{Binding LinkText, Converter={StaticResource EmptyToVis}}" />
+                        <TextBlock Text="{Binding Subtitle}" Style="{StaticResource MutedText}" FontSize="11" TextTrimming="CharacterEllipsis"
+                                   Visibility="{Binding Subtitle, Converter={StaticResource EmptyToVis}}" />
                     </StackPanel>
                     <Border x:Name="Count" Grid.Column="1" CornerRadius="8" Padding="6,0" MinWidth="18" VerticalAlignment="Center" Margin="6,0,0,0"
                             Background="{DynamicResource SubtleFillColorTertiaryBrush}" Visibility="{Binding HasUnread, Converter={StaticResource BoolToVis}}">
@@ -212,6 +212,8 @@
                 <DockPanel DockPanel.Dock="Top">
                     <Button x:Name="NewChannelButton" DockPanel.Dock="Right" Style="{StaticResource SubtleIconButton}" Content="&#xE710;" VerticalAlignment="Center"
                             Command="{Binding NewChannelCommand}" ToolTip="Start a channel" AutomationProperties.Name="Start a channel" />
+                    <Button x:Name="BrowseButton" DockPanel.Dock="Right" Style="{StaticResource SubtleIconButton}" Content="&#xE8FD;" VerticalAlignment="Center"
+                            Command="{Binding BrowseCommand}" ToolTip="Browse channels: every channel, with what it's for" AutomationProperties.Name="Browse channels" />
                     <TextBlock Text="Chat" FontSize="28" FontWeight="SemiBold" />
                 </DockPanel>
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="-4,12,-4,0">
@@ -222,6 +224,13 @@
                         <TextBlock Text="Other channels" Style="{StaticResource MutedText}" FontSize="12" Margin="8,14,0,4"
                                    Visibility="{Binding HasOtherChannels, Converter={StaticResource BoolToVis}}" ToolTip="Channels you're not in" />
                         <ItemsControl x:Name="OtherChannelList" ItemsSource="{Binding OtherChannels}" ItemTemplate="{StaticResource ChannelRow}" Focusable="False" />
+                        <Button Style="{StaticResource SubtleButton}" HorizontalAlignment="Left" Margin="0,10,0,0" Command="{Binding BrowseCommand}"
+                                Visibility="{Binding HasNoChannels, Converter={StaticResource InvBoolToVis}}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Style="{StaticResource Icon}" Text="&#xE8FD;" FontSize="12" Margin="0,1,6,0" />
+                                <TextBlock Text="Browse channels" />
+                            </StackPanel>
+                        </Button>
                     </StackPanel>
                 </ScrollViewer>
             </DockPanel>
@@ -251,6 +260,7 @@
                            Foreground="{DynamicResource SystemFillColorCriticalBrush}" Visibility="{Binding NewNameProblem, Converter={StaticResource EmptyToVis}}" />
                 <TextBlock Text="Topic" FontWeight="SemiBold" Margin="0,14,0,4" />
                 <TextBox Text="{Binding NewTopic, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Topic" />
+                <TextBlock Style="{StaticResource MutedText}" FontSize="12" Margin="0,2,0,0" Text="What it's for, in a line. It shows in the channel lists." />
                 <StackPanel Margin="0,14,0,0" Visibility="{Binding HasNewLink, Converter={StaticResource BoolToVis}}">
                     <TextBlock Text="About" FontWeight="SemiBold" Margin="0,0,0,4" />
                     <DockPanel>
@@ -270,6 +280,54 @@
                 </StackPanel>
             </StackPanel>
         </ScrollViewer>
+
+        <!-- Browse channels -->
+        <DockPanel x:Name="BrowsePane" Grid.Column="1" Margin="28,20,28,12" Visibility="{Binding IsBrowsing, Converter={StaticResource BoolToVis}}">
+            <DockPanel DockPanel.Dock="Top" Margin="0,0,0,12">
+                <Button DockPanel.Dock="Right" Style="{StaticResource SubtleIconButton}" Content="&#xE711;" FontSize="12" VerticalAlignment="Top"
+                        Command="{Binding CloseBrowseCommand}" ToolTip="Close" AutomationProperties.Name="Close" />
+                <Button DockPanel.Dock="Right" Content="Start a channel" Margin="0,0,10,0" VerticalAlignment="Top" Command="{Binding NewChannelCommand}" />
+                <StackPanel>
+                    <TextBlock Text="Browse channels" FontSize="22" FontWeight="SemiBold" />
+                    <TextBlock Style="{StaticResource MutedText}" Margin="0,2,0,0" Text="Every channel, with what it's for. Open one, or join one you're not in." />
+                </StackPanel>
+            </DockPanel>
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <ItemsControl x:Name="BrowseList" ItemsSource="{Binding BrowseRows}" Focusable="False" MaxWidth="820" HorizontalAlignment="Left">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:BrowseRowViewModel}">
+                            <Border Style="{StaticResource Card}" Padding="16,12" Margin="0,0,0,8">
+                                <DockPanel>
+                                    <Button x:Name="Action" DockPanel.Dock="Right" Content="{Binding ActionText}" VerticalAlignment="Center" Margin="12,0,0,0" MinWidth="72"
+                                            Command="{Binding OpenCommand}" AutomationProperties.Name="{Binding ActionText}" />
+                                    <StackPanel>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding Name}" FontSize="15" FontWeight="SemiBold" />
+                                            <Border Style="{StaticResource TagChip}" Background="{DynamicResource SubtleFillColorSecondaryBrush}" Margin="8,0,0,0" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding AccessText}" FontSize="11" />
+                                            </Border>
+                                        </StackPanel>
+                                        <TextBlock x:Name="Topic" Text="{Binding Topic}" TextWrapping="Wrap" Margin="0,3,0,0" />
+                                        <TextBlock Text="{Binding LinkText}" Style="{StaticResource MutedText}" FontSize="12" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"
+                                                   Visibility="{Binding LinkText, Converter={StaticResource EmptyToVis}}" />
+                                        <TextBlock Text="{Binding Details}" Style="{StaticResource MutedText}" FontSize="12" Margin="0,2,0,0" />
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                            <DataTemplate.Triggers>
+                                <DataTrigger Binding="{Binding HasTopic}" Value="False">
+                                    <Setter TargetName="Topic" Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}" />
+                                    <Setter TargetName="Topic" Property="FontStyle" Value="Italic" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsMember}" Value="False">
+                                    <Setter TargetName="Action" Property="Style" Value="{StaticResource AccentButtonStyle}" />
+                                </DataTrigger>
+                            </DataTemplate.Triggers>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </DockPanel>
 
         <!-- The open channel -->
         <DockPanel x:Name="ChannelPane" Grid.Column="1" Margin="20,16,16,12" Visibility="{Binding ShowChannelPane, Converter={StaticResource BoolToVis}}">
@@ -300,7 +358,7 @@
                     </StackPanel>
                     <TextBox x:Name="TopicBox" Style="{StaticResource HoverHintTextBox}" Tag="topic…" Margin="-2,2,0,0" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                              Text="{Binding TopicText, UpdateSourceTrigger=LostFocus}" IsReadOnly="{Binding IsModerator, Converter={StaticResource InvBool}}"
-                             AutomationProperties.Name="Topic" />
+                             AutomationProperties.Name="Topic" ToolTip="What the channel is for; moderators change it" />
                     <TextBlock FontSize="12" Margin="0,2,0,0" Foreground="{DynamicResource TextFillColorTertiaryBrush}">
                         <Hyperlink x:Name="LinkHyperlink" Command="{Binding OpenLinkCommand}" ToolTip="Show it on its board"><Run Text="{Binding LinkText, Mode=OneWay}" /></Hyperlink><Run Text="{Binding LinkSeparator, Mode=OneWay}" /><Run Text="{Binding StartedText, Mode=OneWay}" />
                     </TextBlock>
@@ -327,6 +385,32 @@
                         <TextBlock Text="Editing your message" FontSize="12" VerticalAlignment="Center" />
                     </DockPanel>
                 </Border>
+                <!-- @mention suggestions: Up/Down pick, Tab or Enter puts the name in, Esc closes. -->
+                <Border x:Name="MentionList" Style="{StaticResource Card}" Padding="4" Margin="0,0,0,4" HorizontalAlignment="Left" MinWidth="240"
+                        Visibility="{Binding HasMentionChoices, Converter={StaticResource BoolToVis}}">
+                    <ItemsControl ItemsSource="{Binding MentionChoices}" Focusable="False">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:MentionChoice}">
+                                <Border x:Name="Choice" Padding="8,4" CornerRadius="4" Background="Transparent" Cursor="Hand" MouseLeftButtonDown="MentionChoice_MouseDown">
+                                    <StackPanel Orientation="Horizontal">
+                                        <Border Width="20" Height="20" CornerRadius="10" Background="{Binding Badge.Background}" Margin="0,0,8,0">
+                                            <TextBlock Text="{Binding Badge.Initials}" Foreground="White" FontSize="9" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        </Border>
+                                        <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Border>
+                                <DataTemplate.Triggers>
+                                    <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                        <Setter TargetName="Choice" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                                    </DataTrigger>
+                                    <Trigger SourceName="Choice" Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="Choice" Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}" />
+                                    </Trigger>
+                                </DataTemplate.Triggers>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Border>
                 <TextBlock x:Name="ComposerNote" Text="{Binding ComposerNote}" Style="{StaticResource MutedText}" Margin="2,0,0,6"
                            Visibility="{Binding ComposerNote, Converter={StaticResource EmptyToVis}}" />
                 <Grid IsEnabled="{Binding CanWrite}">
@@ -337,6 +421,7 @@
                     </Grid.ColumnDefinitions>
                     <TextBox x:Name="DraftBox" Text="{Binding Draft, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="40" MaxHeight="180"
                              VerticalScrollBarVisibility="Auto" AutomationProperties.Name="Message" PreviewKeyDown="DraftBox_PreviewKeyDown"
+                             TextChanged="DraftBox_Changed" SelectionChanged="DraftBox_Changed" LostKeyboardFocus="DraftBox_LostFocus"
                              AllowDrop="True" PreviewDragOver="Draft_PreviewDragOver" PreviewDrop="Draft_PreviewDrop" />
                     <Button Grid.Column="1" Style="{StaticResource SubtleIconButton}" Content="&#xE723;" Margin="6,0,0,0" VerticalAlignment="Bottom"
                             Command="{Binding AttachFilesCommand}" ToolTip="Attach files (or paste or drop them in the box)" AutomationProperties.Name="Attach files" />
@@ -382,7 +467,8 @@
                     <DockPanel>
                         <Button DockPanel.Dock="Right" Content="Invite" Margin="6,0,0,0" Command="{Binding InviteCommand}" />
                         <ComboBox x:Name="InviteBox" IsEditable="True" ItemsSource="{Binding InviteChoices}" Text="{Binding InviteName, UpdateSourceTrigger=PropertyChanged}"
-                                  AutomationProperties.Name="Who to invite" />
+                                  AutomationProperties.Name="Who to invite" DropDownOpened="InviteBox_DropDownOpened"
+                                  ToolTip="Agents connected now come first" />
                     </DockPanel>
                 </StackPanel>
                 <ScrollViewer VerticalScrollBarVisibility="Auto">

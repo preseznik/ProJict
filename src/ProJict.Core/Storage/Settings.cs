@@ -177,6 +177,9 @@ public sealed class WorkspaceSettings
         if (GroupComments is { Count: 0 }) GroupComments = null;
     }
 
+    /// <summary>The names agents picked for themselves, and the client each runs in ("Ada" → "Claude Code").</summary>
+    public Dictionary<string, string>? AgentNames { get; set; }
+
     public static bool IsDefaultGroup(string? name) =>
         string.Equals(name?.Trim(), PersonalGroup, StringComparison.OrdinalIgnoreCase) ||
         string.Equals(name?.Trim(), WorkGroup, StringComparison.OrdinalIgnoreCase);

@@ -60,8 +60,14 @@ public sealed partial class AgentTools : IMcpToolHost
                 ("ship_steps", "string[]", "The steps this project has, from commit, build, package, push and release (replaces the list).", false),
                 ("ship_how_to", "string", "How to ship it: what an agent does for each step, e.g. bump the version in …, run build.ps1, test, commit, push, publish the release.", false)),
             UpdateProject);
+        Add("set_name", "Pick your name",
+            "Picks a short name of your own that you sign everything with from now on (comments, history, check-outs, chat), e.g. Ada or Quill. " +
+            "Call it when you start. If you had a name in this workspace before, take it again: your earlier work then counts as yours. " +
+            "A name another connected agent has is taken.",
+            Schema(("name", "string", $"One word of 2 to {AgentNaming.MaxLength} letters, digits or dashes.", true)), SetName);
         Add("set_label", "Set your label",
-            "Adds a short label to the name you sign with (e.g. the task or folder), so the user can tell parallel sessions apart: \"Claude Code · login fix\".",
+            "Says in a few words what you're working on in this session (e.g. the task or folder); it shows on your card in the user's Agents view. " +
+            "It isn't part of your name: pick that with set_name.",
             Schema(("label", "string", "A few words; empty removes the label.", true)), SetLabel);
         Add("set_status", "Set your status",
             "Tells the user in a few words what you're doing right now, e.g. \"Running the tests\" or \"Writing the fix for the launcher\". " +
@@ -172,8 +178,9 @@ public sealed partial class AgentTools : IMcpToolHost
         "ProJict is the user's to-do list app: projects contain categories, categories contain items (with sub-items, tags such as BUG or ADD, " +
         "attachments, discussions, and a state: todo, in_progress or done). To work on items: current_project (or list_projects) to find the project, " +
         "list_items to see what is open, claim_item to check an item out before you start (other agents then can't change it), then complete_item " +
-        "with a short resolution and evidence such as screenshots. Everything you do is signed with your name; if several sessions of you run at " +
-        "once, call set_label first. Everything you complete waits for the user's review, so only complete what you really finished; use " +
+        "with a short resolution and evidence such as screenshots. Everything you do is signed with your name: when you start, pick a short name " +
+        "of your own with set_name (one word, e.g. Ada), the same one as before if you had one here, so your earlier work stays yours; " +
+        "set_label says what you're working on. Everything you complete waits for the user's review, so only complete what you really finished; use " +
         "update_item with state todo if you stop. The user decides which items agents may work on, by priority (current_project says which); " +
         "the others and items on hold are off limits: list_items leaves them out, and you may read and comment on them but not check them out, " +
         "change or complete them. Ask the user questions or report progress with add_comment, and check list_comments for their " +
@@ -193,7 +200,16 @@ public sealed partial class AgentTools : IMcpToolHost
 
     public void SessionStarted(McpSession session)
     {
-        lock (_live) _live.Add(session);
+        lock (_live)
+        {
+            // Sessions of the same client without a name of their own are numbered: Claude Code, Claude Code 2, …
+            if (string.IsNullOrWhiteSpace(session.SignAs))
+            {
+                var taken = _live.Where(s => s.Name == null && string.IsNullOrWhiteSpace(s.SignAs) && s.Client == session.Client).Select(s => s.Number).ToHashSet();
+                while (taken.Contains(session.Number)) session.Number++;
+            }
+            _live.Add(session);
+        }
         _dispatcher.InvokeAsync(() =>
         {
             _state.StatusText = $"{session.AgentName} connected to ProJict.";
@@ -305,7 +321,8 @@ public sealed partial class AgentTools : IMcpToolHost
             "list_projects" => "Looked through the projects",
             "current_project" => project != null ? $"Opened {project.Name}" : "Looked for its project",
             "update_project" => $"Changed the details of {project?.Name}",
-            "set_label" => $"Now signs as {session.AgentName}",
+            "set_name" => $"Now called {session.AgentName}",
+            "set_label" => session.Label != null ? $"Working on: {session.Label}" : "Cleared its label",
             "set_status" => session.Status ?? "Cleared its status",
             "list_items" => project != null ? $"Went through the items of {project.Name}" : "Went through the items",
             "get_item" => $"Read {what}",
@@ -458,14 +475,43 @@ public sealed partial class AgentTools : IMcpToolHost
 
     private string SetLabel(McpSession session, Args args, List<Attachment> files)
     {
-        var label = args.String("label")?.Trim();
+        // Older agents put their client's name in the label; the card shows that already.
+        var label = AgentNaming.TrimLabel(args.String("label"), session.Client);
         if (label is { Length: > 40 }) throw new McpToolException("Keep the label short (40 characters at most).");
-        var held = LocalProjects.SelectMany(p => p.Walk().Select(l => (Project: p, l.Item))).Where(x => Holds(session, x.Item)).ToList();
-        session.Label = string.IsNullOrEmpty(label) ? null : label;
-        // Items it has checked out move to its new name, so it keeps them.
-        foreach (var (project, item) in held) Edit(project, item.Id, i => i.ClaimedBy = session.AgentName);
+        session.Label = label;
         _main.Agents.Renamed();
-        return Json(new JsonObject { ["name"] = session.AgentName });
+        return Json(new JsonObject { ["label"] = session.Label, ["name"] = session.AgentName });
+    }
+
+    private string SetName(McpSession session, Args args, List<Attachment> files)
+    {
+        if (!string.IsNullOrWhiteSpace(session.SignAs))
+            throw new McpToolException($"An API token signs with the name the user gave it ({session.SignAs.Trim()}); it can't pick another.", ToolProblem.Forbidden);
+        var name = args.Required("name").Trim().TrimStart('@');
+        if (AgentNaming.Problem(name) is { } problem) throw new McpToolException(problem);
+        if (string.Equals(name, _state.UserName, StringComparison.OrdinalIgnoreCase) || string.Equals(name, session.Client, StringComparison.OrdinalIgnoreCase))
+            throw new McpToolException($"{name} can't be your name; pick one of your own.");
+        List<McpSession> others;
+        lock (_live) others = _live.Where(s => s != session).ToList();
+        if (others.Any(s => string.Equals(s.AgentName, name, StringComparison.OrdinalIgnoreCase)))
+            throw new McpToolException($"{name} is taken by another agent connected now; pick another name.", ToolProblem.Conflict);
+        var known = _state.Settings.AgentNames ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var before = known.Keys.FirstOrDefault(k => string.Equals(k, name, StringComparison.OrdinalIgnoreCase));
+        var old = session.AgentName;
+        var held = LocalProjects.SelectMany(p => p.Walk().Select(l => (Project: p, l.Item))).Where(x => Holds(session, x.Item)).ToList();
+        session.Name = before ?? name;
+        // What it has checked out and the channels it's in go with it, so it keeps them.
+        foreach (var (project, item) in held) Edit(project, item.Id, i => i.ClaimedBy = session.AgentName);
+        Chat.RenameMember(old, session.AgentName);
+        known[session.AgentName] = session.Client;
+        _state.MarkSettingsDirty();
+        _main.Agents.Renamed();
+        return Json(new JsonObject
+        {
+            ["name"] = session.AgentName,
+            ["client"] = session.Client,
+            ["note"] = before != null ? $"You were {session.AgentName} here before: your earlier work counts as yours." : $"Everything you do is now signed {session.AgentName}.",
+        });
     }
 
     // ───────────── Items ─────────────
@@ -705,16 +751,20 @@ public sealed partial class AgentTools : IMcpToolHost
         if (item.State != ItemState.InProgress || item.ClaimedBy == null || Holds(session, item)) return null;
         McpSession? holder;
         lock (_live) holder = _live.FirstOrDefault(s => s != session && Holds(s, item));
-        if (holder == null && string.Equals(item.ClaimedBy, session.AgentName, StringComparison.OrdinalIgnoreCase))
+        if (holder == null && AgentNaming.IsOwnWork(session, item.ClaimedBy))
         {
             session.Claimed.Add(item.Id);
+            // Its own check-out from an earlier session, under the name it had then ("Claude Code 2"): it carries on under this one.
+            if (!string.Equals(item.ClaimedBy, session.AgentName, StringComparison.OrdinalIgnoreCase) &&
+                LocalProjects.FirstOrDefault(p => p.Find(item.Id) != null) is { } project)
+                Edit(project, item.Id, i => i.ClaimedBy = session.AgentName);
             return null;
         }
         if (args.Bool("force") == true) return item.ClaimedBy;
         throw new McpToolException(holder == null
             ? $"{item.ClaimedBy} has this item checked out but isn't connected any more. Pass force=true to take it over, or leave it for the user to release."
             : holder.AgentName == session.AgentName
-                ? $"Another {session.AgentName} session has this item checked out. Call set_label so your sessions can be told apart, pick another item, or pass force=true to take it over."
+                ? $"Another session signing as {session.AgentName} has this item checked out. Pick another item, or pass force=true to take it over."
                 : $"{item.ClaimedBy} has this item checked out and is still connected. Talk to it or the user with add_comment, pick another item, or pass force=true to take it over.",
             ToolProblem.Conflict);
     }

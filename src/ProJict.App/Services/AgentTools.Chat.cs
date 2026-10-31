@@ -34,7 +34,7 @@ public sealed partial class AgentTools
                 ("category", "string", "Category name to link it to (in the project).", false),
                 ("project", "string", "Project to link it to (name or key); with category, the category's project.", false),
                 ("access", "enum:open|invite_only", "open: anyone who can see its project can join; invite_only: only those invited.", false),
-                ("topic", "string", "What the channel is for, in a line.", false),
+                ("topic", "string", "What the channel is for, in a line; it shows in the channel lists.", false),
                 ("invite", "string[]", "Names to invite, e.g. Codex.", false)),
             CreateChannel);
         Add("read_channel", "Read a chat channel",
@@ -447,13 +447,15 @@ public sealed partial class AgentTools
                _state.Projects.Any(p => p.Walk().Any(l => (l.Item.Activity ?? []).Any(a => a.Agent && string.Equals(a.By, name, StringComparison.OrdinalIgnoreCase))));
     }
 
-    /// <summary>Names the user can invite: agents connected now or seen before.</summary>
+    /// <summary>Names the user can invite: agents connected now first, then the ones seen before (in channels or the history).</summary>
     public IReadOnlyList<string> KnownAgentNames()
     {
         List<string> live;
-        lock (_live) live = _live.Select(s => s.AgentName).ToList();
-        return live.Concat(Chat.Channels.SelectMany(c => c.Members).Where(m => m.Agent).Select(m => m.Name))
-            .Concat(_state.Projects.SelectMany(p => p.Walk()).SelectMany(l => l.Item.Activity ?? []).Where(a => a.Agent).Select(a => a.By))
-            .Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.CurrentCultureIgnoreCase).ToList();
+        lock (_live) live = _live.Select(s => s.AgentName).Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.CurrentCultureIgnoreCase).ToList();
+        var earlier = Chat.Channels.SelectMany(c => c.Members).Where(m => m.Agent).Select(m => m.Name)
+            .Concat(_state.Projects.SelectMany(p => p.Walk()).SelectMany(l => l.Item.Activity ?? []).Where(a => a.Agent).Select(a => AgentNaming.Identity(a.By)))
+            .Distinct(StringComparer.OrdinalIgnoreCase).Where(n => !live.Contains(n, StringComparer.OrdinalIgnoreCase))
+            .Order(StringComparer.CurrentCultureIgnoreCase);
+        return [.. live, .. earlier];
     }
 }

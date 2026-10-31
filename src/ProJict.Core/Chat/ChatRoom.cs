@@ -197,6 +197,35 @@ public sealed class ChatRoom
         Changed?.Invoke(channel);
     }
 
+    /// <summary>An agent picked a name: its memberships go with it (what it wrote stays signed with the old one).</summary>
+    public void RenameMember(string from, string to)
+    {
+        if (string.Equals(from, to, StringComparison.OrdinalIgnoreCase)) return;
+        foreach (var channel in Channels)
+        {
+            var changed = false;
+            if (Member(channel, from) is { } member)
+            {
+                if (Member(channel, to) is { } existing)
+                {
+                    existing.Moderator |= member.Moderator;
+                    if (member.LastRead > existing.LastRead) existing.LastRead = member.LastRead;
+                    channel.Members.Remove(member);
+                }
+                else member.Name = to;
+                // Its earlier messages stay signed with the old name: say who that was.
+                AddNotice(channel, new ChatActor(to, member.Agent), $"{from} is now called {to}");
+                changed = true;
+            }
+            if (channel.Kicked.RemoveAll(k => string.Equals(k, from, StringComparison.OrdinalIgnoreCase)) > 0)
+            {
+                if (!IsKicked(channel, to)) channel.Kicked.Add(to);
+                changed = true;
+            }
+            if (changed) Changed?.Invoke(channel);
+        }
+    }
+
     /// <summary>Removes a member, who can't rejoin until invited again.</summary>
     public void Kick(ChatChannel channel, ChatActor by, string name)
     {

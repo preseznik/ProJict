@@ -19,8 +19,12 @@ public sealed class McpSession
     public string? WorkingDirectory { get; set; }
     /// <summary>Items this agent has checked out (claimed) in this session.</summary>
     public HashSet<Guid> Claimed { get; } = [];
-    /// <summary>Set by the agent (set_label) so parallel sessions of the same client can be told apart.</summary>
+    /// <summary>What the agent says it's working on (set_label), shown on its card; not part of its name.</summary>
     public string? Label { get; set; }
+    /// <summary>The short name the agent picked for itself (set_name), e.g. "Ada"; it signs everything with it.</summary>
+    public string? Name { get; set; }
+    /// <summary>Sessions of the same client without a name of their own are numbered: 2 for "Claude Code 2".</summary>
+    public int Number { get; set; } = 1;
 
     /// <summary>The name it signs with whatever the client calls itself: an API token's name.</summary>
     public string? SignAs { get; init; }
@@ -45,12 +49,19 @@ public sealed class McpSession
     /// <summary>What its tool results already told it is waiting (chat messages, comments, …), so each is mentioned once.</summary>
     public HashSet<string> Noticed { get; } = [];
 
-    /// <summary>How the agent signs its work: "Claude Code" for a client named "claude-code", plus its label if it set one.</summary>
-    public string AgentName => string.IsNullOrWhiteSpace(Label) ? ClientDisplayName : $"{ClientDisplayName} · {Label.Trim()}";
+    /// <summary>
+    /// How the agent signs its work: an API token's name, the name it picked ("Ada"), or else its client's name
+    /// ("Claude Code" for a client named "claude-code"), numbered when several run at once ("Claude Code 2").
+    /// </summary>
+    public string AgentName => !string.IsNullOrWhiteSpace(SignAs) ? SignAs.Trim()
+        : Name ?? (Number > 1 ? $"{Client} {Number}" : Client);
 
-    private string ClientDisplayName => !string.IsNullOrWhiteSpace(SignAs) ? SignAs.Trim()
-        : !string.IsNullOrWhiteSpace(ClientTitle) ? ClientTitle.Trim()
+    /// <summary>What it runs in: "Claude Code", "Codex", …</summary>
+    public string Client => !string.IsNullOrWhiteSpace(ClientTitle) ? ClientTitle.Trim()
         : !string.IsNullOrWhiteSpace(ClientName) ? Prettify(ClientName) : "AI agent";
+
+    /// <summary>Its name with its client, for tooltips: "Ada · Claude Code".</summary>
+    public string FullName => Name != null ? $"{Name} · {Client}" : AgentName;
 
     private static string Prettify(string name) => name.Contains(' ') ? name.Trim() :
         string.Join(" ", name.Split(['-', '_'], StringSplitOptions.RemoveEmptyEntries).Select(w => char.ToUpperInvariant(w[0]) + w[1..]));

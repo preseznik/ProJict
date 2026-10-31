@@ -76,6 +76,24 @@ public partial class ChatView : UserControl
     private void DraftBox_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         if (_vm == null) return;
+        if (_vm.HasMentionChoices)
+        {
+            switch (e.Key)
+            {
+                case Key.Down or Key.Up:
+                    _vm.MoveMention(e.Key == Key.Down ? 1 : -1);
+                    e.Handled = true;
+                    return;
+                case Key.Tab or Key.Enter when !Keyboard.Modifiers.HasFlag(ModifierKeys.Shift):
+                    CompleteMention(_vm.SelectedMention!);
+                    e.Handled = true;
+                    return;
+                case Key.Escape:
+                    _vm.ClearMentions();
+                    e.Handled = true;
+                    return;
+            }
+        }
         switch (e.Key)
         {
             case Key.Enter when !Keyboard.Modifiers.HasFlag(ModifierKeys.Shift):
@@ -96,6 +114,35 @@ public partial class ChatView : UserControl
                 break;
         }
     }
+
+    /// <summary>Typing or moving the caret: the @mention suggestions follow.</summary>
+    private void DraftBox_Changed(object sender, RoutedEventArgs e) => _vm?.UpdateMentions(DraftBox.Text, DraftBox.CaretIndex);
+
+    private void DraftBox_LostFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        // Clicking a suggestion takes the focus first; it puts the name in itself.
+        if (!MentionList.IsMouseOver) _vm?.ClearMentions();
+    }
+
+    private void MentionChoice_MouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: MentionChoice choice })
+        {
+            CompleteMention(choice.Name);
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>Replaces the "@na" before the caret with the name.</summary>
+    public void CompleteMention(string name)
+    {
+        var (text, caret) = ChatViewModel.InsertMention(DraftBox.Text, DraftBox.CaretIndex, name);
+        DraftBox.Text = text;
+        DraftBox.CaretIndex = caret;
+        _vm?.ClearMentions();
+    }
+
+    private void InviteBox_DropDownOpened(object sender, EventArgs e) => _vm?.RefreshInviteChoices();
 
     private void Draft_PreviewDragOver(object sender, DragEventArgs e)
     {

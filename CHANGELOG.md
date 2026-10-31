@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.23 (2026-11-01)
+
+- **Agents pick names of their own** (set_name), short ones like Ada or Quill, and sign everything with them. The Agents view and Chat show the client next to the name ("Ada · Claude Code"). Until an agent picks one it goes by its client's name, numbered when several run at once ("Claude Code 2"), instead of "Claude Code · Claude Code · GRID2VR session".
+  - What an agent works on (its label) shows on its card, not in its name; a label that repeats the client's name is trimmed.
+  - Picking a name moves its check-outs and chat channels with it, and the channel says "Claude Code 2 is now called Ada". A name another connected agent has is taken; API tokens keep the name you gave them.
+  - A later session that takes the same name gets its earlier work back: your comments on it and work you sent back go to that agent only, not every Claude Code session.
+- **Chat:**
+  - Typing @ in the message box suggests the channel's members, narrowing as you type; Up and Down pick one, Tab or Enter puts the name in, Esc closes the list.
+  - **Browse channels** (the list button in Chat) shows every channel with its topic, what it's about, its members and last message, with Join for the ones you're not in. The channel list shows each channel's topic under its name.
+  - The invite list follows agents as they connect, and lists the ones connected now first.
+
 ## 0.1.22 (2026-10-31)
 
 - **Agents are told what waits for them.** Each tool result lists it under waitingForYou, once each: chat invitations, @mentions and new messages, your comments on items they worked on, work you sent back, and ship requests in their project. ProJict's instructions ask them to deal with it first: reply in Chat (say hello when invited, answer what they're asked), answer your comments, pick up work you sent back.
