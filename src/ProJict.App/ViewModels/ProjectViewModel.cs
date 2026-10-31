@@ -774,7 +774,13 @@ public sealed partial class ProjectViewModel : ObservableObject
         // Finishing the focused item moves the cursor on to the next one, like ticking down a list.
         if (_focusedItemId == row.Item.Id && row.Parent == null && (state == ItemState.Done || row.Item.IsDone))
             focus = NextRowAfter(row)?.Item.Id ?? row.Item.Id;
-        Mutate(() => row.Item.SetState(state), [row.Category], focus);
+        // An agent's work you mark not done goes back to it: the history says so, and the agent is told.
+        var sentBack = row.Item.NeedsReview && state != ItemState.Done;
+        Mutate(() =>
+        {
+            row.Item.SetState(state);
+            if (sentBack) row.Item.AddActivity(_state.UserName, $"{ActivityEntry.SentBack}: not accepted yet.", agent: false);
+        }, [row.Category], focus);
     }
 
     private ItemRowViewModel? NextRowAfter(ItemRowViewModel row)

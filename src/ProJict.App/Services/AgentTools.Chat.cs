@@ -194,7 +194,7 @@ public sealed partial class AgentTools
             ? (ChatRoom.FindMessage(channel, r.Trim()) ?? throw new McpToolException($"No message {r} in #{channel.Name}.", ToolProblem.NotFound)).Id
             : null;
         var message = Chatting(() => Chat.Post(channel, ActorOf(session), args.String("text") ?? "", replyTo, files));
-        session.ChatNoticed.Add(message.Id);
+        session.Noticed.Add($"chat:{message.Id}");
         return Json(new JsonObject { ["id"] = ShortId(message.Id), ["channel"] = "#" + channel.Name, ["at"] = Time(message.At) });
     }
 
@@ -266,17 +266,18 @@ public sealed partial class AgentTools
         var args = new Args(arguments);
         var seconds = Math.Clamp(args.Int("seconds") ?? MaxWaitSeconds, 1, MaxWaitSeconds);
         var arrived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        Action<ChatChannel, ChatMessage>? listener = null;
+        Action<ChatChannel>? listener = null;
         var only = await Run(session, () =>
         {
             RequireChat();
             var channel = args.String("channel") != null ? ChannelFor(session, args) : null;
-            listener = (c, m) =>
+            // Any change can be for it: a message, an @mention, an invitation.
+            listener = c =>
             {
-                if ((channel == null || c == channel) && IsFor(session, c, m)) arrived.TrySetResult();
+                if ((channel == null || c == channel) && Waiting(session, channel).Count > 0) arrived.TrySetResult();
             };
             if (Waiting(session, channel).Count > 0) arrived.TrySetResult();
-            else Chat.Posted += listener;
+            else Chat.Changed += listener;
             return channel;
         });
         try
@@ -285,7 +286,7 @@ public sealed partial class AgentTools
         }
         finally
         {
-            await _dispatcher.InvokeAsync(() => Chat.Posted -= listener);
+            await _dispatcher.InvokeAsync(() => Chat.Changed -= listener);
         }
         return await Run(session, () =>
         {
@@ -319,13 +320,10 @@ public sealed partial class AgentTools
         return result;
     }
 
-    /// <summary>Whether a new message is for the agent: in a channel it's in, or @mentioning it where it can see; never its own.</summary>
-    private bool IsFor(McpSession session, ChatChannel channel, ChatMessage message) =>
-        !message.Notice && !message.Deleted && !string.Equals(message.By, session.AgentName, StringComparison.OrdinalIgnoreCase) &&
-        ChatRoom.CanSee(channel, ActorOf(session)) &&
-        (ChatRoom.Member(channel, session.AgentName) != null || ChatText.Mentions(message.Text, session.AgentName));
-
-    /// <summary>What waits for the agent: unread messages in its channels, and @mentions of it elsewhere it hasn't been given yet.</summary>
+    /// <summary>
+    /// What waits for the agent: what it hasn't read in its channels (messages, and lines about it such as an invitation),
+    /// and @mentions of it in channels it isn't in, also from while it wasn't connected.
+    /// </summary>
     private List<(ChatChannel Channel, ChatMessage Message)> Waiting(McpSession session, ChatChannel? only = null)
     {
         var actor = ActorOf(session);
@@ -335,8 +333,7 @@ public sealed partial class AgentTools
             if (ChatRoom.Member(channel, actor.Name) != null)
                 waiting.AddRange(ChatRoom.Unread(channel, actor.Name).Select(m => (channel, m)));
             else
-                waiting.AddRange(channel.Messages.Where(m => m.At > session.ConnectedAt && !session.ChatDelivered.Contains(m.Id) && IsFor(session, channel, m))
-                    .Select(m => (channel, m)));
+                waiting.AddRange(Chat.MentionsOutside(channel, actor.Name).Select(m => (channel, m)));
         }
         return waiting;
     }
@@ -345,40 +342,40 @@ public sealed partial class AgentTools
     private void Delivered(McpSession session, ChatChannel channel, List<ChatMessage> messages)
     {
         if (messages.Count == 0) return;
-        foreach (var m in messages)
-        {
-            session.ChatDelivered.Add(m.Id);
-            session.ChatNoticed.Add(m.Id);
-        }
-        Chat.MarkRead(channel, session.AgentName, messages.Max(m => m.At));
+        foreach (var m in messages) session.Noticed.Add($"chat:{m.Id}");
+        var upTo = messages.Max(m => m.At);
+        if (ChatRoom.Member(channel, session.AgentName) != null) Chat.MarkRead(channel, session.AgentName, upTo);
+        else Chat.MarkMentionsRead(channel, session.AgentName, upTo);
     }
 
     /// <summary>
-    /// Added to the result of every other tool when new messages wait for the agent (each message once): how many in which
-    /// channel, and whether one @mentions it.
+    /// For the waitingForYou list (each thing once per session): invitations and other lines about the agent, and how many
+    /// new messages wait in which channel, saying when one @mentions it; with what to do about them.
     /// </summary>
-    private string WithChatNote(McpSession session, string tool, string result)
+    private List<string> ChatLines(McpSession session)
     {
-        if (ChatTools.Contains(tool) || !_state.AppSettings.AgentsUseChat || Chat.Channels.Count == 0) return result;
-        var fresh = Waiting(session).Where(w => !session.ChatNoticed.Contains(w.Message.Id)).ToList();
-        if (fresh.Count == 0) return result;
-        foreach (var (_, message) in fresh) session.ChatNoticed.Add(message.Id);
-        var parts = fresh.GroupBy(w => w.Channel).Select(g =>
+        if (!_state.AppSettings.AgentsUseChat || Chat.Channels.Count == 0) return [];
+        var fresh = Waiting(session).Where(w => !session.Noticed.Contains($"chat:{w.Message.Id}")).ToList();
+        if (fresh.Count == 0) return [];
+        foreach (var (_, message) in fresh) session.Noticed.Add($"chat:{message.Id}");
+        var parts = new List<string>();
+        var asked = false;
+        foreach (var group in fresh.GroupBy(w => w.Channel))
         {
-            var mentions = g.Count(w => ChatText.Mentions(w.Message.Text, session.AgentName));
-            return $"{Count(g.Count(), "new message")} in #{g.Key.Name}" + (mentions > 0 ? $" ({(mentions == 1 ? "one mentions" : $"{mentions} mention")} you)" : "");
-        });
-        var note = "Chat: " + string.Join(", ", parts) + ". read_channel to read them.";
-        try
-        {
-            if (JsonNode.Parse(result) is JsonObject json)
+            foreach (var (_, notice) in group.Where(w => w.Message.Notice))
             {
-                json["chat"] = note;
-                return Json(json);
+                parts.Add(notice.AboutText ?? notice.Text);
+                asked |= notice.Text.Contains(" invited ", StringComparison.Ordinal);
             }
+            var messages = group.Where(w => !w.Message.Notice).ToList();
+            if (messages.Count == 0) continue;
+            var mentions = messages.Count(w => ChatText.Mentions(w.Message.Text, session.AgentName));
+            asked |= mentions > 0;
+            parts.Add($"{Count(messages.Count, "new message")} in #{group.Key.Name}" +
+                      (mentions > 0 ? $" ({(mentions == 1 ? "one mentions" : $"{mentions} mention")} you)" : ""));
         }
-        catch (JsonException) { }
-        return result;
+        return ["Chat: " + string.Join("; ", parts) + ". Read them with read_channel" +
+                (asked ? ", and reply with post_message: say hello when invited, and answer what you're asked (or say you can't now)." : ".")];
     }
 
     // ───────────── JSON ─────────────
@@ -407,7 +404,10 @@ public sealed partial class AgentTools
 
     private JsonObject MessageJson(ChatMessage m, string you)
     {
-        if (m.Notice) return new JsonObject { ["notice"] = m.Text, ["at"] = Time(m.At) };
+        if (m.Notice)
+            return string.Equals(m.About, you, StringComparison.OrdinalIgnoreCase)
+                ? new JsonObject { ["notice"] = m.AboutText ?? m.Text, ["aboutYou"] = true, ["at"] = Time(m.At) }
+                : new JsonObject { ["notice"] = m.Text, ["at"] = Time(m.At) };
         return new JsonObject
         {
             ["id"] = ShortId(m.Id),

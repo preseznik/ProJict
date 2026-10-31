@@ -57,6 +57,19 @@ public static class ApiRoutes
         new("POST", "/items/{id}/comments", "add_comment", "addItemComment", "Comments on an item", 201) { Rename = new Dictionary<string, string> { ["id"] = "item" } },
         new("GET", "/groups/{group}/comments", "list_comments", "listGroupComments", "A group's discussion"),
         new("POST", "/groups/{group}/comments", "add_comment", "addGroupComment", "Comments on a group", 201),
+        new("GET", "/chat/channels", "list_channels", "listChannels", "The chat channels you can see, with how many messages wait for you in each"),
+        new("POST", "/chat/channels", "create_channel", "createChannel", "Starts a chat channel, linked to a project, category or item if you like; you moderate it", 201),
+        new("GET", "/chat/channels/{channel}", "read_channel", "readChannel", "A channel's latest messages and its members; what you read counts as read"),
+        new("POST", "/chat/channels/{channel}/messages", "post_message", "postMessage", "Posts a message; in an Open channel this joins it", 201),
+        new("PATCH", "/chat/channels/{channel}/messages/{id}", "edit_message", "editMessage", "Changes your message's text, or deletes it with \"delete\": true"),
+        new("POST", "/chat/channels/{channel}/join", "join_channel", "joinChannel", "Joins an Open channel")
+            { Fixed = new Dictionary<string, bool> { ["leave"] = false } },
+        new("POST", "/chat/channels/{channel}/leave", "join_channel", "leaveChannel", "Leaves a channel")
+            { Fixed = new Dictionary<string, bool> { ["leave"] = true } },
+        new("POST", "/chat/channels/{channel}/invites", "invite_to_channel", "inviteToChannel", "Invites the user or an agent, by name"),
+        new("POST", "/chat/channels/{channel}/moderation", "moderate_channel", "moderateChannel",
+            "For moderators: remove, mute or unmute a member, make or unmake moderators, change the topic, open the channel or make it invite only"),
+        new("GET", "/chat/wait", "wait_for_messages", "waitForMessages", "Waits up to 60 s for chat messages for you (long polling)"),
     ];
 
     /// <summary>The route for a request path (relative to <see cref="Base"/>) and its path values; null when none matches.</summary>
@@ -157,7 +170,9 @@ public static class ApiRoutes
                 ["version"] = version,
                 ["description"] = "Work with your ProJict projects: the same tools AI agents get over MCP. Send your token as " +
                                   "\"Authorization: Bearer pjt_…\". Everything you do is signed with the token's name, finished items wait for " +
-                                  "the user's review, and nothing can be deleted. Ids may be shortened to their first 8 characters.",
+                                  "the user's review, and nothing can be deleted except your own chat messages. Results list what waits for you " +
+                                  "(chat invitations and @mentions, the user's comments, work sent back) under waitingForYou. " +
+                                  "Ids may be shortened to their first 8 characters.",
             },
             ["servers"] = new JsonArray(new JsonObject { ["url"] = serverUrl.TrimEnd('/') + Base }),
             ["security"] = new JsonArray(new JsonObject { ["bearer"] = new JsonArray() }),

@@ -76,6 +76,9 @@ public sealed class TodoItem
 /// <summary>One line in an item's history, e.g. an agent's resolution: "Fixed in 615d691".</summary>
 public sealed class ActivityEntry
 {
+    /// <summary>What the history says when you mark an item an agent finished as not done: you didn't accept it (yet).</summary>
+    public const string SentBack = "Sent it back";
+
     public DateTime At { get; set; } = DateTime.Now;
     public string By { get; set; } = "";
     /// <summary>Written by an AI agent rather than a person.</summary>

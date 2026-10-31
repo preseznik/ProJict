@@ -158,7 +158,7 @@ public sealed class NotificationService
         var events = new List<Event>();
         // Chat: what you haven't read in your channels; an @mention is its own kind.
         foreach (var channel in _state.Chat.Channels)
-            foreach (var message in ProJict.Core.Chat.ChatRoom.Unread(channel, _state.UserName))
+            foreach (var message in ProJict.Core.Chat.ChatRoom.Unread(channel, _state.UserName).Where(m => !m.Notice))
             {
                 var mention = ProJict.Core.Chat.ChatText.Mentions(message.Text, _state.UserName);
                 var where = "#" + channel.Name;

@@ -42,10 +42,8 @@ public sealed class McpSession
     /// <summary>What it did lately, oldest first (at most <see cref="KeptActions"/>), for the Agents view.</summary>
     public List<AgentAction> Recent { get; } = [];
     public const int KeptActions = 40;
-    /// <summary>Chat messages a tool result already told it about, so each is mentioned once.</summary>
-    public HashSet<Guid> ChatNoticed { get; } = [];
-    /// <summary>Chat messages it was given (read or waited for), also @mentions in channels it isn't in.</summary>
-    public HashSet<Guid> ChatDelivered { get; } = [];
+    /// <summary>What its tool results already told it is waiting (chat messages, comments, …), so each is mentioned once.</summary>
+    public HashSet<string> Noticed { get; } = [];
 
     /// <summary>How the agent signs its work: "Claude Code" for a client named "claude-code", plus its label if it set one.</summary>
     public string AgentName => string.IsNullOrWhiteSpace(Label) ? ClientDisplayName : $"{ClientDisplayName} · {Label.Trim()}";

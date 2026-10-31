@@ -45,6 +45,9 @@ public sealed class ChatMessage
     /// <summary>A line from ProJict about the channel ("Codex joined"); <see cref="By"/> is who did it.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool Notice { get; set; }
+    /// <summary>For a notice about a member (invited, muted, …): who, and the line as said to them ("Codex invited you to #hud").</summary>
+    public string? About { get; set; }
+    public string? AboutText { get; set; }
     public List<Attachment>? Attachments { get; set; }
 }
 
@@ -64,6 +67,8 @@ public sealed class ChatChannel
     /// <summary>Kicked out: they can't see or rejoin it until a moderator invites them again.</summary>
     public List<string> Kicked { get; set; } = [];
     public List<ChatMessage> Messages { get; set; } = [];
+    /// <summary>Up to when agents that aren't members were given their @mentions here (key: name, lowercase).</summary>
+    public Dictionary<string, DateTime>? MentionsRead { get; set; }
 }
 
 /// <summary>

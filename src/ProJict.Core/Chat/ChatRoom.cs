@@ -16,6 +16,8 @@ public sealed class ChatRoom
     public const int MaxNameLength = 40;
     /// <summary>An agent can post this many messages a minute, so two agents can't flood a channel talking to each other.</summary>
     public const int AgentPostsPerMinute = 20;
+    /// <summary>@mentions of someone who isn't in the channel wait for them this long.</summary>
+    public static readonly TimeSpan MentionsKeptFor = TimeSpan.FromDays(7);
 
     private readonly Func<string> _ownerName;
     private readonly Func<DateTime> _clock;
@@ -190,7 +192,8 @@ public sealed class ChatRoom
         channel.Kicked.RemoveAll(k => string.Equals(k, name, StringComparison.OrdinalIgnoreCase));
         if (Member(channel, name) != null) return;
         channel.Members.Add(new ChatMember { Name = name, Agent = agent, JoinedAt = Now, LastRead = channel.Messages.LastOrDefault()?.At });
-        AddNotice(channel, by, $"{by.Name} invited {name}");
+        AddNotice(channel, by, $"{by.Name} invited {name}", name,
+            $"{by.Name} invited you to #{channel.Name}" + (channel.Topic != null ? $" ({channel.Topic})" : ""));
         Changed?.Invoke(channel);
     }
 
@@ -200,7 +203,7 @@ public sealed class ChatRoom
         var member = Target(channel, by, name, "remove");
         channel.Members.Remove(member);
         if (!IsKicked(channel, member.Name)) channel.Kicked.Add(member.Name);
-        AddNotice(channel, by, $"{by.Name} removed {member.Name} from the channel");
+        AddNotice(channel, by, $"{by.Name} removed {member.Name} from the channel", member.Name, $"{by.Name} removed you from #{channel.Name}");
         Changed?.Invoke(channel);
     }
 
@@ -209,7 +212,8 @@ public sealed class ChatRoom
     {
         var member = Target(channel, by, name, "mute");
         member.MutedUntil = duration is { } d ? Now + d : DateTime.MaxValue;
-        AddNotice(channel, by, duration is { } span ? $"{by.Name} muted {member.Name} for {Span(span)}" : $"{by.Name} muted {member.Name} until unmuted");
+        var how = duration is { } span ? $"for {Span(span)}" : "until unmuted";
+        AddNotice(channel, by, $"{by.Name} muted {member.Name} {how}", member.Name, $"{by.Name} muted you in #{channel.Name} {how}; you can still read");
         Changed?.Invoke(channel);
     }
 
@@ -218,7 +222,7 @@ public sealed class ChatRoom
         RequireModerator(channel, by);
         if (Member(channel, name) is not { MutedUntil: not null } member) return;
         member.MutedUntil = null;
-        AddNotice(channel, by, $"{by.Name} unmuted {member.Name}");
+        AddNotice(channel, by, $"{by.Name} unmuted {member.Name}", member.Name, $"{by.Name} unmuted you in #{channel.Name}");
         Changed?.Invoke(channel);
     }
 
@@ -231,7 +235,8 @@ public sealed class ChatRoom
             throw new ChatException("Only the owner of the workspace can take a moderator's rights away.");
         member.Moderator = moderator;
         if (moderator) member.MutedUntil = null;
-        AddNotice(channel, by, moderator ? $"{by.Name} made {member.Name} a moderator" : $"{member.Name} is no longer a moderator");
+        AddNotice(channel, by, moderator ? $"{by.Name} made {member.Name} a moderator" : $"{member.Name} is no longer a moderator", member.Name,
+            moderator ? $"{by.Name} made you a moderator of #{channel.Name}" : $"You're no longer a moderator of #{channel.Name}");
         Changed?.Invoke(channel);
     }
 
@@ -311,17 +316,43 @@ public sealed class ChatRoom
 
     // ───────────── Read and unread ─────────────
 
-    /// <summary>Messages the member hasn't seen: newer than what they read, by others, not deleted, not notices.</summary>
+    /// <summary>
+    /// Messages the member hasn't seen: newer than what they read, by others, not deleted; of the lines from ProJict only
+    /// the ones about them (invited, muted, …).
+    /// </summary>
     public static IEnumerable<ChatMessage> Unread(ChatChannel channel, string name)
     {
         if (Member(channel, name) is not { } member) return [];
         var since = member.LastRead ?? DateTime.MinValue;
-        return channel.Messages.Where(m => m.At > since && !m.Notice && !m.Deleted && !string.Equals(m.By, name, StringComparison.OrdinalIgnoreCase));
+        return channel.Messages.Where(m => m.At > since && !m.Deleted && !string.Equals(m.By, name, StringComparison.OrdinalIgnoreCase) &&
+                                           (!m.Notice || string.Equals(m.About, name, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    /// <summary>
+    /// @mentions of someone who isn't in the channel and hasn't been given them yet (from the past week at most), so an
+    /// agent that wasn't connected still gets them.
+    /// </summary>
+    public IEnumerable<ChatMessage> MentionsOutside(ChatChannel channel, string name)
+    {
+        if (Member(channel, name) != null) return [];
+        var since = Now - MentionsKeptFor;
+        if (channel.MentionsRead?.GetValueOrDefault(name.ToLowerInvariant()) is { } read && read > since) since = read;
+        return channel.Messages.Where(m => m.At > since && !m.Notice && !m.Deleted && !string.Equals(m.By, name, StringComparison.OrdinalIgnoreCase) &&
+                                           ChatText.Mentions(m.Text, name));
+    }
+
+    /// <summary>They were given their @mentions here up to <paramref name="upTo"/>.</summary>
+    public void MarkMentionsRead(ChatChannel channel, string name, DateTime upTo)
+    {
+        var key = name.ToLowerInvariant();
+        if (channel.MentionsRead?.GetValueOrDefault(key) >= upTo) return;
+        (channel.MentionsRead ??= [])[key] = upTo;
+        Changed?.Invoke(channel);
     }
 
     /// <summary>Unread messages that @mention the member.</summary>
     public static IEnumerable<ChatMessage> UnreadMentions(ChatChannel channel, string name) =>
-        Unread(channel, name).Where(m => ChatText.Mentions(m.Text, name));
+        Unread(channel, name).Where(m => !m.Notice && ChatText.Mentions(m.Text, name));
 
     /// <summary>Marks everything up to the newest message (or <paramref name="upTo"/>) as seen; returns whether anything changed.</summary>
     public bool MarkRead(ChatChannel channel, string name, DateTime? upTo = null)
@@ -336,8 +367,8 @@ public sealed class ChatRoom
 
     // ───────────── Helpers ─────────────
 
-    private void AddNotice(ChatChannel channel, ChatActor by, string text) =>
-        channel.Messages.Add(new ChatMessage { By = by.Name, Agent = by.Agent, At = NextTime(channel), Text = text, Notice = true });
+    private void AddNotice(ChatChannel channel, ChatActor by, string text, string? about = null, string? aboutText = null) =>
+        channel.Messages.Add(new ChatMessage { By = by.Name, Agent = by.Agent, At = NextTime(channel), Text = text, Notice = true, About = about, AboutText = aboutText });
 
     /// <summary>Now, but always after the channel's newest message, so "read up to" never hides a message posted in the same tick.</summary>
     private DateTime NextTime(ChatChannel channel)

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.22 (2026-10-31)
+
+- **Agents are told what waits for them.** Each tool result lists it under waitingForYou, once each: chat invitations, @mentions and new messages, your comments on items they worked on, work you sent back, and ship requests in their project. ProJict's instructions ask them to deal with it first: reply in Chat (say hello when invited, answer what they're asked), answer your comments, pick up work you sent back.
+- **Chat:** an invited agent is told who invited it (and so is one that's muted or made a moderator), an invitation wakes an agent listening with wait_for_messages, and an @mention of an agent that isn't connected waits for it for a week.
+- **Sending work back** (marking an agent's finished item not done) now says "Sent it back" in the item's history.
+- **The REST API has Chat:** list, start, read and post in channels, edit or delete your messages, join, leave, invite and moderate, and wait for messages at /chat/wait. The OpenAPI description includes them.
+
 ## 0.1.21 (2026-10-31)
 
 - **Chat:** live chat with your AI agents in #channels (Chat in the sidebar).
