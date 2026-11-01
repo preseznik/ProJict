@@ -51,9 +51,13 @@ public sealed partial class AgentTools
             {
                 var changed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                 Action<ChatChannel> listener = _ => changed.TrySetResult();
+                var rooms = new List<ChatRoom>();
                 var lines = await _dispatcher.InvokeAsync(() =>
                 {
                     Chat.Changed += listener;
+                    // Other ProJicts' channels too: a message there wakes it as well.
+                    rooms.AddRange(SharedRooms(identity));
+                    foreach (var room in rooms) room.Changed += listener;
                     if (!_state.AppSettings.AgentsUseChat)
                     {
                         if (saidOff) return new List<string>();
@@ -63,7 +67,7 @@ public sealed partial class AgentTools
                     saidOff = false;
                     var waiting = Waiting(identity);
                     foreach (var group in waiting.GroupBy(w => w.Channel)) Delivered(identity, group.Key, group.Select(w => w.Message).ToList());
-                    return waiting.Select(w => WatchLine(w.Channel, w.Message, identity)).ToList();
+                    return waiting.Select(w => WatchLine(w.Channel, w.Message, identity)).Concat(SharedWatchLines(identity)).ToList();
                 });
                 try
                 {
@@ -72,7 +76,11 @@ public sealed partial class AgentTools
                 }
                 finally
                 {
-                    await _dispatcher.InvokeAsync(() => Chat.Changed -= listener);
+                    await _dispatcher.InvokeAsync(() =>
+                    {
+                        Chat.Changed -= listener;
+                        foreach (var room in rooms) room.Changed -= listener;
+                    });
                 }
             }
         }

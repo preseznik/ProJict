@@ -60,6 +60,8 @@ public sealed class SharingData
     /// <summary>The host certificate (PKCS#12), protected for this Windows user; made the first time sharing is on.</summary>
     public string? ProtectedCertificate { get; set; }
     public List<GuestAccount> Guests { get; set; } = [];
+    /// <summary>Guests' AI agents may work in what you share, as far as the guest's role allows; signed "Ada (via Alice)".</summary>
+    public bool GuestAgents { get; set; } = true;
     public List<Invite> Invites { get; set; } = [];
     public List<KnownHost> Hosts { get; set; } = [];
 

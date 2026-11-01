@@ -102,6 +102,8 @@ public sealed partial class AgentTools
             return Chatting(() => Chat.OpenDirect(ActorOf(session), other, IsAgentName(other)));
         }
         var channel = Chat.Find(key);
+        if (channel == null && SharedChannelFor(session, args, name) is { } shared)
+            throw new McpToolException($"In {SharedName(shared.Host, shared.Channel)} you read and post (read_channel, post_message); the rest is for the people there.", ToolProblem.Forbidden);
         if (channel == null || !ChatRoom.CanSee(channel, ActorOf(session)))
             throw new McpToolException($"No channel #{key.Trim().TrimStart('#')} you can see. list_channels shows them.", ToolProblem.NotFound);
         return channel;
@@ -120,9 +122,11 @@ public sealed partial class AgentTools
         RequireChat();
         var actor = ActorOf(session);
         var only = args.String("project") != null ? ResolveProject(session, args) : null;
+        // This ProJict's channels, then other ProJicts' (named like #hud (Sam's)).
         var channels = Chat.Visible(actor).Where(c => only == null || c.Link?.ProjectId == only.Id)
             .OrderByDescending(c => c.Messages.LastOrDefault()?.At ?? c.CreatedAt)
-            .Select(c => (JsonNode)ChannelJson(c, session)).ToArray();
+            .Select(c => (JsonNode)ChannelJson(c, session))
+            .Concat(only is { Remote: null } ? [] : SharedChannelsJson(session, only)).ToArray();
         return Json(new JsonObject
         {
             ["channels"] = new JsonArray(channels),
@@ -174,6 +178,8 @@ public sealed partial class AgentTools
 
     private string ReadChannel(McpSession session, Args args, List<Attachment> files)
     {
+        RequireChat();
+        if (SharedChannelFor(session, args) is { } shared) return SharedRead(session, shared.Host, shared.Channel, args);
         var channel = ChannelFor(session, args);
         var limit = Math.Clamp(args.Int("limit") ?? 30, 1, 200);
         IEnumerable<ChatMessage> messages = channel.Messages;
@@ -208,6 +214,8 @@ public sealed partial class AgentTools
 
     private string PostMessage(McpSession session, Args args, List<Attachment> files)
     {
+        RequireChat();
+        if (SharedChannelFor(session, args) is { } shared) return SharedPost(session, shared.Host, shared.Channel, args, files);
         var channel = ChannelFor(session, args, start: true);
         Guid? replyTo = args.String("reply_to") is { } r
             ? (ChatRoom.FindMessage(channel, r.Trim()) ?? throw new McpToolException($"No message {r} in #{channel.Name}.", ToolProblem.NotFound)).Id
@@ -385,7 +393,16 @@ public sealed partial class AgentTools
     private List<string> ChatLines(McpSession session)
     {
         // A read-only token that may only read Chat isn't asked to answer.
-        if (!_state.AppSettings.AgentsUseChat || Chat.Channels.Count == 0 || (session.ReadOnly && !_state.AppSettings.ReadOnlyTokensUseChat)) return [];
+        if (!_state.AppSettings.AgentsUseChat || (session.ReadOnly && !_state.AppSettings.ReadOnlyTokensUseChat)) return [];
+        var lines = LocalChatLines(session);
+        if (SharedChatLine(session) is { } shared) lines.Add(shared);
+        if (lines.Count > 0 && WatchTip(session) is { } tip) lines.Add(tip);
+        return lines;
+    }
+
+    private List<string> LocalChatLines(McpSession session)
+    {
+        if (Chat.Channels.Count == 0) return [];
         var fresh = Waiting(session).Where(w => !session.Noticed.Contains($"chat:{w.Message.Id}")).ToList();
         if (fresh.Count == 0) return [];
         foreach (var (_, message) in fresh) session.Noticed.Add($"chat:{message.Id}");
@@ -412,10 +429,8 @@ public sealed partial class AgentTools
             parts.Add($"{Count(messages.Count, "new message")} in #{group.Key.Name}" +
                       (mentions > 0 ? $" ({(mentions == 1 ? "one mentions" : $"{mentions} mention")} you)" : ""));
         }
-        List<string> lines = ["Chat: " + string.Join("; ", parts) + ". Read them with read_channel" +
+        return ["Chat: " + string.Join("; ", parts) + ". Read them with read_channel" +
                 (asked ? ", and reply with post_message: say hello when invited, and answer what you're asked (or say you can't now)." : ".")];
-        if (WatchTip(session) is { } tip) lines.Add(tip);
-        return lines;
     }
 
     // ───────────── JSON ─────────────

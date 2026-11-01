@@ -16,7 +16,9 @@ public static class ChatText
     {
         if (text.Length == 0 || name.Length == 0) return false;
         var label = name.IndexOf(" · ", StringComparison.Ordinal);
-        return Has(text, name) || (label > 0 && Has(text, name[..label]));
+        // A guest's agent, "Ada (via Alice)", is mentioned as @Ada too.
+        var via = name.LastIndexOf(" (via ", StringComparison.Ordinal);
+        return Has(text, name) || (label > 0 && Has(text, name[..label])) || (via > 0 && name.EndsWith(')') && Has(text, name[..via]));
 
         static bool Has(string text, string name)
         {

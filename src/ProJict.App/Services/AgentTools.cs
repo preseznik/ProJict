@@ -4,6 +4,7 @@ using System.Runtime.ExceptionServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Windows.Threading;
+using ProJict.App.Services.Sharing;
 using ProJict.App.ViewModels;
 using ProJict.Core.Agents;
 using ProJict.Core.Api;
@@ -11,6 +12,7 @@ using ProJict.Core.Chat;
 using ProJict.Core.Features;
 using ProJict.Core.Import;
 using ProJict.Core.Model;
+using ProJict.Core.Sharing;
 
 namespace ProJict.App.Services;
 
@@ -175,6 +177,68 @@ public sealed partial class AgentTools : IMcpToolHost
     private List<Project> LocalProjects =>
         _state.Projects.Where(p => p.Remote == null && (_caller?.Projects is not { } only || only.Contains(p.Id))).ToList();
 
+    // ───────────── Projects shared with this ProJict ─────────────
+
+    /// <summary>
+    /// The projects an agent reaches: this ProJict's own (an API token's, if it's limited to some), and the ones other
+    /// ProJicts share with it, which the agent reads, and changes as far as the guest's role there allows.
+    /// </summary>
+    private List<Project> ReachableProjects =>
+        _state.Projects.Where(p => p.Remote == null ? _caller?.Projects is not { } only || only.Contains(p.Id) : _caller?.Projects == null).ToList();
+
+    /// <summary>The connection a shared project comes through.</summary>
+    private HostConnection? HostOf(Project project) =>
+        project.Remote is { } remote ? _main.Guest.Connections.FirstOrDefault(c => c.Address == remote.HostKey) : null;
+
+    /// <summary>Who this ProJict's user is in the project's host ("Alice").</summary>
+    private string GuestNameIn(Project project) => HostOf(project)?.MyName ?? _state.UserName;
+
+    /// <summary>
+    /// How the agent signs in a project: its name, or in a project shared with this ProJict "Ada (via Alice)", since it
+    /// works there through Alice's connection (the host checks that).
+    /// </summary>
+    private string SignAs(McpSession session, Project project) =>
+        project.Remote != null ? AgentNaming.Via(session.AgentName, GuestNameIn(project)) : session.AgentName;
+
+    /// <summary>Whether something signed <paramref name="by"/> in the project is the agent's own work.</summary>
+    private bool OwnIn(McpSession session, Project project, string by) =>
+        AgentNaming.IsOwnWork(session, project.Remote != null ? AgentNaming.WithoutVia(by, GuestNameIn(project)) ?? "" : by);
+
+    private enum Change { Comment, AddItems, Edit, HostOnly }
+
+    /// <summary>
+    /// Refuses a change to a project shared with this ProJict that the connection, the host's rules or the guest's role
+    /// there don't allow; this ProJict's own projects pass.
+    /// </summary>
+    private void MayChange(Project project, Change change)
+    {
+        if (project.Remote is not { } remote) return;
+        var name = remote.HostName;
+        if (change == Change.HostOnly)
+            throw new McpToolException($"{project.Name} is shared with this ProJict by {name}: only {name} changes its details and shipping.", ToolProblem.Forbidden);
+        var host = HostOf(project);
+        if (host is not { State: ConnectionState.Connected })
+            throw new McpToolException($"{project.Name} is shared by {name}, and this ProJict isn't connected to theirs right now: you can read it, not change it.", ToolProblem.Forbidden);
+        if (!host.AgentsAllowed)
+            throw new McpToolException($"{name} doesn't let guests' AI agents change what they share (or runs an older ProJict): you can read {project.Name}, not change it.", ToolProblem.Forbidden);
+        var allowed = change switch
+        {
+            Change.Comment => GuestAccess.CanComment(host.Role),
+            Change.AddItems => GuestAccess.CanAddItems(host.Role),
+            _ => GuestAccess.CanEdit(host.Role),
+        };
+        if (!allowed)
+            throw new McpToolException($"You work in {name}'s ProJict through {GuestNameIn(project)}, who is a {host.Role.ToString().ToLowerInvariant()} there " +
+                                       $"({GuestAccess.Describe(host.Role)}), so you can't {change switch { Change.Comment => "comment", Change.AddItems => "add items", _ => "change items" }} in {project.Name}.",
+                ToolProblem.Forbidden);
+    }
+
+    /// <summary>Which items agents may work on in a project: this ProJict's rules, or for a shared project its host's.</summary>
+    private sealed record AgentRules(Project Project, Dictionary<TodoItem, Priority> Governing, IReadOnlyCollection<Priority> Allowed);
+
+    private AgentRules RulesFor(Project project) =>
+        new(project, AgentAccess.Governing(project), project.Remote != null ? HostOf(project)?.AgentPriorities ?? [] : AgentPriorities);
+
     public string Instructions => InstructionsFor(remote: false);
 
     /// <summary>What agents are told when they connect; over the API (remote) they watch Chat over HTTP, not with ProJict.exe.</summary>
@@ -207,6 +271,8 @@ public sealed partial class AgentTools : IMcpToolHost
             ? $"GET {ProJict.Core.Api.ApiRoutes.Base}/chat/watch on this server with your Authorization header (e.g. curl -sN) "
             : $"{WatchCommand("<your name>")} ") +
         "prints a line for each chat message for you, as it comes, so you can answer while you're idle or busy with other things. " +
+        "Projects another ProJict shares with this one are reachable too, and so are its #channels (named like #hud (Sam's)): list_projects " +
+        "says what you may do there; what you do there is signed with your name and the user's, like Ada (via Alice). " +
         "Ids (items, comments and messages) may be shortened to their first 8 characters.";
 
     public void SessionStarted(McpSession session)
@@ -295,6 +361,13 @@ public sealed partial class AgentTools : IMcpToolHost
             try
             {
                 // Group discussions are outside a token limited to some projects.
+                if (ReachableProjects.Where(p => p.Remote != null).SelectMany(p => p.Attachments().Select(a => (Project: p, Attachment: a)))
+                        .FirstOrDefault(x => x.Attachment.Id == id) is { Project: { } shared } found)
+                {
+                    var path = _state.AttachmentPath(shared, found.Attachment);
+                    if (!File.Exists(path)) _main.Guest.Fetch(shared, found.Attachment);
+                    return (found.Attachment, path);
+                }
                 var attachment = LocalProjects.SelectMany(p => p.Attachments())
                     .Concat(session.Projects == null ? _state.Settings.GroupAttachments() : [])
                     .Concat(Chat.Visible(ActorOf(session)).SelectMany(c => c.Messages).SelectMany(m => m.Attachments ?? []))
@@ -397,7 +470,7 @@ public sealed partial class AgentTools : IMcpToolHost
 
     private string ListProjects(McpSession session, Args args, List<Attachment> files) => Json(new JsonObject
     {
-        ["projects"] = new JsonArray(LocalProjects.Select(p => (JsonNode)ProjectJson(p)).ToArray()),
+        ["projects"] = new JsonArray(ReachableProjects.Select(p => (JsonNode)ProjectJson(p)).ToArray()),
     });
 
     private string CurrentProject(McpSession session, Args args, List<Attachment> files)
@@ -414,7 +487,7 @@ public sealed partial class AgentTools : IMcpToolHost
         var json = ProjectJson(match.Project);
         json["matchedBy"] = match.How;
         if (!string.IsNullOrWhiteSpace(match.Project.PromptPreamble)) json["instructions"] = match.Project.PromptPreamble.Trim();
-        json["agentsMayWorkOn"] = (AgentAccess.Describe(AgentPriorities) ?? "no items at the moment (you can still read, comment and add items)") +
+        json["agentsMayWorkOn"] = (AgentAccess.Describe(RulesFor(match.Project).Allowed) ?? "no items at the moment (you can still read, comment and add items)") +
                                   "; never items on hold";
         if (!string.IsNullOrWhiteSpace(match.Project.Description)) json["description"] = match.Project.Description.Trim();
         if (!match.Project.IsInbox)
@@ -442,6 +515,7 @@ public sealed partial class AgentTools : IMcpToolHost
     private string UpdateProject(McpSession session, Args args, List<Attachment> files)
     {
         var project = ProjectFor(session, args);
+        MayChange(project, Change.HostOnly);
         var changed = new List<string>();
         string? Text(string name, string label)
         {
@@ -611,16 +685,16 @@ public sealed partial class AgentTools : IMcpToolHost
             (tag == null || string.Equals(l.Item.Tag, tag, StringComparison.OrdinalIgnoreCase)) &&
             (category == null || ProjectExtensions.CategoryNamesEqual(l.Category.Name, category)) &&
             terms.All(t => l.Item.SearchText().Contains(t, StringComparison.OrdinalIgnoreCase))).ToList();
-        var governing = AgentAccess.Governing(project);
-        var offLimits = matches.Count(l => !MayWork(governing, l.Item));
-        if (!includeOffLimits) matches = matches.Where(l => MayWork(governing, l.Item)).ToList();
+        var rules = RulesFor(project);
+        var offLimits = matches.Count(l => !MayWork(rules, l.Item));
+        if (!includeOffLimits) matches = matches.Where(l => MayWork(rules, l.Item)).ToList();
         if (byPriority) matches = matches.OrderByDescending(l => Priorities.Rank(l.Item.Priority)).ToList();
         var result = new JsonObject
         {
             ["project"] = project.Name,
             ["state"] = state,
             ["total"] = matches.Count,
-            ["items"] = new JsonArray(matches.Take(limit).Select(l => (JsonNode)ItemJson(l, details: false, governing)).ToArray()),
+            ["items"] = new JsonArray(matches.Take(limit).Select(l => (JsonNode)ItemJson(l, details: false, rules)).ToArray()),
             ["truncated"] = matches.Count > limit,
         };
         if (offLimits > 0)
@@ -644,9 +718,10 @@ public sealed partial class AgentTools : IMcpToolHost
         var (project, loc) = FindItem(session, args.Required("id"));
         var item = loc.Item;
         if (item.IsDone) throw new McpToolException("This item is already done. Use update_item with state todo to reopen it first.", ToolProblem.Conflict);
+        MayChange(project, Change.Edit);
         CheckMayWork(project, item);
-        var takenFrom = CheckOut(session, item, args);
-        var agent = session.AgentName;
+        var takenFrom = CheckOut(session, project, item, args);
+        var agent = SignAs(session, project);
         var note = args.String("note");
         Edit(project, item.Id, i =>
         {
@@ -664,9 +739,10 @@ public sealed partial class AgentTools : IMcpToolHost
     {
         var (project, loc) = FindItem(session, args.Required("id"));
         var resolution = args.Required("resolution").Trim();
+        MayChange(project, Change.Edit);
         CheckMayWork(project, loc.Item);
-        var takenFrom = CheckOut(session, loc.Item, args);
-        var agent = session.AgentName;
+        var takenFrom = CheckOut(session, project, loc.Item, args);
+        var agent = SignAs(session, project);
         Edit(project, loc.Item.Id, i =>
         {
             if (takenFrom != null) i.AddActivity(agent, $"Took it over from {takenFrom}.", agent: true);
@@ -693,12 +769,14 @@ public sealed partial class AgentTools : IMcpToolHost
             // A sub-item goes into its parent's project.
             var (parentProject, parentLoc) = FindItem(session, parentText);
             if (args.String("project") != null && ProjectFor(session, args) != parentProject) throw new McpToolException("The parent item is in another project.");
+            MayChange(parentProject, Change.AddItems);
             CheckMayWork(parentProject, parentLoc.Item);
-            CheckOut(session, parentLoc.Item, args);
+            CheckOut(session, parentProject, parentLoc.Item, args);
             project = parentProject;
             parentId = parentLoc.Item.Id;
         }
         else project = ProjectFor(session, args);
+        MayChange(project, Change.AddItems);
         var category = args.String("category");
         if (parentId == null && string.IsNullOrWhiteSpace(category))
             throw new McpToolException($"Say which category (existing ones: {string.Join(", ", project.Categories.Select(c => c.Name))}), or give a parent item.");
@@ -706,10 +784,10 @@ public sealed partial class AgentTools : IMcpToolHost
         var (parsedTag, parsedText) = TxtListParser.SplitTag(text);
         var tag = args.String("tag") is { } explicitTag ? (explicitTag.Trim().Length == 0 ? null : explicitTag.Trim().ToUpperInvariant()) : parsedTag;
         var item = new TodoItem { Text = parsedTag != null && parsedText.Length > 0 ? parsedText : text, Tag = tag, Priority = PriorityArgument(args) ?? Priority.None };
-        item.AddActivity(session.AgentName, "Added it.", agent: true);
+        item.AddActivity(SignAs(session, project), "Added it.", agent: true);
         _main.GetProjectViewModel(project).AgentAdd(item, category, parentId);
-        _state.StatusText = $"{session.AgentName} added “{Short(item.Text)}” to {project.Name}.";
-        return Json(ItemJson(project.Find(item.Id)!, details: false, AgentAccess.Governing(project)));
+        _state.StatusText = $"{SignAs(session, project)} added “{Short(item.Text)}” to {project.Name}.";
+        return Json(ItemJson(project.Find(item.Id)!, details: false, RulesFor(project)));
     }
 
     private string UpdateItem(McpSession session, Args args, List<Attachment> files)
@@ -731,12 +809,13 @@ public sealed partial class AgentTools : IMcpToolHost
             throw new McpToolException("Nothing to change: give text, tag, priority, state or comment.");
         if (text != null && text.Trim().Length == 0) throw new McpToolException("The text can't be empty.");
 
-        var agent = session.AgentName;
+        var agent = SignAs(session, project);
         var changes = text != null || tag != null || priority != null || state != null;
+        MayChange(project, changes ? Change.Edit : Change.Comment);
         // Putting an item back is always allowed, e.g. one the user put on hold while you had it.
         var onlyPutsBack = text == null && tag == null && priority == null && state == ItemState.Todo;
         if (changes && !onlyPutsBack) CheckMayWork(project, loc.Item);
-        var takenFrom = changes ? CheckOut(session, loc.Item, args) : null;
+        var takenFrom = changes ? CheckOut(session, project, loc.Item, args) : null;
         if (changes)
         {
             Edit(project, loc.Item.Id, i =>
@@ -770,18 +849,19 @@ public sealed partial class AgentTools : IMcpToolHost
             else if (state != null) session.Claimed.Remove(loc.Item.Id);
         }
         if (!string.IsNullOrWhiteSpace(comment))
-            _main.GetProjectViewModel(project).PostComment(loc.Item.Id, NewComment(session, comment), null);
+            _main.GetProjectViewModel(project).PostComment(loc.Item.Id, NewComment(session, project, comment), null);
         _state.StatusText = $"{agent} updated “{Short(loc.Item.Text)}” ({project.Name}).";
-        return Json(ItemJson(project.Find(loc.Item.Id)!, details: false, AgentAccess.Governing(project)));
+        return Json(ItemJson(project.Find(loc.Item.Id)!, details: false, RulesFor(project)));
     }
 
     private string AttachFile(McpSession session, Args args, List<Attachment> files)
     {
         var (project, loc) = FindItem(session, args.Required("id"));
         if (files.Count == 0) throw new McpToolException("Give at least one file in paths.");
+        MayChange(project, Change.Edit);
         CheckMayWork(project, loc.Item);
-        var takenFrom = CheckOut(session, loc.Item, args);
-        var agent = session.AgentName;
+        var takenFrom = CheckOut(session, project, loc.Item, args);
+        var agent = SignAs(session, project);
         Edit(project, loc.Item.Id, i =>
         {
             if (takenFrom != null)
@@ -794,25 +874,24 @@ public sealed partial class AgentTools : IMcpToolHost
         });
         if (takenFrom != null) session.Claimed.Add(loc.Item.Id);
         _state.StatusText = $"{agent} attached {files.Count} file(s) to “{Short(loc.Item.Text)}”.";
-        return Json(new JsonObject { ["id"] = ShortId(loc.Item.Id), ["attachments"] = Paths(project.Find(loc.Item.Id)!.Item.Attachments) });
+        return Json(new JsonObject { ["id"] = ShortId(loc.Item.Id), ["attachments"] = Paths(project.Find(loc.Item.Id)!.Item.Attachments, project) });
     }
 
     /// <summary>
     /// Another agent's check-out blocks changes. The same agent may continue its own check-out, also from a new session
     /// once the old one is gone. With force=true it takes over: returns whose check-out it was, for the history.
     /// </summary>
-    private string? CheckOut(McpSession session, TodoItem item, Args args)
+    private string? CheckOut(McpSession session, Project project, TodoItem item, Args args)
     {
         if (item.State != ItemState.InProgress || item.ClaimedBy == null || Holds(session, item)) return null;
         McpSession? holder;
         lock (_live) holder = _live.FirstOrDefault(s => s != session && Holds(s, item));
-        if (holder == null && AgentNaming.IsOwnWork(session, item.ClaimedBy))
+        if (holder == null && OwnIn(session, project, item.ClaimedBy))
         {
             session.Claimed.Add(item.Id);
             // Its own check-out from an earlier session, under the name it had then ("Claude Code 2"): it carries on under this one.
-            if (!string.Equals(item.ClaimedBy, session.AgentName, StringComparison.OrdinalIgnoreCase) &&
-                LocalProjects.FirstOrDefault(p => p.Find(item.Id) != null) is { } project)
-                Edit(project, item.Id, i => i.ClaimedBy = session.AgentName);
+            var mine = SignAs(session, project);
+            if (!string.Equals(item.ClaimedBy, mine, StringComparison.OrdinalIgnoreCase)) Edit(project, item.Id, i => i.ClaimedBy = mine);
             return null;
         }
         if (args.Bool("force") == true) return item.ClaimedBy;
@@ -827,20 +906,22 @@ public sealed partial class AgentTools : IMcpToolHost
     /// <summary>The priorities of items agents may work on (Settings › AI agents).</summary>
     private IReadOnlyCollection<Priority> AgentPriorities => _state.Settings.AgentPriorities;
 
-    private bool MayWork(Dictionary<TodoItem, Priority> governing, TodoItem item) =>
-        AgentAccess.Allows(AgentPriorities, governing.GetValueOrDefault(item));
+    private static bool MayWork(AgentRules rules, TodoItem item) =>
+        AgentAccess.Allows(rules.Allowed, rules.Governing.GetValueOrDefault(item));
 
-    /// <summary>Refuses a change to an item the user keeps off limits to agents; reading and commenting stay open.</summary>
+    /// <summary>Refuses a change to an item the user (or a shared project's host) keeps off limits to agents; reading and commenting stay open.</summary>
     private void CheckMayWork(Project project, TodoItem item)
     {
-        if (AgentAccess.Refusal(AgentPriorities, AgentAccess.Governing(project).GetValueOrDefault(item)) is { } why)
+        var rules = RulesFor(project);
+        if (AgentAccess.Refusal(rules.Allowed, rules.Governing.GetValueOrDefault(item)) is { } why)
             throw new McpToolException(why + " You can still read it, and comment on it with add_comment (e.g. to ask the user).", ToolProblem.Forbidden);
     }
 
     /// <summary>The session checked the item out, and nobody (another agent, the user) changed that since.</summary>
     private static bool Holds(McpSession session, TodoItem item) =>
-        session.Claimed.Contains(item.Id) && item.State == ItemState.InProgress &&
-        string.Equals(item.ClaimedBy, session.AgentName, StringComparison.OrdinalIgnoreCase);
+        session.Claimed.Contains(item.Id) && item.State == ItemState.InProgress && item.ClaimedBy is { } by &&
+        (string.Equals(by, session.AgentName, StringComparison.OrdinalIgnoreCase) || AgentNaming.WithoutVia(by) is { } agent &&
+         string.Equals(agent, session.AgentName, StringComparison.OrdinalIgnoreCase));
 
     // ───────────── Discussions ─────────────
 
@@ -880,7 +961,7 @@ public sealed partial class AgentTools : IMcpToolHost
             return Json(new JsonObject
             {
                 ["target"] = target.Label,
-                ["threads"] = new JsonArray((target.Threads ?? []).Select(c => (JsonNode)CommentJson(c, nested: true)).ToArray()),
+                ["threads"] = new JsonArray((target.Threads ?? []).Select(c => (JsonNode)CommentJson(c, nested: true, target.Project)).ToArray()),
             });
         }
 
@@ -898,7 +979,8 @@ public sealed partial class AgentTools : IMcpToolHost
         foreach (var category in project.Categories)
             foreach (var (comment, parent) in category.Comments.Walk())
                 all.Add((comment, parent, new JsonObject { ["category"] = category.Name }));
-        if (!project.IsInbox)
+        // A shared project's group discussion stays with its host.
+        if (!project.IsInbox && project.Remote == null)
             foreach (var (comment, parent) in _state.Settings.CommentsFor(project.Group).Walk())
                 all.Add((comment, parent, new JsonObject { ["group"] = project.Group }));
         var recent = all.Where(e => !e.Comment.Deleted && (since == null || e.Comment.At > since)).OrderByDescending(e => e.Comment.At).ToList();
@@ -908,7 +990,7 @@ public sealed partial class AgentTools : IMcpToolHost
             ["total"] = recent.Count,
             ["comments"] = new JsonArray(recent.Take(limit).Select(e =>
             {
-                var json = CommentJson(e.Comment, nested: false);
+                var json = CommentJson(e.Comment, nested: false, project);
                 json["on"] = e.Where;
                 if (e.Parent != null) json["replyTo"] = ShortId(e.Parent.Id);
                 return (JsonNode)json;
@@ -932,18 +1014,19 @@ public sealed partial class AgentTools : IMcpToolHost
         if (files.FirstOrDefault(f => f.Size > limit) is { } big)
             throw new McpToolException($"{big.FileName} is {AttachmentViewModel.FormatSize(big.Size)}; files in comments can be up to {AttachmentViewModel.FormatSize(limit)} " +
                                        "(the user's setting). Attach it to the item instead (attach_file), or send a smaller file.");
-        var comment = NewComment(session, text);
+        if (target.Project != null) MayChange(target.Project, Change.Comment);
+        var comment = NewComment(session, target.Project, text);
         if (files.Count > 0) comment.Attachments = files;
         if (target.Group != null) _state.PostGroupComment(target.Group, comment, replyTo);
         else _main.GetProjectViewModel(target.Project!).PostComment(target.TargetId!.Value, comment, replyTo);
-        _state.StatusText = $"{session.AgentName} {(replyTo == null ? "commented on" : "replied on")} {target.Label}.";
+        _state.StatusText = $"{comment.By} {(replyTo == null ? "commented on" : "replied on")} {target.Label}.";
         var result = new JsonObject { ["id"] = ShortId(comment.Id), ["on"] = target.Label };
         if (files.Count > 0) result["attached"] = files.Count;
         return Json(result);
     }
 
-    private static Comment NewComment(McpSession session, string text) =>
-        new() { By = session.AgentName, Agent = true, Text = text.Trim() };
+    private Comment NewComment(McpSession session, Project? project, string text) =>
+        new() { By = project != null ? SignAs(session, project) : session.AgentName, Agent = true, Text = text.Trim() };
 
     // ───────────── Notes & releases ─────────────
 
@@ -974,7 +1057,7 @@ public sealed partial class AgentTools : IMcpToolHost
                 : $"Several notes match \"{title}\": {string.Join(", ", candidates.Select(n => n.Title))}.",
                 candidates.Count == 0 ? ToolProblem.NotFound : ToolProblem.Invalid);
         var note = candidates[0];
-        return Json(new JsonObject { ["title"] = note.Title, ["updatedBy"] = note.UpdatedBy, ["text"] = note.Text, ["attachments"] = Paths(note.Attachments) });
+        return Json(new JsonObject { ["title"] = note.Title, ["updatedBy"] = note.UpdatedBy, ["text"] = note.Text, ["attachments"] = Paths(note.Attachments, project) });
     }
 
     private string WriteDoc(McpSession session, Args args, List<Attachment> files)
@@ -988,14 +1071,15 @@ public sealed partial class AgentTools : IMcpToolHost
             "append" => true,
             _ => throw new McpToolException("mode must be replace or append."),
         };
-        var note = _main.GetProjectViewModel(project).AgentWriteDoc(title, text, append, files, session.AgentName, out var created);
-        _state.StatusText = $"{session.AgentName} {(created ? "wrote" : "updated")} the note “{note.Title}” ({project.Name}).";
+        MayChange(project, Change.Edit);
+        var note = _main.GetProjectViewModel(project).AgentWriteDoc(title, text, append, files, SignAs(session, project), out var created);
+        _state.StatusText = $"{SignAs(session, project)} {(created ? "wrote" : "updated")} the note “{note.Title}” ({project.Name}).";
         return Json(new JsonObject
         {
             ["title"] = note.Title,
             ["created"] = created,
             ["characters"] = note.Text.Length,
-            ["attachments"] = Paths(note.Attachments),
+            ["attachments"] = Paths(note.Attachments, project),
         });
     }
 
@@ -1011,8 +1095,9 @@ public sealed partial class AgentTools : IMcpToolHost
         var save = args.Bool("save") == true;
         if (save)
         {
-            _main.GetProjectViewModel(project).AgentSaveRelease(version, title, entries, markdown, session.AgentName);
-            _state.StatusText = $"{session.AgentName} recorded release {version} of {project.Name}.";
+            MayChange(project, Change.Edit);
+            _main.GetProjectViewModel(project).AgentSaveRelease(version, title, entries, markdown, SignAs(session, project));
+            _state.StatusText = $"{SignAs(session, project)} recorded release {version} of {project.Name}.";
         }
         var result = new JsonObject { ["version"] = version, ["items"] = entries.Count, ["saved"] = save, ["markdown"] = markdown };
         if (unreviewed > 0) result["note"] = $"{unreviewed} of these items still wait for the user's review.";
@@ -1069,6 +1154,7 @@ public sealed partial class AgentTools : IMcpToolHost
     private string PlanShip(McpSession session, Args args, List<Attachment> files)
     {
         var project = ProjectFor(session, args);
+        MayChange(project, Change.HostOnly);
         var request = OpenShip(project);
         var plan = args.Required("plan");
         ChangeShip(project, () => ShipFlow.Plan(request, plan, args.String("version"), session.AgentName));
@@ -1086,6 +1172,7 @@ public sealed partial class AgentTools : IMcpToolHost
     private string ReportShip(McpSession session, Args args, List<Attachment> files)
     {
         var project = ProjectFor(session, args);
+        MayChange(project, Change.HostOnly);
         var request = OpenShip(project);
         var step = Enum.TryParse<ShipStep>(args.Required("step"), ignoreCase: true, out var s) && Enum.IsDefined(s) ? s
             : throw new McpToolException("step must be commit, build, package, push or release.");
@@ -1104,6 +1191,7 @@ public sealed partial class AgentTools : IMcpToolHost
     private string FinishShip(McpSession session, Args args, List<Attachment> files)
     {
         var project = ProjectFor(session, args);
+        MayChange(project, Change.HostOnly);
         var request = OpenShip(project);
         var shipped = args.Required("outcome").Trim().ToLowerInvariant() switch
         {
@@ -1140,9 +1228,11 @@ public sealed partial class AgentTools : IMcpToolHost
         if (args.String("project") is { } name)
         {
             name = name.Trim();
-            return LocalProjects.FirstOrDefault(p => p.Id.ToString().Equals(name, StringComparison.OrdinalIgnoreCase))
-                   ?? LocalProjects.FirstOrDefault(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase) || p.Key.Equals(name, StringComparison.OrdinalIgnoreCase))
-                   ?? LocalProjects.FirstOrDefault(p => GitHubReleases.MatchKey(p.Name) == GitHubReleases.MatchKey(name))
+            // Your own projects first, so a shared one with the same name doesn't take its place.
+            var reachable = ReachableProjects.OrderBy(p => p.Remote != null).ToList();
+            return reachable.FirstOrDefault(p => p.Id.ToString().Equals(name, StringComparison.OrdinalIgnoreCase))
+                   ?? reachable.FirstOrDefault(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase) || p.Key.Equals(name, StringComparison.OrdinalIgnoreCase))
+                   ?? reachable.FirstOrDefault(p => GitHubReleases.MatchKey(p.Name) == GitHubReleases.MatchKey(name))
                    ?? throw new McpToolException($"No project \"{name}\". Projects: {ProjectNames()}.", ToolProblem.NotFound);
         }
         return ProjectMatcher.ForFolder(LocalProjects, session.WorkingDirectory)?.Project
@@ -1162,7 +1252,7 @@ public sealed partial class AgentTools : IMcpToolHost
         id = id.Trim();
         var exact = Guid.TryParse(id, out var guid);
         if (!exact && id.Length < 6) throw new McpToolException("Give the item id (at least its first 6 characters).");
-        var found = LocalProjects
+        var found = ReachableProjects
             .SelectMany(p => p.Walk().Select(l => (Project: p, Loc: l)))
             .Where(x => exact ? x.Loc.Item.Id == guid : x.Loc.Item.Id.ToString().StartsWith(id, StringComparison.OrdinalIgnoreCase))
             .Take(2)
@@ -1205,6 +1295,7 @@ public sealed partial class AgentTools : IMcpToolHost
             json["group"] = p.Group;
             json["status"] = p.Status.ToString();
         }
+        if (p.Remote != null) json["sharedBy"] = SharedText(p);
         if (!string.IsNullOrWhiteSpace(p.RepoPath)) json["repoPath"] = p.RepoPath;
         if (!string.IsNullOrWhiteSpace(p.GitHubUrl)) json["gitHub"] = p.GitHubUrl;
         json["open"] = stats.Open;
@@ -1215,8 +1306,8 @@ public sealed partial class AgentTools : IMcpToolHost
         return json;
     }
 
-    /// <summary>The item for an agent; <paramref name="governing"/> (AgentAccess.Governing) marks what is off limits.</summary>
-    private JsonObject ItemJson(ItemLocation loc, bool details, Dictionary<TodoItem, Priority> governing)
+    /// <summary>The item for an agent; <paramref name="rules"/> mark what is off limits.</summary>
+    private JsonObject ItemJson(ItemLocation loc, bool details, AgentRules rules)
     {
         var item = loc.Item;
         var json = new JsonObject
@@ -1231,8 +1322,8 @@ public sealed partial class AgentTools : IMcpToolHost
         if (loc.Parent != null) json["parent"] = ShortId(loc.Parent.Id);
         if (item.ClaimedBy != null && item.State == ItemState.InProgress) json["checkedOutBy"] = item.ClaimedBy;
         if (item.NeedsReview) json["needsReview"] = true;
-        if (!MayWork(governing, item)) json["offLimits"] = true;
-        if (item.HasAttachments) json["attachments"] = Paths(item.Attachments);
+        if (!MayWork(rules, item)) json["offLimits"] = true;
+        if (item.HasAttachments) json["attachments"] = Paths(item.Attachments, rules.Project);
         if (item.Issue is { } issue)
         {
             var link = new JsonObject { ["number"] = issue.Number, ["url"] = issue.Url };
@@ -1246,9 +1337,9 @@ public sealed partial class AgentTools : IMcpToolHost
             if (item.Activity is { Count: > 0 } log)
                 json["history"] = new JsonArray(log.Select(a => (JsonNode)$"{a.At.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)} {a.By}: {a.Text}").ToArray());
             if (item.Comments is { Count: > 0 } threads)
-                json["discussion"] = new JsonArray(threads.Select(c => (JsonNode)CommentJson(c, nested: true)).ToArray());
+                json["discussion"] = new JsonArray(threads.Select(c => (JsonNode)CommentJson(c, nested: true, rules.Project)).ToArray());
             if (item.Children.Count > 0)
-                json["subItems"] = new JsonArray(item.Children.Select(c => (JsonNode)ChildJson(c, governing)).ToArray());
+                json["subItems"] = new JsonArray(item.Children.Select(c => (JsonNode)ChildJson(c, rules)).ToArray());
         }
         else
         {
@@ -1258,19 +1349,19 @@ public sealed partial class AgentTools : IMcpToolHost
         return json;
     }
 
-    private JsonObject ChildJson(TodoItem item, Dictionary<TodoItem, Priority> governing)
+    private JsonObject ChildJson(TodoItem item, AgentRules rules)
     {
         var json = new JsonObject { ["id"] = ShortId(item.Id), ["text"] = item.Text, ["state"] = StateName(item.State) };
         if (item.Tag != null) json["tag"] = item.Tag;
         if (item.Priority != Priority.None) json["priority"] = item.Priority.ToString().ToLowerInvariant();
-        if (!MayWork(governing, item)) json["offLimits"] = true;
-        if (item.HasAttachments) json["attachments"] = Paths(item.Attachments);
+        if (!MayWork(rules, item)) json["offLimits"] = true;
+        if (item.HasAttachments) json["attachments"] = Paths(item.Attachments, rules.Project);
         if (item.Comments.CountComments() is > 0 and var count) json["comments"] = count;
-        if (item.Children.Count > 0) json["subItems"] = new JsonArray(item.Children.Select(c => (JsonNode)ChildJson(c, governing)).ToArray());
+        if (item.Children.Count > 0) json["subItems"] = new JsonArray(item.Children.Select(c => (JsonNode)ChildJson(c, rules)).ToArray());
         return json;
     }
 
-    private JsonObject CommentJson(Comment comment, bool nested)
+    private JsonObject CommentJson(Comment comment, bool nested, Project? project = null)
     {
         var json = new JsonObject
         {
@@ -1280,19 +1371,20 @@ public sealed partial class AgentTools : IMcpToolHost
             ["text"] = comment.Deleted ? "(deleted)" : comment.Text,
         };
         if (comment.Agent) json["agent"] = true;
-        if (comment.Attachments is { Count: > 0 } posted) json["attachments"] = Paths(posted);
+        if (comment.Attachments is { Count: > 0 } posted) json["attachments"] = Paths(posted, project);
         if (nested && comment.Replies is { Count: > 0 } replies)
-            json["replies"] = new JsonArray(replies.Select(r => (JsonNode)CommentJson(r, nested: true)).ToArray());
+            json["replies"] = new JsonArray(replies.Select(r => (JsonNode)CommentJson(r, nested: true, project)).ToArray());
         return json;
     }
 
     private JsonObject ItemDetails(Project project, ItemLocation loc)
     {
-        var governing = AgentAccess.Governing(project);
-        var json = ItemJson(loc, details: true, governing);
+        var rules = RulesFor(project);
+        var json = ItemJson(loc, details: true, rules);
         // Why, instead of just true, so the agent can tell the user.
-        if (AgentAccess.Refusal(AgentPriorities, governing.GetValueOrDefault(loc.Item)) is { } why) json["offLimits"] = why;
+        if (AgentAccess.Refusal(rules.Allowed, rules.Governing.GetValueOrDefault(loc.Item)) is { } why) json["offLimits"] = why;
         var context = new JsonObject { ["name"] = project.Name };
+        if (project.Remote != null) context["sharedBy"] = SharedText(project);
         if (!string.IsNullOrWhiteSpace(project.RepoPath)) context["repoPath"] = project.RepoPath;
         if (!string.IsNullOrWhiteSpace(project.GitHubUrl)) context["gitHub"] = project.GitHubUrl;
         if (!string.IsNullOrWhiteSpace(project.PromptPreamble)) context["instructions"] = project.PromptPreamble.Trim();
@@ -1300,12 +1392,37 @@ public sealed partial class AgentTools : IMcpToolHost
         return json;
     }
 
-    private JsonArray Paths(List<Attachment>? attachments) =>
-        new((attachments ?? []).Select(a => _caller is { Remote: true } remote
+    /// <summary>
+    /// Where the agent finds attached files: paths on this computer (a shared project's files are fetched from its host
+    /// as they're listed, so they're there a moment later), or download links over the API.
+    /// </summary>
+    private JsonArray Paths(List<Attachment>? attachments, Project? project = null)
+    {
+        if (project?.Remote != null)
+            foreach (var a in attachments ?? [])
+                if (!File.Exists(_state.AttachmentPath(project, a))) _main.Guest.Fetch(project, a);
+        return new((attachments ?? []).Select(a => _caller is { Remote: true } remote
             ? new JsonObject { ["name"] = a.FileName, ["size"] = a.Size, ["url"] = $"{remote.BaseUrl}{ApiRoutes.Base}/attachments/{a.Id:N}" }
-            : (JsonNode)_state.Store.AttachmentPath(a)).ToArray());
+            : (JsonNode)_state.AttachmentPath(project, a)).ToArray());
+    }
 
-    private string ProjectNames() => string.Join(", ", LocalProjects.Where(p => !p.IsInbox).Select(p => p.Name));
+    private string ProjectNames() =>
+        string.Join(", ", ReachableProjects.Where(p => !p.IsInbox).Select(p => p.Remote is { } r ? $"{p.Name} (shared by {r.HostName})" : p.Name));
+
+    /// <summary>"Sam's ProJict, where you work through Alice (an editor): you may comment and change items".</summary>
+    private string SharedText(Project project)
+    {
+        var remote = project.Remote!;
+        var host = HostOf(project);
+        var may = host is not { State: ConnectionState.Connected } ? "it's not connected right now, so you can only read it"
+            : !host.AgentsAllowed ? "its owner doesn't let guests' agents change anything, so you can only read it"
+            : GuestAccess.CanEdit(host.Role) ? "you may comment, add items and work on items its agent rules allow"
+            : GuestAccess.CanAddItems(host.Role) ? "you may comment and add items"
+            : GuestAccess.CanComment(host.Role) ? "you may comment"
+            : "you can only read it";
+        return $"{remote.HostName}'s ProJict, where you work through {GuestNameIn(project)} ({(host?.Role ?? remote.Role).ToString().ToLowerInvariant()}): {may}; " +
+               $"what you do there is signed {AgentNaming.Via("<your name>", GuestNameIn(project))}.";
+    }
 
     // The agent reads this text as is, so letters like č or ž stay readable instead of becoming č.
     private static readonly JsonSerializerOptions ReadableJson = new() { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };

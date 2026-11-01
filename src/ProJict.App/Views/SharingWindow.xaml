@@ -105,6 +105,9 @@
                         </ItemsControl>
 
                         <TextBlock Text="People" Style="{StaticResource SectionTitle}" Visibility="{Binding HasGuests, Converter={StaticResource BoolToVis}}" />
+                        <CheckBox x:Name="GuestAgentsBox" Content="Guests' AI agents may work in what you share with them" IsChecked="{Binding GuestAgents}" Margin="0,0,0,2" />
+                        <TextBlock Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap" Margin="2,0,0,10"
+                                   Text="As far as the guest's role allows, and only on items your agent rules allow (Settings › AI agents). Their work is signed like “Ada (via Alice)” and waits for your review. Turned off, their agents can still read." />
                         <ItemsControl ItemsSource="{Binding Guests}" Focusable="False">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate DataType="{x:Type vm:GuestRow}">

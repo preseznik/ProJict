@@ -56,6 +56,17 @@ public sealed partial class SharingViewModel : ObservableObject
         }
     }
 
+    /// <summary>Guests' AI agents may work in what you share, as far as the guest's role allows.</summary>
+    public bool GuestAgents
+    {
+        get => Host.GuestAgents;
+        set
+        {
+            Host.GuestAgents = value;
+            OnPropertyChanged();
+        }
+    }
+
     public string PortText
     {
         get => Host.Data.Port.ToString(CultureInfo.InvariantCulture);

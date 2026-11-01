@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using ProJict.Core.Agents;
 using ProJict.Core.Model;
 using ProJict.Core.Storage;
 
@@ -19,7 +20,8 @@ public enum GuestRole
 
 /// <summary>
 /// The host's check of every change a guest sends: whatever the guest's app claims, a viewer changes nothing, a commenter
-/// only comments, a reporter only adds items and comments, and nobody signs in someone else's name.
+/// only comments, a reporter only adds items and comments, and nobody signs in someone else's name. The guest's AI agents
+/// work through the same role, signed "Ada (via Alice)", when the host lets them, and only on items its agent rules allow.
 /// </summary>
 public static class GuestAccess
 {
@@ -39,11 +41,16 @@ public static class GuestAccess
     private static readonly string[] HostFields =
         ["id", "name", "key", "filePrefix", "group", "status", "isInbox", "repoPath", "gitHubUrl", "issues", "gitHubRelease", "archivedFiles", "shipping", "ships", "createdAt", "updatedAt"];
 
+    /// <summary>The longest agent name a guest's agent may sign with ("Ada" in "Ada (via Alice)").</summary>
+    private const int MaxAgentName = 40;
+
     /// <summary>
     /// The guest's version of the project as the host will store it, or the reason it is refused. Comments, history
-    /// entries, notes and releases the guest added are signed with the guest's name.
+    /// entries, notes and releases the guest added are signed with the guest's name, or "Ada (via Alice)" when the guest's
+    /// agent did it and <paramref name="agentsAllowed"/>; such work on items is limited to <paramref name="agentPriorities"/>.
     /// </summary>
-    public static (Project? Accepted, string? Refusal) Check(Project current, Project incoming, string guestName, GuestRole role)
+    public static (Project? Accepted, string? Refusal) Check(Project current, Project incoming, string guestName, GuestRole role,
+        bool agentsAllowed = false, IReadOnlyCollection<Priority>? agentPriorities = null)
     {
         var c = ProjectMerge.ToJson(current);
         var n = ProjectMerge.ToJson(incoming);
@@ -67,8 +74,7 @@ public static class GuestAccess
         {
             if (!before.TryGetValue(id, out var old))
             {
-                comment["by"] = guestName;
-                comment.Remove("agent");
+                if (Sign(comment, "by", guestName, agentsAllowed) is { } refused) return (null, refused);
                 commentsChanged = true;
                 continue;
             }
@@ -92,35 +98,89 @@ public static class GuestAccess
                     _ => "As a reporter you can add items and comments, but not change existing items.",
                 });
         }
-        SignNewWork(c, n, guestName);
+        if (SignNewWork(c, n, guestName, agentsAllowed, agentPriorities ?? []) is { } refusal) return (null, refusal);
         return (Json.Deserialize<Project>(n.ToJsonString(Json.Options)), null);
     }
 
-    private static bool Mine(JsonObject comment, string guestName) =>
-        string.Equals((string?)comment["by"], guestName, StringComparison.OrdinalIgnoreCase) && comment["agent"] == null;
+    /// <summary>
+    /// Signs something new the guest sent: with the guest's name, or for the guest's agent (marked agent) "Ada (via Alice)"
+    /// when the host lets guests' agents work; returns why not otherwise.
+    /// </summary>
+    private static string? Sign(JsonObject thing, string field, string guestName, bool agentsAllowed)
+    {
+        if (thing["agent"] is JsonValue flag && flag.TryGetValue<bool>(out var agent) && agent)
+        {
+            if (!agentsAllowed) return "This ProJict doesn't let guests' AI agents change what it shares.";
+            var name = AgentNaming.WithoutVia((string?)thing[field] ?? "", guestName) ?? (string?)thing[field] ?? "";
+            name = name.Trim();
+            thing[field] = AgentNaming.Via(name.Length is > 0 and <= MaxAgentName && !name.Contains(" (via ") ? name : "AI agent", guestName);
+            return null;
+        }
+        thing[field] = guestName;
+        thing.Remove("agent");
+        return null;
+    }
 
-    /// <summary>New history entries, notes changes and releases carry the guest's name.</summary>
-    private static void SignNewWork(JsonObject c, JsonObject n, string guestName)
+    /// <summary>The guest's own comment, or its agent's ("Ada (via Alice)").</summary>
+    private static bool Mine(JsonObject comment, string guestName) =>
+        comment["agent"] == null ? string.Equals((string?)comment["by"], guestName, StringComparison.OrdinalIgnoreCase)
+            : AgentNaming.WithoutVia((string?)comment["by"] ?? "", guestName) != null;
+
+    /// <summary>
+    /// New history entries, notes changes and releases carry the guest's name, or its agent's; a check-out is the guest's
+    /// or its agent's. An agent's work on an item the host's rules keep off limits to agents is refused.
+    /// </summary>
+    private static string? SignNewWork(JsonObject c, JsonObject n, string guestName, bool agentsAllowed, IReadOnlyCollection<Priority> agentPriorities)
     {
         var old = AllItems(c);
+        var governing = Governing(c);
         foreach (var (id, item) in AllItems(n))
         {
-            var known = old.TryGetValue(id, out var o) ? (o["activity"] as JsonArray)?.Count ?? 0 : 0;
-            if (item["activity"] is not JsonArray log) continue;
-            for (var i = known; i < log.Count; i++)
-                if (log[i] is JsonObject entry)
+            var was = old.GetValueOrDefault(id);
+            var known = (was?["activity"] as JsonArray)?.Count ?? 0;
+            if (item["activity"] is JsonArray log)
+                for (var i = known; i < log.Count; i++)
                 {
-                    entry["by"] = guestName;
-                    entry.Remove("agent");
+                    if (log[i] is not JsonObject entry) continue;
+                    if (Sign(entry, "by", guestName, agentsAllowed) is { } refused) return refused;
+                    // Agents keep off items the host keeps off limits to them; putting one back stays allowed. New items are fine.
+                    if (entry["agent"] != null && was != null && (string?)entry["text"] != "Put it back to do." &&
+                        !AgentAccess.Allows(agentPriorities, governing.GetValueOrDefault(id)))
+                        return "This ProJict keeps that item off limits to AI agents.";
                 }
+            // Only the guest or its agent checks things out in its name.
+            var claimed = (string?)item["claimedBy"];
+            if (claimed != null && claimed != (string?)was?["claimedBy"] &&
+                !string.Equals(claimed, guestName, StringComparison.OrdinalIgnoreCase) && !(agentsAllowed && AgentNaming.WithoutVia(claimed, guestName) != null))
+                item["claimedBy"] = guestName;
         }
         var notes = (c["notes"] as JsonArray ?? []).OfType<JsonObject>().ToDictionary(x => (string)x["id"]!);
         foreach (var note in (n["notes"] as JsonArray ?? []).OfType<JsonObject>())
             if (!notes.TryGetValue((string)note["id"]!, out var was) || !JsonNode.DeepEquals(was, note))
-                note["updatedBy"] = guestName;
+                note["updatedBy"] = agentsAllowed && AgentNaming.WithoutVia((string?)note["updatedBy"] ?? "", guestName) != null ? note["updatedBy"]!.GetValue<string>() : guestName;
         var releases = (c["releases"] as JsonArray ?? []).OfType<JsonObject>().Select(x => (string)x["id"]!).ToHashSet();
         foreach (var release in (n["releases"] as JsonArray ?? []).OfType<JsonObject>())
-            if (!releases.Contains((string)release["id"]!)) release["createdBy"] = guestName;
+            if (!releases.Contains((string)release["id"]!))
+                release["createdBy"] = agentsAllowed && AgentNaming.WithoutVia((string?)release["createdBy"] ?? "", guestName) != null ? release["createdBy"]!.GetValue<string>() : guestName;
+        return null;
+    }
+
+    /// <summary>Each item's priority as agents go by it (its own, or else its parent's), by id.</summary>
+    private static Dictionary<string, Priority> Governing(JsonObject project)
+    {
+        var map = new Dictionary<string, Priority>();
+        void Walk(JsonNode? list, Priority above)
+        {
+            foreach (var item in (list as JsonArray ?? []).OfType<JsonObject>())
+            {
+                var own = Enum.TryParse<Priority>((string?)item["priority"], true, out var p) ? p : Priority.None;
+                var governing = AgentAccess.Governing(own, above);
+                map[(string)item["id"]!] = governing;
+                Walk(item["children"], governing);
+            }
+        }
+        foreach (var category in Categories(project)) Walk(category["items"], Priority.None);
+        return map;
     }
 
     private static IEnumerable<JsonObject> Categories(JsonObject project) => (project["categories"] as JsonArray ?? []).OfType<JsonObject>();

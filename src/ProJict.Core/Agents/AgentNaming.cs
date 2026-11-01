@@ -34,6 +34,20 @@ public static partial class AgentNaming
         return string.IsNullOrEmpty(label) ? null : label;
     }
 
+    /// <summary>"Ada (via Alice)": an agent working in a project shared with Alice's ProJict, through her connection.</summary>
+    public static string Via(string agent, string guest) => $"{agent} (via {guest})";
+
+    /// <summary>
+    /// The agent in "Ada (via Alice)" ("Ada"), when the name is signed that way (through <paramref name="guest"/>, if
+    /// given); else null.
+    /// </summary>
+    public static string? WithoutVia(string name, string? guest = null)
+    {
+        if (!name.EndsWith(')') || name.LastIndexOf(" (via ", StringComparison.Ordinal) is not (> 0 and var at)) return null;
+        var through = name[(at + 6)..^1];
+        return guest == null || string.Equals(through, guest, StringComparison.OrdinalIgnoreCase) ? name[..at] : null;
+    }
+
     /// <summary>Who signed it, without a label from before agents had names: "Claude Code · login fix" → "Claude Code".</summary>
     public static string Identity(string name) => name.IndexOf(" · ", StringComparison.Ordinal) is > 0 and var i ? name[..i] : name;
 

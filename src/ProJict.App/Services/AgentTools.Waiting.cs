@@ -37,15 +37,16 @@ public sealed partial class AgentTools
     /// <summary>Comments, work sent back and ship requests waiting for the agent.</summary>
     private List<string> WorkLines(McpSession session)
     {
-        bool Mine(string by) => AgentNaming.IsOwnWork(session, by);
         var now = DateTime.Now;
         var lines = new List<string>();
         if (session.RenamedBy is { } renamer && session.Noticed.Add($"renamed:{session.AgentName}"))
             lines.Add($"{renamer} renamed you {session.AgentName}: everything you do is now signed {session.AgentName}. " +
                       $"Go by that name, also in Chat, and pick it again with set_name {session.AgentName} when you come back.");
-        foreach (var project in LocalProjects)
+        // Also in projects shared with this ProJict, where it signs "Ada (via Alice)".
+        foreach (var project in ReachableProjects)
             foreach (var loc in project.Walk())
             {
+                bool Mine(string by) => OwnIn(session, project, by);
                 var item = loc.Item;
                 // When the agent last did something on the item: its history or its comments.
                 DateTime? mine = null;
@@ -75,7 +76,7 @@ public sealed partial class AgentTools
             if (ship.State == ShipState.Requested && session.Noticed.Add($"ship:{ship.Id}:requested"))
                 lines.Add($"{ship.RequestedBy} wants {project.Name} shipped ({ShipFlow.Describe(ship.Steps)}): read ship_request project={project.Name}, " +
                           "then post your plan with plan_ship and wait for approval.");
-            else if (ship.State == ShipState.Approved && ship.PlannedBy is { } planner && Mine(planner) && session.Noticed.Add($"ship:{ship.Id}:approved"))
+            else if (ship.State == ShipState.Approved && ship.PlannedBy is { } planner && AgentNaming.IsOwnWork(session, planner) && session.Noticed.Add($"ship:{ship.Id}:approved"))
                 lines.Add($"{ship.DecidedBy ?? "The user"} approved your ship plan for {project.Name}: run it, report_ship each step, then finish_ship.");
         }
         return lines;

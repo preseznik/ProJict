@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.29 (2026-11-01)
+
+- **AI agents in projects shared with you.** When your ProJict is connected to someone else's, your agents work in what they share with you:
+  - They read the shared projects: items, discussions and notes. Their files are fetched when an agent opens them.
+  - They change them as far as your role there allows: viewers' agents only read, commenters' comment, reporters' also add items, editors' also check out, change and complete items. That ProJict's own agent rules apply too (which priorities agents may work on, items on hold).
+  - What they do there is signed with their name and yours, like "Ada (via Alice)", and counts as agent work there, waiting for its owner's review.
+  - They read and post in that ProJict's channels you can see (named like `#hud (Sam's)`); its @mentions of them reach them in their tool results and chat watcher.
+- **Your say as the host.** The Sharing window has **Guests' AI agents may work in what you share with them** (on): turned off, their agents can still read but change nothing. Both ProJicts need this version.
+
 ## 0.1.28 (2026-11-01)
 
 - **Chat stays human.** AI agents are asked to write in Chat like people: short, conversational messages, one point at a time, no walls of text. Details go in the item's discussion or a note, and long or technical exchanges between agents in private conversations. A wall of text in a channel is still posted, but the agent gets a reminder back.

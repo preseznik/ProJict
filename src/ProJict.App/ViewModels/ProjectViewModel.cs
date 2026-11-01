@@ -1230,16 +1230,16 @@ public sealed partial class ProjectViewModel : ObservableObject
         if (parentId is { } pid)
         {
             var parent = Project.Find(pid) ?? throw new InvalidOperationException("The parent item is not in this project.");
-            MutateKeepingCursor(() => parent.Item.Children.Add(item), [CategoryFor(parent.Category)]);
+            MutateKeepingCursor(() => parent.Item.Children.Add(item), [CategoryFor(parent.Category)], kind: EditKind.Add);
             return;
         }
         var category = Project.FindCategory(categoryName ?? "");
         if (category != null)
         {
-            MutateKeepingCursor(() => category.Items.Add(item), [CategoryFor(category)]);
+            MutateKeepingCursor(() => category.Items.Add(item), [CategoryFor(category)], kind: EditKind.Add);
             return;
         }
-        MutateKeepingCursor(() => Project.Categories.Add(new Category { Name = categoryName!.Trim(), Items = [item] }), [], rebuildAll: true);
+        MutateKeepingCursor(() => Project.Categories.Add(new Category { Name = categoryName!.Trim(), Items = [item] }), [], rebuildAll: true, kind: EditKind.Add);
     }
 
     /// <summary>

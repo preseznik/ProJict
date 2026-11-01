@@ -45,6 +45,18 @@ public sealed partial class HostConnection(KnownHost host) : ObservableObject
     internal bool UserStopped { get; set; }
     internal int Attempts { get; set; }
     internal Dictionary<Guid, RemoteCopy> Copies { get; } = [];
+    /// <summary>The host lets guests' AI agents change what it shares (through the guest's role); older hosts don't say, so no.</summary>
+    public bool AgentsAllowed { get; internal set; }
+    /// <summary>The priorities of items the host lets agents work on (its Settings › AI agents).</summary>
+    public IReadOnlyCollection<Priority> AgentPriorities { get; internal set; } = [];
+
+    /// <summary>The host's rules for guests' agents, from its welcome or when they change.</summary>
+    internal void TakeAgentRules(JsonObject message)
+    {
+        AgentsAllowed = (bool?)message["agents"] == true;
+        AgentPriorities = (message["agentPriorities"] as JsonArray ?? [])
+            .Select(n => Enum.TryParse<Priority>((string?)n, true, out var p) ? p : (Priority?)null).OfType<Priority>().ToList();
+    }
     internal HashSet<Guid> Requested { get; } = [];
 
     internal void Send(JsonObject message)
@@ -323,6 +335,9 @@ public sealed partial class GuestService
             case "welcome":
                 Welcome(connection, message);
                 break;
+            case "agentRules":
+                connection.TakeAgentRules(message);
+                break;
             case "project":
                 Receive(connection, message["project"]!, (int)message["revision"]!);
                 break;
@@ -360,6 +375,7 @@ public sealed partial class GuestService
         connection.HostName = (string?)message["host"] ?? connection.HostName;
         connection.Role = Enum.TryParse<GuestRole>((string?)message["role"], out var role) ? role : GuestRole.Viewer;
         connection.MyName = (string?)message["name"] ?? connection.MyName;
+        connection.TakeAgentRules(message);
         host.HostName = connection.HostName;
         if (Guid.TryParse((string?)message["guestId"], out var guestId)) host.GuestId = guestId;
         if ((string?)message["token"] is { } token) _store.SetToken(host, token);

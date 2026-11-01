@@ -41,6 +41,8 @@ public sealed class GuestSession(GuestAccount account, Wire wire, string address
     internal HashSet<Guid> Sent { get; } = [];
     /// <summary>Chat channels the guest has, likewise.</summary>
     internal HashSet<Guid> ChatSent { get; } = [];
+    /// <summary>The agent rules the guest last heard (so it hears again only when they change).</summary>
+    internal string? RulesSent { get; set; }
 
     internal void Send(JsonObject message) => _ = SendAsync(message);
 
@@ -427,6 +429,8 @@ public sealed partial class HostService
             ("guestId", session.Account.Id.ToString()), ("role", session.Account.Role.ToString()), ("host", _state.UserName), ("name", session.Account.Name),
             ("projectIds", new JsonArray(projects.Select(p => (JsonNode)p.Id.ToString()).ToArray())));
         if (token != null) welcome["token"] = token;
+        AddAgentRules(welcome);
+        session.RulesSent = AgentRulesSignature();
         var messages = new List<JsonObject> { welcome };
         foreach (var project in projects)
         {
@@ -477,7 +481,7 @@ public sealed partial class HostService
             candidate = ProjectMerge.Merge(Json.Deserialize<Project>(baseJson)!, incoming, project);
         else return Rejected(project, "The project changed too much meanwhile, so your last change couldn't be kept.");
 
-        var (accepted, refusal) = GuestAccess.Check(project, candidate, account.Name, account.Role);
+        var (accepted, refusal) = GuestAccess.Check(project, candidate, account.Name, account.Role, Data.GuestAgents, _state.Settings.AgentPriorities);
         if (refusal != null) return Rejected(project, refusal);
         if (ProjectMerge.Normalized(accepted!) == ProjectMerge.Normalized(project))
             return Wire.Message("saved", ("projectId", id.ToString()), ("revision", history.Revision));
@@ -601,10 +605,49 @@ public sealed partial class HostService
         OnProjectListChanged();
     }
 
+    // ───────────── Guests' agents ─────────────
+
+    /// <summary>Whether guests' AI agents may work in what you share (the Sharing window); guests hear it at once.</summary>
+    public bool GuestAgents
+    {
+        get => Data.GuestAgents;
+        set
+        {
+            if (Data.GuestAgents == value) return;
+            Data.GuestAgents = value;
+            _store.Save();
+            SendAgentRules();
+        }
+    }
+
+    /// <summary>What guests' agents may do here: whether at all, and on items of which priorities (Settings › AI agents).</summary>
+    private void AddAgentRules(JsonObject message)
+    {
+        message["agents"] = Data.GuestAgents;
+        message["agentPriorities"] = new JsonArray(_state.Settings.AgentPriorities.Select(p => (JsonNode)p.ToString()).ToArray());
+    }
+
+    private string AgentRulesSignature() => $"{Data.GuestAgents}:{string.Join(",", _state.Settings.AgentPriorities.Order())}";
+
+    /// <summary>Tells connected guests the rules when they changed since they last heard them.</summary>
+    private void SendAgentRules()
+    {
+        var signature = AgentRulesSignature();
+        foreach (var session in _sessions.Where(s => s.RulesSent != signature))
+        {
+            var message = Wire.Message("agentRules");
+            AddAgentRules(message);
+            session.RulesSent = signature;
+            session.Send(message);
+        }
+    }
+
     /// <summary>Projects added, deleted or moved to another group: guests get the ones they may now see and lose the others.</summary>
     private void OnProjectListChanged()
     {
         SyncChat();
+        // Settings › AI agents saved (it refreshes the list too): the agent rules may have changed.
+        SendAgentRules();
         foreach (var session in _sessions)
         {
             var visible = Visible(session.Account).ToList();

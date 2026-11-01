@@ -1,6 +1,7 @@
 using System.IO;
 using System.Text.Json.Nodes;
 using System.Windows.Threading;
+using ProJict.Core.Agents;
 using ProJict.Core.Chat;
 using ProJict.Core.Model;
 using ProJict.Core.Sharing;
@@ -96,10 +97,20 @@ public sealed partial class HostService
     {
         var account = session.Account;
         var actor = ChatActorOf(account);
+        // What the guest may see decides; its agent acts as "Ada (via Alice)".
+        var seeing = actor;
         var room = _state.Chat;
         var op = (string?)message["op"] ?? "";
         string? Text(string name) => (string?)message[name];
         JsonObject Refuse(string why) => Wire.Message("chatError", ("message", why));
+        if (Text("as") is { } agentName && agentName.Trim().Length > 0)
+        {
+            if (!Data.GuestAgents) return Refuse("This ProJict doesn't let guests' AI agents take part.");
+            if (op is not ("post" or "read" or "edit" or "delete" or "join" or "leave")) return Refuse("Guests' AI agents read and write in channels; the rest is for people.");
+            var agent = (AgentNaming.WithoutVia(agentName.Trim(), account.Name) ?? agentName).Trim();
+            if (agent.Length is 0 or > 40 || agent.Contains(" (via ", StringComparison.Ordinal)) return Refuse("That isn't an agent's name.");
+            actor = new ChatActor(AgentNaming.Via(agent, account.Name), true, Projects: actor.Projects, Guest: true);
+        }
         try
         {
             if (op == "create")
@@ -127,11 +138,15 @@ public sealed partial class HostService
                 return null;
             }
 
-            if (!Guid.TryParse(Text("channel"), out var id) || room.Channels.FirstOrDefault(c => c.Id == id) is not { } channel || !ChatRoom.CanSee(channel, actor))
+            if (!Guid.TryParse(Text("channel"), out var id) || room.Channels.FirstOrDefault(c => c.Id == id) is not { } channel || !ChatRoom.CanSee(channel, seeing))
                 return Refuse("That channel isn't there any more.");
             if (op == "read")
             {
-                if (DateTime.TryParse(Text("upTo"), null, System.Globalization.DateTimeStyles.RoundtripKind, out var upTo)) room.MarkRead(channel, actor.Name, upTo);
+                if (DateTime.TryParse(Text("upTo"), null, System.Globalization.DateTimeStyles.RoundtripKind, out var upTo))
+                {
+                    if (ChatRoom.Member(channel, actor.Name) != null) room.MarkRead(channel, actor.Name, upTo);
+                    else if (actor.Agent) room.MarkMentionsRead(channel, actor.Name, upTo);
+                }
                 return null;
             }
             if (!GuestAccess.CanComment(account.Role)) return Refuse("As a viewer you can read, not write.");
