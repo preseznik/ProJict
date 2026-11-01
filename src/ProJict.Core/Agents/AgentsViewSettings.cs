@@ -19,6 +19,10 @@ public sealed class AgentsViewSettings
     public AgeUnit ActiveWithinUnit { get; set; } = AgeUnit.Hours;
     /// <summary>How many days back Earlier goes; 0 for all of it.</summary>
     public int EarlierDays { get; set; } = 7;
+    /// <summary>The office with the agents at their desks, beside (or above) the cards.</summary>
+    public bool ShowOffice { get; set; } = true;
+    /// <summary>The list of all agents under the office is open.</summary>
+    public bool AgentListOpen { get; set; }
 
     /// <summary>How recently an agent must have done something to get a card; null when every connected one does.</summary>
     public TimeSpan? ActiveSpan => Show switch

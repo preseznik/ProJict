@@ -40,6 +40,9 @@ public sealed partial class AgentTools
         bool Mine(string by) => AgentNaming.IsOwnWork(session, by);
         var now = DateTime.Now;
         var lines = new List<string>();
+        if (session.RenamedBy is { } renamer && session.Noticed.Add($"renamed:{session.AgentName}"))
+            lines.Add($"{renamer} renamed you {session.AgentName}: everything you do is now signed {session.AgentName}. " +
+                      $"Go by that name, also in Chat, and pick it again with set_name {session.AgentName} when you come back.");
         foreach (var project in LocalProjects)
             foreach (var loc in project.Walk())
             {

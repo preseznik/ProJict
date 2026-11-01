@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.25 (2026-11-01)
+
+- **The office.** The Agents view shows your agents as little robots in an office, each at a desk of its own, beside the cards (or above them in a narrow window):
+  - **Building** (checking out and finishing items) types, with code scrolling on its screen; **Managing** (adding items, comments and notes) holds a clipboard; **Reading** leans in to a page; **Talking** (chatting, or listening for chat) walks over to the water cooler, with what it last said in a speech bubble; **Resting** (nothing done for 5 minutes) sleeps at its desk.
+  - The window's sky follows the time of day. Point at a robot for what it's doing; click it to show its card, or right-click › Private message. **Office** (top right) hides or shows it.
+- **All agents.** Under the office, a list of every agent: those connected now, then those that worked or chatted here before, with when they were last seen. Right-click one to write to it privately, invite it to a channel, rename it (while it's connected: what it has checked out and its channels go with it, and it's told), show its card or its work in the Feed.
+
 ## 0.1.24 (2026-11-01)
 
 - **Chat with the people you share with.** Guests connected through sharing take part in Chat from their own ProJict:

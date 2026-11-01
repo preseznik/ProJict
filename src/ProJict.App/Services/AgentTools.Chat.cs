@@ -290,12 +290,15 @@ public sealed partial class AgentTools
             else Chat.Changed += listener;
             return channel;
         });
+        // The office shows it at the water cooler while it listens.
+        session.Listening = true;
         try
         {
             await Task.WhenAny(arrived.Task, Task.Delay(TimeSpan.FromSeconds(seconds)));
         }
         finally
         {
+            session.Listening = false;
             await _dispatcher.InvokeAsync(() => Chat.Changed -= listener);
         }
         return await Run(session, () =>
@@ -312,7 +315,7 @@ public sealed partial class AgentTools
             };
             if (waiting.Count == 0) json["note"] = $"Nothing new in {seconds} s. Call wait_for_messages again to keep listening.";
             foreach (var group in waiting.GroupBy(w => w.Channel)) Delivered(session, group.Key, group.Select(w => w.Message).ToList());
-            RecordText(session, waiting.Count == 0 ? "Listened in Chat" : $"Got {Count(waiting.Count, "chat message")}", waiting.FirstOrDefault().Channel);
+            RecordText(session, waiting.Count == 0 ? "Listened in Chat" : $"Got {Count(waiting.Count, "chat message")}", waiting.FirstOrDefault().Channel, "wait_for_messages");
             return Json(json);
         });
     }

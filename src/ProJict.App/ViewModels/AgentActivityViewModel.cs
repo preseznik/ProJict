@@ -1,9 +1,11 @@
+using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Windows.Media;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ProJict.Core.Agents;
+using ProJict.Core.Chat;
 using ProJict.Core.Features;
 using ProJict.Core.Model;
 
@@ -58,6 +60,170 @@ public sealed partial class AgentActivityViewModel : ObservableObject
 
     /// <summary>The sidebar's count changed (agents came, went idle, or the settings changed).</summary>
     public event Action? CountChanged;
+    /// <summary>A card should come into view (its agent was clicked in the office).</summary>
+    public event Action<AgentCardViewModel>? RevealRequested;
+
+    /// <summary>The office beside the cards, with the same agents at their desks.</summary>
+    public OfficeViewModel Office { get; } = new();
+
+    public bool ShowOffice
+    {
+        get => View.ShowOffice;
+        set
+        {
+            if (View.ShowOffice == value) return;
+            View.ShowOffice = value;
+            _state.SaveAppSettings();
+            OnPropertyChanged();
+            UpdateOffice();
+        }
+    }
+
+    // ───────────── All agents ─────────────
+
+    /// <summary>Every agent: the ones connected now, then the ones seen here before, most recent first.</summary>
+    public ObservableCollection<AgentListRow> AllAgents { get; } = [];
+    /// <summary>When agents connected since ProJict started were last seen, for after they leave.</summary>
+    private readonly Dictionary<string, DateTime> _seenLive = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>"3 connected · 12 in all".</summary>
+    public string AgentListCount { get; private set; } = "";
+
+    public bool IsAgentListOpen
+    {
+        get => View.AgentListOpen;
+        set
+        {
+            if (View.AgentListOpen == value) return;
+            View.AgentListOpen = value;
+            _state.SaveAppSettings();
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>
+    /// Rebuilds the list: the agents connected now, and those that signed work, comments or chat messages here or picked
+    /// a name (older numbered and labelled names count as their agent's).
+    /// </summary>
+    private void RefreshAgentList()
+    {
+        var registry = _state.Settings.AgentNames ?? [];
+        var live = _main.Agents.Sessions.OrderBy(s => s.AgentName, StringComparer.CurrentCultureIgnoreCase).ToList();
+        var clients = registry.Values.Concat(live.Select(s => s.Client)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var seen = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
+        // Members of channels it never wrote in are known, not seen (being invited isn't being here).
+        void Saw(string by, DateTime at)
+        {
+            var name = AgentNaming.Identity(by);
+            foreach (var client in clients) name = AgentNaming.Unnumbered(name, client);
+            if (name.Length > 0 && (!seen.TryGetValue(name, out var last) || at > last)) seen[name] = at;
+        }
+        foreach (var project in _state.Projects.Where(p => p.Remote == null))
+        {
+            foreach (var loc in project.Walk())
+            {
+                foreach (var entry in loc.Item.Activity ?? []) if (entry.Agent) Saw(entry.By, entry.At);
+                foreach (var (comment, _) in loc.Item.Comments.Walk()) if (comment.Agent) Saw(comment.By, comment.At);
+            }
+            foreach (var category in project.Categories)
+                foreach (var (comment, _) in category.Comments.Walk()) if (comment.Agent) Saw(comment.By, comment.At);
+        }
+        foreach (var channel in _state.Chat.Channels)
+        {
+            foreach (var message in channel.Messages) if (message.Agent && !message.Notice) Saw(message.By, message.At);
+            foreach (var member in channel.Members) if (member.Agent) Saw(member.Name, DateTime.MinValue);
+        }
+        foreach (var name in registry.Keys) seen.TryAdd(name, DateTime.MinValue);
+        foreach (var session in live) _seenLive[session.AgentName] = AgentsViewSettings.LastSeen(session);
+        foreach (var (name, at) in _seenLive) if (!seen.TryGetValue(name, out var last) || at > last) seen[name] = at;
+        // A connected agent's earlier names (it picked another, or you renamed it) are the same agent.
+        var liveNames = live.SelectMany(s => s.FormerNames.Append(s.AgentName)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        string? ClientOf(string name) => registry.FirstOrDefault(n => string.Equals(n.Key, name, StringComparison.OrdinalIgnoreCase)).Value;
+        // Rows stay as long as their agent does (connected, or not), so the list doesn't flicker and a rename under way stays.
+        AgentListRow RowFor(string name, McpSession? session, string? client, DateTime? at)
+        {
+            var row = AllAgents.FirstOrDefault(r => r.Session == session && string.Equals(r.Name, name, StringComparison.Ordinal));
+            if (row == null) return new AgentListRow(this, name, session, client, at);
+            row.Seen(client, at);
+            return row;
+        }
+        List<AgentListRow> rows =
+        [
+            .. live.Select(s => RowFor(s.AgentName, s, s.Client, AgentsViewSettings.LastSeen(s))),
+            .. seen.Where(n => !liveNames.Contains(n.Key)).OrderByDescending(n => n.Value).ThenBy(n => n.Key, StringComparer.CurrentCultureIgnoreCase)
+                .Select(n => RowFor(n.Key, null, ClientOf(n.Key), n.Value == DateTime.MinValue ? null : n.Value)),
+        ];
+        for (var i = 0; i < rows.Count; i++)
+        {
+            if (i < AllAgents.Count && AllAgents[i] == rows[i]) continue;
+            var at = AllAgents.IndexOf(rows[i]);
+            if (at > i) AllAgents.Move(at, i);
+            else AllAgents.Insert(i, rows[i]);
+        }
+        while (AllAgents.Count > rows.Count) AllAgents.RemoveAt(AllAgents.Count - 1);
+        AgentListCount = live.Count == rows.Count ? (live.Count == 1 ? "1 connected" : $"{live.Count} connected") : $"{live.Count} connected · {rows.Count} in all";
+        TickAgentList(DateTime.Now);
+        OnPropertyChanged(nameof(AgentListCount));
+    }
+
+    private void TickAgentList(DateTime now)
+    {
+        foreach (var row in AllAgents)
+            if (row.Session is { } session)
+                row.Tick(OfficeActivities.Name(OfficeActivities.Of(session, now, session.Claimed.Count > 0 && CheckedOut(session, null).Count > 0)), ProjectNames(session));
+    }
+
+    /// <summary>Your channels the agent isn't in yet (not private conversations), to invite it to.</summary>
+    internal IReadOnlyList<InviteTarget> InviteTargets(string name) =>
+        _state.Chat.Channels.Where(c => !c.Direct && ChatRoom.Member(c, name) == null)
+            .OrderBy(c => c.Name, StringComparer.CurrentCultureIgnoreCase)
+            .Select(c => new InviteTarget("#" + c.Name, () => InviteTo(name, c))).ToList();
+
+    private void InviteTo(string name, ChatChannel channel)
+    {
+        try
+        {
+            _state.Chat.Invite(channel, _state.ChatMe, name, agent: true);
+            _state.StatusText = $"Invited {name} to #{channel.Name}.";
+        }
+        catch (ChatException ex) { _state.StatusText = ex.Message; }
+    }
+
+    /// <summary>Renames a connected agent; returns why it can't have the name, or null.</summary>
+    internal string? Rename(McpSession session, string name)
+    {
+        var old = session.AgentName;
+        if (_main.AgentTools.RenameAgent(session, name) is { } problem) return problem;
+        if (old != session.AgentName) _state.StatusText = $"{old} is now called {session.AgentName}; it's told with its next step.";
+        Refresh();
+        return null;
+    }
+
+    /// <summary>The Feed, showing only what the agent did, all of it.</summary>
+    internal void ShowWorkOf(string name)
+    {
+        _main.ShowFeed();
+        var feed = _main.Feed;
+        feed.Period = FeedViewModel.Periods.First(p => p.Days == null);
+        if (feed.WhoChoices.Contains(name, StringComparer.OrdinalIgnoreCase))
+            feed.WhoFilter = feed.WhoChoices.First(w => string.Equals(w, name, StringComparison.OrdinalIgnoreCase));
+        else
+        {
+            feed.WhoFilter = FeedViewModel.Agents;
+            feed.SearchText = name;
+        }
+    }
+
+    /// <summary>Its card comes into view, also when it's idle (hidden) or works outside the project shown.</summary>
+    internal void ShowCardOf(McpSession session)
+    {
+        if (Live.All(c => c.Session != session) && !_showIdle)
+        {
+            _showIdle = true;
+            RefreshLive();
+        }
+        if (Live.All(c => c.Session != session) && ProjectFilter != AllProjects) ProjectFilter = AllProjects;
+        if (Live.FirstOrDefault(c => c.Session == session) is { } card) RequestReveal(card);
+    }
 
     [ObservableProperty] private string _projectFilter = AllProjects;
     [ObservableProperty] private GroupingOption _grouping;
@@ -287,7 +453,37 @@ public sealed partial class AgentActivityViewModel : ObservableObject
         Live = (_showIdle ? connected : active).Select(s => new AgentCardViewModel(s, this, project)).ToList();
         foreach (var name in new[] { nameof(Live), nameof(HasLive), nameof(EmptyText), nameof(LiveTitle), nameof(IdleCount), nameof(HasIdleLine), nameof(IdleText), nameof(IdleButtonText) })
             OnPropertyChanged(name);
+        UpdateOffice();
+        RefreshAgentList();
     }
+
+    /// <summary>Puts the agents shown at their desks or at the cooler, by what they do now.</summary>
+    private void UpdateOffice()
+    {
+        if (!View.ShowOffice) return;
+        var project = FilterProject;
+        Office.Update(Live, DateTime.Now, s => s.Claimed.Count > 0 && CheckedOut(s, project).Count > 0, LastSaid);
+    }
+
+    /// <summary>The agent's latest message in Chat since it connected (for its speech bubble at the cooler).</summary>
+    private string? LastSaid(McpSession session)
+    {
+        ChatMessage? last = null;
+        foreach (var channel in _state.Chat.Channels)
+            for (var i = channel.Messages.Count - 1; i >= 0; i--)
+            {
+                var m = channel.Messages[i];
+                if (m.At < session.ConnectedAt || (last != null && m.At <= last.At)) break;
+                if (m.Agent && !m.Deleted && !m.Notice && string.Equals(m.By, session.AgentName, StringComparison.OrdinalIgnoreCase))
+                {
+                    last = m;
+                    break;
+                }
+            }
+        return last?.Text;
+    }
+
+    internal void RequestReveal(AgentCardViewModel card) => RevealRequested?.Invoke(card);
 
     private void BuildHistory()
     {
@@ -324,6 +520,8 @@ public sealed partial class AgentActivityViewModel : ObservableObject
     private void Tick()
     {
         foreach (var card in Live) card.Tick();
+        UpdateOffice();
+        TickAgentList(DateTime.Now);
         // Every few seconds: agents that went idle drop off, and the idle line counts them.
         if (++_ticks % 5 != 0 || _showIdle) return;
         var project = FilterProject;
@@ -345,10 +543,12 @@ public sealed partial class AgentActivityViewModel : ObservableObject
                         string.Equals(x.Item.ClaimedBy, session.AgentName, StringComparison.OrdinalIgnoreCase))
             .ToList();
 
-    internal void MessagePrivately(McpSession session)
+    internal void MessagePrivately(McpSession session) => MessagePrivately(session.AgentName);
+
+    internal void MessagePrivately(string agent)
     {
         _main.ShowChannel(null);
-        _main.Chat.OpenDirect(session.AgentName, agent: true);
+        _main.Chat.OpenDirect(agent, agent: true);
     }
 
     internal void Reveal(Project project, Guid itemId)
@@ -429,6 +629,10 @@ public sealed partial class AgentCardViewModel : ObservableObject
 
     /// <summary>Right-click the card › Private message: your conversation with it in Chat.</summary>
     [RelayCommand] private void PrivateMessage() => _owner.MessagePrivately(Session);
+
+    /// <summary>Its agent was clicked in the office: the view scrolls to the card and flashes it.</summary>
+    internal void RequestReveal() => _owner.RequestReveal(this);
+    [ObservableProperty] private bool _isFlashing;
     public bool HasRecent => Recent.Count > 0;
 
     /// <summary>Called or set its status in the last half minute: the dots move.</summary>

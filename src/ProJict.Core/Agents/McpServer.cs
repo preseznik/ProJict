@@ -25,6 +25,10 @@ public sealed class McpSession
     public string? Name { get; set; }
     /// <summary>Sessions of the same client without a name of their own are numbered: 2 for "Claude Code 2".</summary>
     public int Number { get; set; } = 1;
+    /// <summary>Who renamed it (the user, from the Agents view), so its next tool result tells it its new name.</summary>
+    public string? RenamedBy { get; set; }
+    /// <summary>Names it had earlier in this session, before it (or the user) picked another.</summary>
+    public HashSet<string> FormerNames { get; } = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>The name it signs with whatever the client calls itself: an API token's name.</summary>
     public string? SignAs { get; init; }
@@ -46,6 +50,8 @@ public sealed class McpSession
     /// <summary>What it did lately, oldest first (at most <see cref="KeptActions"/>), for the Agents view.</summary>
     public List<AgentAction> Recent { get; } = [];
     public const int KeptActions = 40;
+    /// <summary>Waiting for chat messages (wait_for_messages) right now.</summary>
+    public volatile bool Listening;
     /// <summary>What its tool results already told it is waiting (chat messages, comments, …), so each is mentioned once.</summary>
     public HashSet<string> Noticed { get; } = [];
 
@@ -68,7 +74,7 @@ public sealed class McpSession
 }
 
 /// <summary>One thing an agent did, in a few words ("Checked out “Fix the launcher”"), and the project and item it was about.</summary>
-public sealed record AgentAction(DateTime At, string Text, Guid? ProjectId, Guid? ItemId);
+public sealed record AgentAction(DateTime At, string Text, Guid? ProjectId, Guid? ItemId, string? Tool = null);
 
 public interface IMcpToolHost
 {

@@ -303,7 +303,7 @@ public sealed partial class AgentTools : IMcpToolHost
                 "join_channel" => args.Bool("leave") == true ? $"Left {name}" : $"Joined {name}",
                 "invite_to_channel" => $"Invited {args.String("who")} to {name}",
                 _ => $"Moderated {name} ({args.String("action")?.Replace('_', ' ')})",
-            }, channel);
+            }, channel, tool);
             return;
         }
         (Project Project, ItemLocation Loc)? found = null;
@@ -346,12 +346,12 @@ public sealed partial class AgentTools : IMcpToolHost
             "finish_ship" => args.String("outcome") == "shipped" ? "Shipped it" : "Couldn't ship it",
             _ => tool.Replace('_', ' '),
         };
-        Remember(session, new AgentAction(DateTime.Now, text, project?.Id, item?.Id));
+        Remember(session, new AgentAction(DateTime.Now, text, project?.Id, item?.Id, tool));
     }
 
     /// <summary>Notes a chat action, in the channel's project.</summary>
-    private void RecordText(McpSession session, string text, ProJict.Core.Chat.ChatChannel? channel) =>
-        Remember(session, new AgentAction(DateTime.Now, text, channel?.Link?.ProjectId, channel?.Link?.ItemId));
+    private void RecordText(McpSession session, string text, ProJict.Core.Chat.ChatChannel? channel, string? tool = null) =>
+        Remember(session, new AgentAction(DateTime.Now, text, channel?.Link?.ProjectId, channel?.Link?.ItemId, tool));
 
     private void Remember(McpSession session, AgentAction action)
     {
@@ -499,23 +499,51 @@ public sealed partial class AgentTools : IMcpToolHost
         lock (_live) others = _live.Where(s => s != session).ToList();
         if (others.Any(s => string.Equals(s.AgentName, name, StringComparison.OrdinalIgnoreCase)))
             throw new McpToolException($"{name} is taken by another agent connected now; pick another name.", ToolProblem.Conflict);
+        var before = TakeName(session, name);
+        session.RenamedBy = null;
+        return Json(new JsonObject
+        {
+            ["name"] = session.AgentName,
+            ["client"] = session.Client,
+            ["note"] = before ? $"You were {session.AgentName} here before: your earlier work counts as yours." : $"Everything you do is now signed {session.AgentName}.",
+        });
+    }
+
+    /// <summary>
+    /// The user renames a connected agent (the Agents view's list): as if it had picked the name with set_name; its next
+    /// tool result tells it. Returns why it can't have that name, or null when it's done.
+    /// </summary>
+    public string? RenameAgent(McpSession session, string name)
+    {
+        if (!string.IsNullOrWhiteSpace(session.SignAs)) return $"An API token signs with the name you gave it ({session.SignAs.Trim()}): rename it under Settings › API.";
+        name = name.Trim().TrimStart('@');
+        if (string.Equals(name, session.AgentName, StringComparison.Ordinal)) return null;
+        if (AgentNaming.Problem(name) is { } problem) return problem;
+        if (string.Equals(name, _state.UserName, StringComparison.OrdinalIgnoreCase)) return "That's your own name; pick another one for the agent.";
+        if (string.Equals(name, session.Client, StringComparison.OrdinalIgnoreCase)) return $"{name} is what it runs in; pick a name of its own.";
+        List<McpSession> others;
+        lock (_live) others = _live.Where(s => s != session).ToList();
+        if (others.Any(s => string.Equals(s.AgentName, name, StringComparison.OrdinalIgnoreCase))) return $"{name} is taken by another agent connected now.";
+        TakeName(session, name);
+        session.RenamedBy = _state.UserName;
+        return null;
+    }
+
+    /// <summary>Gives the session the name; what it has checked out and the channels it's in go with it. True when the name was known here before.</summary>
+    private bool TakeName(McpSession session, string name)
+    {
         var known = _state.Settings.AgentNames ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var before = known.Keys.FirstOrDefault(k => string.Equals(k, name, StringComparison.OrdinalIgnoreCase));
         var old = session.AgentName;
         var held = LocalProjects.SelectMany(p => p.Walk().Select(l => (Project: p, l.Item))).Where(x => Holds(session, x.Item)).ToList();
+        if (session.Name is { } former && !string.Equals(former, before ?? name, StringComparison.OrdinalIgnoreCase)) session.FormerNames.Add(former);
         session.Name = before ?? name;
-        // What it has checked out and the channels it's in go with it, so it keeps them.
         foreach (var (project, item) in held) Edit(project, item.Id, i => i.ClaimedBy = session.AgentName);
         Chat.RenameMember(old, session.AgentName);
         known[session.AgentName] = session.Client;
         _state.MarkSettingsDirty();
         _main.Agents.Renamed();
-        return Json(new JsonObject
-        {
-            ["name"] = session.AgentName,
-            ["client"] = session.Client,
-            ["note"] = before != null ? $"You were {session.AgentName} here before: your earlier work counts as yours." : $"Everything you do is now signed {session.AgentName}.",
-        });
+        return before != null;
     }
 
     // ───────────── Items ─────────────

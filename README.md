@@ -80,6 +80,19 @@ Other MCP clients run the same program with `--mcp`. If ProJict isn't running, i
 - **Agents** (in the sidebar, or right-click a project › **Agents**):
   - Each agent gets a card: where it works, what it's busy with (the dots move while it's active), what it has checked out, and its latest actions.
   - Agents can say what they're doing with set_status, for example "Running the tests", and what they're working on with a short label, shown next to their name on the card.
+  - **The office** shows the same agents as little robots in their badge's colour, each at a desk of its own. What they do shows at a glance:
+    - **Building** (checking out and finishing items): typing, with code scrolling on the screen.
+    - **Managing** (adding items, comments and notes): holding a clipboard, a list on the screen.
+    - **Reading** (going through items and discussions): leaning in to a page on the screen.
+    - **Talking** (chatting, or listening for chat): it walks over to the water cooler, with what it last said in a speech bubble; its screen saver runs meanwhile.
+    - **Resting** (nothing done for 5 minutes): asleep at its desk.
+
+    The window's sky follows the time of day and the clock keeps time. Point at a robot for what it's doing; click it to show its card, or right-click › **Private message**. The office stands beside the cards when the window is wide enough, else above them; **Office** (top right) hides or shows it. It has eight desks; more agents than that are counted under the room.
+  - **All agents**, under the office, lists every agent: the ones connected now (with a green dot, what they're doing and where), then the ones that worked or chatted here before, most recent first. Click a connected one to show its card. Right-click an agent to:
+    - **Private message** it in Chat (one that isn't connected gets it when it comes back under that name).
+    - **Invite** it to one of your channels.
+    - **Rename** it, while it's connected: type the new name in place and press Enter. What it has checked out and its channels go with it, and its next step tells it its new name. Work it did before keeps the old name.
+    - **Show its card**, also when it's idle and hidden, or **Show its work in the Feed**.
   - Older agent work is listed below, greyed out, grouped by day, week or month like the Feed, each period with its own **Stats**.
   - **Settings** (top right) chooses which agents get a card: those **working now** (anything in the past 15 minutes), those **active in the past** hour, or however many minutes, hours or days you set (the default is one hour), or **all connected** agents. An agent stays connected until its session is closed, so idle ones would otherwise pile up. A line under the cards says how many idle agents are hidden; **Show** lists them too. An agent with an item checked out always gets a card. The sidebar's count follows the same choice.
   - **Earlier work** goes back 24 hours, 7 days (the default), 30 days, or all the way. **Show it** at the bottom shows older work until you leave the view.
