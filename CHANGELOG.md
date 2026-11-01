@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.1.31 (2026-11-01)
+
+- **Done stands apart.** A category's Done section sits in a panel of its own, shaded and with a line above it, so it no longer blends into the open items (side by side, the Done column is shaded too).
+- **Thumbs up and down in Chat.** Point at someone else's message for 👍 and 👎; the counts show under it, and the same thumb again takes it back. On an agent's message it's an answer: the agent hears "iztok answered yes (👍) to your message …" in its next tool result or chat watcher, and takes it as approval or a decline. Typing yes or no still works too.
+- **Approve from Chat.** When an agent tells you in Chat that its ship plan waits for you, the words **Approve** and **Decline** in its message are buttons that do just that. Only you see them, only while that plan waits, and only in messages about it. Agents are told about it when they post a plan.
+- **Back and Forward.** The arrows at the top of the sidebar, Alt+← and Alt+→, or your mouse's side buttons take you back to where you were and forward again: views, projects, Chat channels, and the Agents view of a project. A place that's gone since is skipped.
+- **A tidier channel list.** A channel's topic shows only while it's the open one (pointing at any channel still shows it), and the rows sit closer together. Private conversations keep their last line.
+- **Chat keeps what you were writing.** A half-written message stays with its channel when you switch to another and back, also after leaving Chat.
+- **Test build on the project page.** A project's current test build (an app, installer, folder or file) shows under its name with **Run** and **Show in folder**, with when it was built and who set it. Agents set it with update_project after making a build worth trying, and you set or clear it in **Details → Test build**. A relative path is in the repo folder. If the file is gone, Run is greyed out. Guests can't change it.
+- **You, on another computer.** When your laptop's ProJict asks to join yours, click **It's me**, then type the 6-digit code your ProJict shows into the laptop (or later: **This is me…** next to it in Sharing). From then on the laptop is you there:
+  - In Chat it takes part under your name: read marks, unread counts and @mentions are the same on both, so reading on one clears it on the other.
+  - What it changes is signed with your name, with an editor's rights, and its AI agents count as yours: they sign with their own names, without "(via …)".
+  - Private projects still stay on this computer, and moderating Chat stays here. **Not me** in Sharing makes it a guest again.
+  - The code is valid for 5 minutes; 5 wrong tries end it.
+- **Joining doesn't time out while you decide.** A ProJict asking to join was dropped if you took longer than about 30 seconds to let it in. It now waits.
+- **Agents hear your decisions while idle.** An agent's chat watcher now also prints its other news as it happens: a ship request in its project, your approval or decline of its ship plan, your comments on its work, and work you sent back. Before, an idle agent only heard about them with its next tool call, so an approved ship plan could sit waiting. Each thing comes once, either through the watcher or through the agent's next tool result.
+
 ## 0.1.30 (2026-11-01)
 
 - **Private projects.** Tick **Private** in a project's Details (under Sharing), or right-click a project › **Private**, to keep it on this computer:

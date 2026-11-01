@@ -17,6 +17,11 @@ public sealed class GuestAccount
     public bool Blocked { get; set; }
     /// <summary>The guest's computer name, as it said when joining.</summary>
     public string? Device { get; set; }
+    /// <summary>
+    /// You, on another computer: confirmed with a 6-digit code typed there. It takes part under your name, its changes
+    /// are signed with it, and its agents count as yours (no "via"). Private projects stay on this computer still.
+    /// </summary>
+    public bool Self { get; set; }
     public DateTime AddedAt { get; set; } = DateTime.Now;
     public DateTime? LastSeen { get; set; }
 

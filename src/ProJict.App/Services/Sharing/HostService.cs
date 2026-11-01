@@ -26,6 +26,8 @@ public sealed class JoinRequest(string name, string device, string address, Invi
     public string Address { get; } = address;
     public Invite Invite { get; } = invite;
     internal TaskCompletionSource<JoinAnswer> Answer { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    /// <summary>Let in as you, on another computer: it's asked for a code at once.</summary>
+    public bool Self { get; set; }
 
     public string Text => $"{Name} ({Device}, {Address}) asks to join your ProJict as {Invite.Role.ToString().ToLowerInvariant()} with invite {Invite.Code}.";
 }
@@ -277,6 +279,7 @@ public sealed partial class HostService
             GuestAccount? account;
             string? token = null;
             Task<JsonObject?>? pendingRead = null;
+            JoinRequest? joined = null;
             switch ((string?)first["type"])
             {
                 case "hello":
@@ -318,7 +321,15 @@ public sealed partial class HostService
                     await wire.SendAsync(Wire.Message("pending", ("host", _state.UserName)), ct).ConfigureAwait(false);
                     // Wait for your answer; the guest may give up meanwhile (its connection closes).
                     pendingRead = wire.ReadAsync(ct);
-                    var answered = await Task.WhenAny(request.Answer.Task, pendingRead, Task.Delay(TimeSpan.FromMinutes(15), ct)).ConfigureAwait(false);
+                    var giveUp = Task.Delay(TimeSpan.FromMinutes(15), ct);
+                    Task answered;
+                    while (true)
+                    {
+                        answered = await Task.WhenAny(request.Answer.Task, pendingRead, giveUp).ConfigureAwait(false);
+                        // The guest keeps the connection alive with pings while it waits: that isn't giving up.
+                        if (answered != pendingRead || !pendingRead.IsCompletedSuccessfully || (string?)pendingRead.Result?["type"] != "ping") break;
+                        pendingRead = wire.ReadAsync(ct);
+                    }
                     if (answered != request.Answer.Task)
                     {
                         await Ui(() =>
@@ -354,6 +365,7 @@ public sealed partial class HostService
                         return;
                     }
                     token = newToken;
+                    joined = request;
                     break;
                 default:
                     return;
@@ -367,9 +379,10 @@ public sealed partial class HostService
                 _store.Save();
                 // Queued in order on the UI thread, so no newer version of a project can overtake these.
                 foreach (var message in Welcome(session, token)) session.Send(message);
-                _main.Agents.PersonConnected(session, account.Name);
+                _main.Agents.PersonConnected(session, NameOf(account));
                 _state.StatusText = $"{account.Name} connected to your ProJict.";
                 Changed?.Invoke();
+                if (joined?.Self == true) StartSelf(account);
             }).ConfigureAwait(false);
 
             var next = pendingRead ?? wire.ReadAsync(ct);
@@ -429,11 +442,12 @@ public sealed partial class HostService
     {
         var projects = Visible(session.Account).ToList();
         var welcome = Wire.Message("welcome",
-            ("guestId", session.Account.Id.ToString()), ("role", session.Account.Role.ToString()), ("host", _state.UserName), ("name", session.Account.Name),
+            ("guestId", session.Account.Id.ToString()), ("role", RoleOf(session.Account).ToString()), ("host", _state.UserName), ("name", NameOf(session.Account)),
             ("projectIds", new JsonArray(projects.Select(p => (JsonNode)p.Id.ToString()).ToArray())));
         if (token != null) welcome["token"] = token;
-        AddAgentRules(welcome);
-        session.RulesSent = AgentRulesSignature();
+        if (session.Account.Self) welcome["self"] = true;
+        AddAgentRules(welcome, session.Account);
+        session.RulesSent = AgentRulesSignature(session.Account);
         var messages = new List<JsonObject> { welcome };
         foreach (var project in projects)
         {
@@ -460,6 +474,8 @@ public sealed partial class HostService
                 return null;
             case "chatOp":
                 return ChatOp(session, message);
+            case "selfCode":
+                return ConfirmSelf(session, message);
             case "viewing":
                 var id = Guid.TryParse((string?)message["projectId"], out var g) ? g : (Guid?)null;
                 _main.Agents.PersonViewing(session, id is { } v && Visible(session.Account).Any(p => p.Id == v) ? v : null);
@@ -484,7 +500,8 @@ public sealed partial class HostService
             candidate = ProjectMerge.Merge(Json.Deserialize<Project>(baseJson)!, incoming, project);
         else return Rejected(project, "The project changed too much meanwhile, so your last change couldn't be kept.");
 
-        var (accepted, refusal) = GuestAccess.Check(project, candidate, account.Name, account.Role, Data.GuestAgents, _state.Settings.AgentPriorities);
+        var (accepted, refusal) = GuestAccess.Check(project, candidate, NameOf(account), RoleOf(account), account.Self || Data.GuestAgents,
+            _state.Settings.AgentPriorities, account.Self);
         if (refusal != null) return Rejected(project, refusal);
         if (ProjectMerge.Normalized(accepted!) == ProjectMerge.Normalized(project))
             return Wire.Message("saved", ("projectId", id.ToString()), ("revision", history.Revision));
@@ -507,7 +524,7 @@ public sealed partial class HostService
     private JsonObject? StoreFile(GuestSession session, JsonObject message)
     {
         // Commenters send files with comments and chat messages; what refers to them is checked when it arrives.
-        if (!GuestAccess.CanComment(session.Account.Role)) return null;
+        if (!GuestAccess.CanComment(RoleOf(session.Account))) return null;
         if (!Guid.TryParse((string?)message["id"], out var id)) return null;
         var data = Convert.FromBase64String((string?)message["data"] ?? "");
         if (data.Length > MaxFileBytes) return null;
@@ -623,23 +640,28 @@ public sealed partial class HostService
         }
     }
 
-    /// <summary>What guests' agents may do here: whether at all, and on items of which priorities (Settings › AI agents).</summary>
-    private void AddAgentRules(JsonObject message)
+    /// <summary>
+    /// What guests' agents may do here: whether at all, and on items of which priorities (Settings › AI agents). Your own
+    /// agents on another computer of yours always may, like the ones here.
+    /// </summary>
+    private void AddAgentRules(JsonObject message, GuestAccount account)
     {
-        message["agents"] = Data.GuestAgents;
+        message["agents"] = account.Self || Data.GuestAgents;
         message["agentPriorities"] = new JsonArray(_state.Settings.AgentPriorities.Select(p => (JsonNode)p.ToString()).ToArray());
     }
 
-    private string AgentRulesSignature() => $"{Data.GuestAgents}:{string.Join(",", _state.Settings.AgentPriorities.Order())}";
+    private string AgentRulesSignature(GuestAccount account) =>
+        $"{account.Self || Data.GuestAgents}:{string.Join(",", _state.Settings.AgentPriorities.Order())}";
 
     /// <summary>Tells connected guests the rules when they changed since they last heard them.</summary>
     private void SendAgentRules()
     {
-        var signature = AgentRulesSignature();
-        foreach (var session in _sessions.Where(s => s.RulesSent != signature))
+        foreach (var session in _sessions)
         {
+            var signature = AgentRulesSignature(session.Account);
+            if (session.RulesSent == signature) continue;
             var message = Wire.Message("agentRules");
-            AddAgentRules(message);
+            AddAgentRules(message, session.Account);
             session.RulesSent = signature;
             session.Send(message);
         }

@@ -24,8 +24,9 @@ public sealed partial class AgentTools
     /// <summary>"#hud (Sam's)".</summary>
     private static string SharedName(HostConnection host, ChatChannel channel) => $"#{channel.Name} ({host.HostName}'s)";
 
-    /// <summary>How the agent goes by in that ProJict's channels: "Ada (via Alice)".</summary>
-    private string ViaIn(McpSession session, HostConnection host) => AgentNaming.Via(session.AgentName, host.MyName ?? _state.UserName);
+    /// <summary>How the agent goes by in that ProJict's channels: "Ada (via Alice)", or "Ada" where this computer is its user.</summary>
+    private string ViaIn(McpSession session, HostConnection host) =>
+        host.IsSelf ? session.AgentName : AgentNaming.Via(session.AgentName, host.MyName ?? _state.UserName);
 
     /// <summary>The other ProJict's channel a "#hud (Sam's)" argument names, or null for one of this ProJict's.</summary>
     private (HostConnection Host, ChatChannel Channel)? SharedChannelFor(McpSession session, Args args, string argument = "channel")

@@ -21,7 +21,7 @@ public sealed partial class HostService
 
     /// <summary>The guest in Chat: a person, who reaches the projects shared with it and never sees your private ones.</summary>
     private ChatActor ChatActorOf(GuestAccount account) =>
-        new(account.Name, false, Projects: Visible(account).Select(p => p.Id).ToHashSet(), Guest: true,
+        new(NameOf(account), false, Projects: Visible(account).Select(p => p.Id).ToHashSet(), Guest: true,
             Hidden: _state.Projects.Where(p => p.Private).Select(p => p.Id).ToHashSet());
 
     private static JsonNode ChannelJson(ChatChannel channel) => JsonNode.Parse(Json.Serialize(ChatRoom.ForGuest(channel)))!;
@@ -33,7 +33,7 @@ public sealed partial class HostService
         var channels = _state.Chat.Visible(actor).ToList();
         session.ChatSent.Clear();
         foreach (var channel in channels) session.ChatSent.Add(channel.Id);
-        return Wire.Message("chat", ("name", session.Account.Name), ("channels", new JsonArray(channels.Select(ChannelJson).ToArray())));
+        return Wire.Message("chat", ("name", NameOf(session.Account)), ("channels", new JsonArray(channels.Select(ChannelJson).ToArray())));
     }
 
     private void OnChatChanged(ChatChannel channel)
@@ -106,17 +106,18 @@ public sealed partial class HostService
         JsonObject Refuse(string why) => Wire.Message("chatError", ("message", why));
         if (Text("as") is { } agentName && agentName.Trim().Length > 0)
         {
-            if (!Data.GuestAgents) return Refuse("This ProJict doesn't let guests' AI agents take part.");
+            if (!account.Self && !Data.GuestAgents) return Refuse("This ProJict doesn't let guests' AI agents take part.");
             if (op is not ("post" or "read" or "edit" or "delete" or "join" or "leave")) return Refuse("Guests' AI agents read and write in channels; the rest is for people.");
             var agent = (AgentNaming.WithoutVia(agentName.Trim(), account.Name) ?? agentName).Trim();
-            if (agent.Length is 0 or > 40 || agent.Contains(" (via ", StringComparison.Ordinal)) return Refuse("That isn't an agent's name.");
-            actor = actor with { Name = AgentNaming.Via(agent, account.Name), Agent = true };
+            if (agent.Length is 0 or > 40 || agent.Contains(" (via ", StringComparison.Ordinal) ||
+                (account.Self && string.Equals(agent, _state.UserName, StringComparison.OrdinalIgnoreCase))) return Refuse("That isn't an agent's name.");
+            actor = actor with { Name = account.Self ? agent : AgentNaming.Via(agent, account.Name), Agent = true };
         }
         try
         {
             if (op == "create")
             {
-                if (account.Role != GuestRole.Editor) return Refuse("Only editors start channels.");
+                if (RoleOf(account) != GuestRole.Editor) return Refuse("Only editors start channels.");
                 if (!Guid.TryParse(Text("projectId"), out var projectId) || Visible(account).All(p => p.Id != projectId))
                     return Refuse("Channels you start are about a project shared with you.");
                 var link = new ChannelLink
@@ -130,7 +131,7 @@ public sealed partial class HostService
             }
             if (op == "direct")
             {
-                if (!GuestAccess.CanComment(account.Role)) return Refuse("As a viewer you can read, not write.");
+                if (!GuestAccess.CanComment(RoleOf(account))) return Refuse("As a viewer you can read, not write.");
                 var other = (Text("with") ?? "").Trim();
                 var agent = _main.AgentTools.KnownAgentNames().Contains(other, StringComparer.OrdinalIgnoreCase);
                 var person = room.IsOwner(other) || Data.Guests.Any(g => !g.Blocked && string.Equals(g.Name, other, StringComparison.OrdinalIgnoreCase));
@@ -150,7 +151,7 @@ public sealed partial class HostService
                 }
                 return null;
             }
-            if (!GuestAccess.CanComment(account.Role)) return Refuse("As a viewer you can read, not write.");
+            if (!GuestAccess.CanComment(RoleOf(account))) return Refuse("As a viewer you can read, not write.");
             Guid? messageId = Guid.TryParse(Text("message"), out var m) ? m : null;
             switch (op)
             {
@@ -166,6 +167,7 @@ public sealed partial class HostService
                     room.Post(channel, actor, Text("text") ?? "", Guid.TryParse(Text("replyTo"), out var r) ? r : null, files);
                     break;
                 case "edit": room.Edit(channel, actor, messageId ?? Guid.Empty, Text("text") ?? ""); break;
+                case "react": room.React(channel, actor, messageId ?? Guid.Empty, (bool?)message["up"]); break;
                 case "delete": room.DeleteMessage(channel, actor, messageId ?? Guid.Empty); break;
                 case "join": room.Join(channel, actor); break;
                 case "leave": room.Leave(channel, actor); break;

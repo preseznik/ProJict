@@ -290,8 +290,12 @@
                     <StackPanel Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVis}}" Margin="0,4,0,0">
                         <ctl:OutlineItemsControl ItemsSource="{Binding OpenRows}" ItemTemplate="{StaticResource RowTemplate}" Focusable="False" />
                         <ContentControl Content="{Binding}" ContentTemplate="{StaticResource AddItemTemplate}" Focusable="False" />
-                        <ToggleButton Style="{StaticResource SubtleToggle}" AutomationProperties.Name="{Binding DoneHeader}" IsChecked="{Binding IsDoneExpanded}" HorizontalAlignment="Left" Margin="18,6,0,0"
-                                      Visibility="{Binding HasDone, Converter={StaticResource BoolToVis}}">
+                        <!-- Done: a panel of its own (a line above, a shade behind), so it doesn't blend into the open items. -->
+                        <Border x:Name="DoneSection" Margin="-6,8,-6,-4" Padding="0,2,0,4" CornerRadius="0,0,6,6" BorderThickness="0,1,0,0"
+                                BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}" Background="{DynamicResource SubtleFillColorSecondaryBrush}"
+                                Visibility="{Binding HasDone, Converter={StaticResource BoolToVis}}">
+                        <StackPanel Margin="6,0">
+                        <ToggleButton Style="{StaticResource SubtleToggle}" AutomationProperties.Name="{Binding DoneHeader}" IsChecked="{Binding IsDoneExpanded}" HorizontalAlignment="Left" Margin="18,4,0,0">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Style="{StaticResource Icon}" Text="&#xE73E;" FontSize="12" />
                                 <TextBlock Text="{Binding DoneHeader}" Margin="6,0,0,0" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
@@ -301,6 +305,8 @@
                         </ToggleButton>
                         <ctl:OutlineItemsControl ItemsSource="{Binding DoneRows}" ItemTemplate="{StaticResource RowTemplate}" Focusable="False" Margin="0,2,0,0"
                                       Visibility="{Binding ShowDoneRows, Converter={StaticResource BoolToVis}}" />
+                        </StackPanel>
+                        </Border>
                     </StackPanel>
                 </StackPanel>
             </Border>
@@ -322,10 +328,13 @@
                             <ContentControl Content="{Binding}" ContentTemplate="{StaticResource AddItemTemplate}" Focusable="False" />
                         </StackPanel>
                         <Border Grid.Column="1" Width="1" Background="{DynamicResource DividerStrokeColorDefaultBrush}" Margin="10,0" />
-                        <StackPanel Grid.Column="2">
-                            <TextBlock Text="{Binding DoneHeader}" Style="{StaticResource MutedText}" FontWeight="SemiBold" Margin="22,0,0,4" />
-                            <ctl:OutlineItemsControl ItemsSource="{Binding DoneRows}" ItemTemplate="{StaticResource RowTemplate}" Focusable="False" />
-                        </StackPanel>
+                        <!-- Done, shaded so it reads apart from TODO -->
+                        <Border Grid.Column="2" CornerRadius="6" Padding="0,4,4,4" Background="{DynamicResource SubtleFillColorSecondaryBrush}">
+                            <StackPanel>
+                                <TextBlock Text="{Binding DoneHeader}" Style="{StaticResource MutedText}" FontWeight="SemiBold" Margin="22,0,0,4" />
+                                <ctl:OutlineItemsControl ItemsSource="{Binding DoneRows}" ItemTemplate="{StaticResource RowTemplate}" Focusable="False" />
+                            </StackPanel>
+                        </Border>
                     </Grid>
                 </StackPanel>
             </Border>
@@ -359,6 +368,25 @@
                     <ItemsControl x:Name="ProjectChannels" ItemsSource="{Binding Channels}" ItemTemplate="{StaticResource ChannelChipTemplate}" ItemsPanel="{StaticResource HorizontalPanel}"
                                   Focusable="False" Margin="10,0,0,0" VerticalAlignment="Center" Visibility="{Binding HasChannels, Converter={StaticResource BoolToVis}}" />
                 </StackPanel>
+                <!-- The current test build, set by you or an agent: run it from here. -->
+                <Border Margin="2,8,0,0" Padding="10,4,6,4" CornerRadius="6" HorizontalAlignment="Left" Background="{DynamicResource SubtleFillColorSecondaryBrush}"
+                        Visibility="{Binding HasTestBuild, Converter={StaticResource BoolToVis}}">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource Icon}" Text="&#xE7FC;" FontSize="13" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <TextBlock Text="Test build" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding TestBuildName}" ToolTip="{Binding TestBuildToolTip}" VerticalAlignment="Center" Margin="8,0,0,0" MaxWidth="280" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding TestBuildDetails}" Style="{StaticResource MutedText}" FontSize="12" VerticalAlignment="Center" Margin="8,0,0,0"
+                                   MaxWidth="380" TextTrimming="CharacterEllipsis" ToolTip="{Binding TestBuildDetails}" />
+                        <Button Style="{StaticResource AccentButtonStyle}" Command="{Binding RunTestBuildCommand}" IsEnabled="{Binding TestBuildExists}" Margin="10,0,0,0" Padding="10,2"
+                                AutomationProperties.Name="Run the test build" ToolTip="{Binding TestBuildToolTip}">
+                            <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource Icon}" Text="&#xE768;" FontSize="11" VerticalAlignment="Center" /><TextBlock Text="{Binding RunTestBuildText}" Margin="6,0,0,0" /></StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource SubtleButton}" Command="{Binding ShowTestBuildCommand}" IsEnabled="{Binding TestBuildExists}" Margin="4,0,0,0"
+                                AutomationProperties.Name="Show the test build in its folder" ToolTip="Show it in its folder">
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE838;" FontSize="12" />
+                        </Button>
+                    </StackPanel>
+                </Border>
                 <TextBlock Margin="2,6,0,0" Style="{StaticResource MutedText}" TextWrapping="Wrap"
                            Text="Ideas and loose notes. Promote an item to a project from its right-click menu."
                            Visibility="{Binding IsInbox, Converter={StaticResource BoolToVis}}" />
@@ -727,6 +755,7 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
                         <Grid.Resources>
                             <Style TargetType="TextBlock" BasedOn="{StaticResource MutedText}">
@@ -809,6 +838,18 @@
                             </Border>
                             <TextBlock Margin="0,4,0,0" FontSize="12" TextWrapping="Wrap"
                                        Text="How to ship it: what an AI agent does when you ask (Ship button), e.g. bump the version in …, run build.ps1, test, commit, push, publish the GitHub release. Untick the steps this project doesn't have." />
+                        </StackPanel>
+
+                        <TextBlock Grid.Row="8" Text="Test build" />
+                        <StackPanel Grid.Row="8" Grid.Column="1" Margin="0,4">
+                            <DockPanel>
+                                <Button DockPanel.Dock="Right" Content="Browse…" Command="{Binding BrowseTestBuildCommand}" Margin="8,0,0,0" />
+                                <TextBox Text="{Binding TestBuildPath, UpdateSourceTrigger=LostFocus}" AutomationProperties.Name="Test build path" />
+                            </DockPanel>
+                            <TextBox Text="{Binding TestBuildNote, UpdateSourceTrigger=LostFocus}" Margin="0,6,0,0" AutomationProperties.Name="What to try"
+                                     IsEnabled="{Binding HasTestBuild}" ToolTip="What it is or what to try, in a line" />
+                            <TextBlock Margin="0,4,0,0" FontSize="12" TextWrapping="Wrap"
+                                       Text="The build to try now: an app, installer, folder or file (a relative path is in the repo folder). It shows under the project's name with Run. Agents set it after building (update_project test_build)." />
                         </StackPanel>
 
                         <TextBlock Grid.Row="7" Text="Sharing" Visibility="{Binding CanBePrivate, Converter={StaticResource BoolToVis}}" />

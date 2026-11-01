@@ -25,19 +25,27 @@ public sealed partial class HostConnection(KnownHost host) : ObservableObject
     [ObservableProperty] private string _hostName = host.HostName ?? host.Address;
     [ObservableProperty] private GuestRole _role;
     [ObservableProperty] private string? _message;
+    /// <summary>This computer is the host's own user there (confirmed with a code): it takes part under their name.</summary>
+    [ObservableProperty] private bool _isSelf;
+    /// <summary>The host asks to confirm this computer is its user: type the 6-digit code it shows.</summary>
+    [ObservableProperty] private bool _selfAsked;
+    /// <summary>What the host said about the code typed (wrong, confirmed, …).</summary>
+    [ObservableProperty] private string? _selfMessage;
 
     public string Title => $"{HostName}'s ProJict ({Address})";
     public string StateText => State switch
     {
         ConnectionState.Connecting => "Connecting…",
         ConnectionState.WaitingForApproval => $"Waiting for {HostName} to let you in…",
-        ConnectionState.Connected => $"Connected · you're {(Role == GuestRole.Editor ? "an" : "a")} {Role.ToString().ToLowerInvariant()} · {Copies.Count} project(s)",
+        ConnectionState.Connected => IsSelf ? $"Connected · it's you there · {Copies.Count} project(s)"
+            : $"Connected · you're {(Role == GuestRole.Editor ? "an" : "a")} {Role.ToString().ToLowerInvariant()} · {Copies.Count} project(s)",
         ConnectionState.Reconnecting => "Connection lost · reconnecting…",
         _ => "Not connected",
     };
 
     partial void OnStateChanged(ConnectionState value) => OnPropertyChanged(nameof(StateText));
     partial void OnRoleChanged(GuestRole value) => OnPropertyChanged(nameof(StateText));
+    partial void OnIsSelfChanged(bool value) => OnPropertyChanged(nameof(StateText));
     partial void OnHostNameChanged(string value) => OnPropertyChanged(nameof(Title));
 
     internal Wire? Wire { get; set; }
@@ -332,6 +340,19 @@ public sealed partial class GuestService
                 connection.State = ConnectionState.WaitingForApproval;
                 Changed?.Invoke();
                 break;
+            case "confirmSelf":
+                connection.SelfAsked = true;
+                connection.SelfMessage = null;
+                _state.StatusText = $"{connection.HostName}'s ProJict asks whether this computer is {(string?)message["host"] ?? connection.HostName}: " +
+                                    "type the 6-digit code it shows, in Sharing.";
+                Changed?.Invoke();
+                break;
+            case "selfResult":
+                connection.SelfMessage = (string?)message["message"];
+                if ((bool?)message["done"] == true) connection.SelfAsked = false;
+                if (connection.SelfMessage != null) _state.StatusText = $"{connection.HostName}'s ProJict: {connection.SelfMessage}";
+                Changed?.Invoke();
+                break;
             case "welcome":
                 Welcome(connection, message);
                 break;
@@ -375,6 +396,7 @@ public sealed partial class GuestService
         connection.HostName = (string?)message["host"] ?? connection.HostName;
         connection.Role = Enum.TryParse<GuestRole>((string?)message["role"], out var role) ? role : GuestRole.Viewer;
         connection.MyName = (string?)message["name"] ?? connection.MyName;
+        connection.IsSelf = (bool?)message["self"] == true;
         connection.TakeAgentRules(message);
         host.HostName = connection.HostName;
         if (Guid.TryParse((string?)message["guestId"], out var guestId)) host.GuestId = guestId;

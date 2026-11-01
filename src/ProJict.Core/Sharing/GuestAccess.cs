@@ -39,7 +39,7 @@ public static class GuestAccess
 
     /// <summary>Only the host changes these; a guest's values are replaced by the host's.</summary>
     private static readonly string[] HostFields =
-        ["id", "name", "key", "filePrefix", "group", "status", "isInbox", "repoPath", "gitHubUrl", "issues", "gitHubRelease", "archivedFiles", "shipping", "ships", "createdAt", "updatedAt"];
+        ["id", "name", "key", "filePrefix", "group", "status", "isInbox", "repoPath", "gitHubUrl", "issues", "gitHubRelease", "archivedFiles", "shipping", "ships", "testBuild", "createdAt", "updatedAt"];
 
     /// <summary>The longest agent name a guest's agent may sign with ("Ada" in "Ada (via Alice)").</summary>
     private const int MaxAgentName = 40;
@@ -48,9 +48,11 @@ public static class GuestAccess
     /// The guest's version of the project as the host will store it, or the reason it is refused. Comments, history
     /// entries, notes and releases the guest added are signed with the guest's name, or "Ada (via Alice)" when the guest's
     /// agent did it and <paramref name="agentsAllowed"/>; such work on items is limited to <paramref name="agentPriorities"/>.
+    /// The host's own user on another computer (<paramref name="self"/>, confirmed with a code) comes as
+    /// <paramref name="guestName"/> = the host's user name, and its agents sign with their own names, like the host's.
     /// </summary>
     public static (Project? Accepted, string? Refusal) Check(Project current, Project incoming, string guestName, GuestRole role,
-        bool agentsAllowed = false, IReadOnlyCollection<Priority>? agentPriorities = null)
+        bool agentsAllowed = false, IReadOnlyCollection<Priority>? agentPriorities = null, bool self = false)
     {
         var c = ProjectMerge.ToJson(current);
         var n = ProjectMerge.ToJson(incoming);
@@ -74,15 +76,15 @@ public static class GuestAccess
         {
             if (!before.TryGetValue(id, out var old))
             {
-                if (Sign(comment, "by", guestName, agentsAllowed) is { } refused) return (null, refused);
+                if (Sign(comment, "by", guestName, agentsAllowed, self) is { } refused) return (null, refused);
                 commentsChanged = true;
                 continue;
             }
             if (JsonNode.DeepEquals(Without(old, "replies"), Without(comment, "replies"))) continue;
             commentsChanged = true;
-            if (!Mine(old, guestName)) return (null, "You can only change or remove your own comments.");
+            if (!Mine(old, guestName, self)) return (null, "You can only change or remove your own comments.");
         }
-        if (before.Keys.Except(after.Keys).Any(id => !Mine(before[id], guestName)))
+        if (before.Keys.Except(after.Keys).Any(id => !Mine(before[id], guestName, self)))
             return (null, "You can only change or remove your own comments.");
         if (commentsChanged && !CanComment(role)) return (null, "As a viewer you can't change anything here.");
 
@@ -98,7 +100,7 @@ public static class GuestAccess
                     _ => "As a reporter you can add items and comments, but not change existing items.",
                 });
         }
-        if (SignNewWork(c, n, guestName, agentsAllowed, agentPriorities ?? []) is { } refusal) return (null, refusal);
+        if (SignNewWork(c, n, guestName, agentsAllowed, agentPriorities ?? [], self) is { } refusal) return (null, refusal);
         return (Json.Deserialize<Project>(n.ToJsonString(Json.Options)), null);
     }
 
@@ -106,14 +108,16 @@ public static class GuestAccess
     /// Signs something new the guest sent: with the guest's name, or for the guest's agent (marked agent) "Ada (via Alice)"
     /// when the host lets guests' agents work; returns why not otherwise.
     /// </summary>
-    private static string? Sign(JsonObject thing, string field, string guestName, bool agentsAllowed)
+    private static string? Sign(JsonObject thing, string field, string guestName, bool agentsAllowed, bool self = false)
     {
         if (thing["agent"] is JsonValue flag && flag.TryGetValue<bool>(out var agent) && agent)
         {
             if (!agentsAllowed) return "This ProJict doesn't let guests' AI agents change what it shares.";
             var name = AgentNaming.WithoutVia((string?)thing[field] ?? "", guestName) ?? (string?)thing[field] ?? "";
             name = name.Trim();
-            thing[field] = AgentNaming.Via(name.Length is > 0 and <= MaxAgentName && !name.Contains(" (via ") ? name : "AI agent", guestName);
+            name = name.Length is > 0 and <= MaxAgentName && !name.Contains(" (via ") ? name : "AI agent";
+            // Your own agents on your other computer sign like the ones here.
+            thing[field] = self ? name : AgentNaming.Via(name, guestName);
             return null;
         }
         thing[field] = guestName;
@@ -121,16 +125,16 @@ public static class GuestAccess
         return null;
     }
 
-    /// <summary>The guest's own comment, or its agent's ("Ada (via Alice)").</summary>
-    private static bool Mine(JsonObject comment, string guestName) =>
+    /// <summary>The guest's own comment, or its agent's ("Ada (via Alice)"); for you on another computer, any agent's.</summary>
+    private static bool Mine(JsonObject comment, string guestName, bool self = false) =>
         comment["agent"] == null ? string.Equals((string?)comment["by"], guestName, StringComparison.OrdinalIgnoreCase)
-            : AgentNaming.WithoutVia((string?)comment["by"] ?? "", guestName) != null;
+            : self || AgentNaming.WithoutVia((string?)comment["by"] ?? "", guestName) != null;
 
     /// <summary>
     /// New history entries, notes changes and releases carry the guest's name, or its agent's; a check-out is the guest's
     /// or its agent's. An agent's work on an item the host's rules keep off limits to agents is refused.
     /// </summary>
-    private static string? SignNewWork(JsonObject c, JsonObject n, string guestName, bool agentsAllowed, IReadOnlyCollection<Priority> agentPriorities)
+    private static string? SignNewWork(JsonObject c, JsonObject n, string guestName, bool agentsAllowed, IReadOnlyCollection<Priority> agentPriorities, bool self)
     {
         var old = AllItems(c);
         var governing = Governing(c);
@@ -142,25 +146,25 @@ public static class GuestAccess
                 for (var i = known; i < log.Count; i++)
                 {
                     if (log[i] is not JsonObject entry) continue;
-                    if (Sign(entry, "by", guestName, agentsAllowed) is { } refused) return refused;
+                    if (Sign(entry, "by", guestName, agentsAllowed, self) is { } refused) return refused;
                     // Agents keep off items the host keeps off limits to them; putting one back stays allowed. New items are fine.
                     if (entry["agent"] != null && was != null && (string?)entry["text"] != "Put it back to do." &&
                         !AgentAccess.Allows(agentPriorities, governing.GetValueOrDefault(id)))
                         return "This ProJict keeps that item off limits to AI agents.";
                 }
-            // Only the guest or its agent checks things out in its name.
+            // Only the guest or its agent checks things out in its name; you on another computer, as here.
             var claimed = (string?)item["claimedBy"];
-            if (claimed != null && claimed != (string?)was?["claimedBy"] &&
+            if (!self && claimed != null && claimed != (string?)was?["claimedBy"] &&
                 !string.Equals(claimed, guestName, StringComparison.OrdinalIgnoreCase) && !(agentsAllowed && AgentNaming.WithoutVia(claimed, guestName) != null))
                 item["claimedBy"] = guestName;
         }
         var notes = (c["notes"] as JsonArray ?? []).OfType<JsonObject>().ToDictionary(x => (string)x["id"]!);
         foreach (var note in (n["notes"] as JsonArray ?? []).OfType<JsonObject>())
-            if (!notes.TryGetValue((string)note["id"]!, out var was) || !JsonNode.DeepEquals(was, note))
+            if ((!notes.TryGetValue((string)note["id"]!, out var was) || !JsonNode.DeepEquals(was, note)) && !(self && (string?)note["updatedBy"] is { Length: > 0 }))
                 note["updatedBy"] = agentsAllowed && AgentNaming.WithoutVia((string?)note["updatedBy"] ?? "", guestName) != null ? note["updatedBy"]!.GetValue<string>() : guestName;
         var releases = (c["releases"] as JsonArray ?? []).OfType<JsonObject>().Select(x => (string)x["id"]!).ToHashSet();
         foreach (var release in (n["releases"] as JsonArray ?? []).OfType<JsonObject>())
-            if (!releases.Contains((string)release["id"]!))
+            if (!releases.Contains((string)release["id"]!) && !(self && (string?)release["createdBy"] is { Length: > 0 }))
                 release["createdBy"] = agentsAllowed && AgentNaming.WithoutVia((string?)release["createdBy"] ?? "", guestName) != null ? release["createdBy"]!.GetValue<string>() : guestName;
         return null;
     }

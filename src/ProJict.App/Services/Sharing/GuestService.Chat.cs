@@ -71,6 +71,13 @@ public sealed partial class GuestService
     public HostConnection? ConnectionOf(ChatChannel channel) => Connections.FirstOrDefault(c => c.Chat?.Channels.Contains(channel) == true);
 
     /// <summary>Something you do in a host's Chat; the host answers with the changed channel, or why not.</summary>
+    /// <summary>The code the host shows, typed here to confirm this computer is its user; or "it isn't me".</summary>
+    public void AnswerSelf(HostConnection connection, string? code)
+    {
+        connection.SelfMessage = null;
+        connection.Send(code == null ? Wire.Message("selfCode", ("decline", true)) : Wire.Message("selfCode", ("code", code.Trim())));
+    }
+
     public void ChatOp(HostConnection connection, string op, params (string Name, JsonNode? Value)[] fields)
     {
         var message = Wire.Message("chatOp", fields);

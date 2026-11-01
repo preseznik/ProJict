@@ -14,6 +14,19 @@ public partial class MainWindow : Window
         RestorePlacement();
         // Back in front: the chat channel you look at is read now.
         Activated += (_, _) => viewModel.Chat.OnActivated();
+        // The mouse's side buttons go back and forward, like in a browser.
+        PreviewMouseDown += (_, e) =>
+        {
+            var command = e.ChangedButton switch
+            {
+                System.Windows.Input.MouseButton.XButton1 => viewModel.GoBackCommand,
+                System.Windows.Input.MouseButton.XButton2 => viewModel.GoForwardCommand,
+                _ => null,
+            };
+            if (command == null) return;
+            if (command.CanExecute(null)) command.Execute(null);
+            e.Handled = true;
+        };
     }
 
     private void RestorePlacement()

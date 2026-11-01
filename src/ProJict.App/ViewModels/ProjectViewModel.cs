@@ -236,12 +236,100 @@ public sealed partial class ProjectViewModel : ObservableObject
         OnPropertyChanged(nameof(Group));
     }
 
+    // ───────────── Test build ─────────────
+
+    /// <summary>The current test build, on the page under the header with Run (your own projects: the paths are this computer's).</summary>
+    public bool HasTestBuild => Project.TestBuild != null && Project.Remote == null;
+    private string? TestBuildFullPath => Project.TestBuild?.FullPath(Project.RepoPath);
+    public bool TestBuildExists => TestBuildFullPath is { } p && (File.Exists(p) || Directory.Exists(p));
+    public string TestBuildName => TestBuildFullPath is { } p ? System.IO.Path.GetFileName(p.TrimEnd('\\', '/')) : "";
+    public string? TestBuildToolTip => TestBuildFullPath;
+    /// <summary>"built 1 Nov 20:25 · set by Wren: 0.1.31 with the office zoom", or that it's gone.</summary>
+    public string TestBuildDetails
+    {
+        get
+        {
+            if (Project.TestBuild is not { } build || TestBuildFullPath is not { } path) return "";
+            if (!TestBuildExists) return "not there any more · set by " + build.SetBy;
+            var built = File.Exists(path) ? File.GetLastWriteTime(path) : Directory.GetLastWriteTime(path);
+            var when = built.ToString(built.Date == DateTime.Today ? "'today' HH:mm" : "d MMM HH:mm", System.Globalization.CultureInfo.CurrentCulture);
+            return $"built {when} · set by {build.SetBy}" + (build.Note is { } note ? $": {note}" : "");
+        }
+    }
+    public string RunTestBuildText => TestBuildFullPath is { } p && Directory.Exists(p) ? "Open" : "Run";
+
+    /// <summary>Details › Test build: a path (full, or in the repo folder); empty removes it.</summary>
+    public string? TestBuildPath
+    {
+        get => Project.TestBuild?.Path;
+        set
+        {
+            var path = value?.Trim().Trim('"');
+            if (path == (Project.TestBuild?.Path ?? "") || (string.IsNullOrEmpty(path) && Project.TestBuild == null)) return;
+            Project.TestBuild = string.IsNullOrEmpty(path) ? null : new TestBuild { Path = path, Note = Project.TestBuild?.Note, SetBy = _state.UserName };
+            _state.MarkDirty(Project);
+            RefreshTestBuild();
+        }
+    }
+
+    public string? TestBuildNote
+    {
+        get => Project.TestBuild?.Note;
+        set
+        {
+            if (Project.TestBuild is not { } build || (value ?? "") == (build.Note ?? "")) return;
+            build.Note = string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+            _state.MarkDirty(Project);
+            RefreshTestBuild();
+        }
+    }
+
+    public void RefreshTestBuild()
+    {
+        foreach (var p in new[] { nameof(HasTestBuild), nameof(TestBuildExists), nameof(TestBuildName), nameof(TestBuildToolTip), nameof(TestBuildDetails),
+                     nameof(RunTestBuildText), nameof(TestBuildPath), nameof(TestBuildNote) })
+            OnPropertyChanged(p);
+    }
+
+    [RelayCommand]
+    private void RunTestBuild()
+    {
+        if (TestBuildFullPath is not { } path) return;
+        RefreshTestBuild();
+        if (Directory.Exists(path)) Try(() => ShellLauncher.OpenFolder(path));
+        else if (File.Exists(path))
+        {
+            Try(() => ShellLauncher.Run(path));
+            _state.StatusText = $"Started {TestBuildName}.";
+        }
+        else _state.StatusText = $"{path} isn't there any more.";
+    }
+
+    [RelayCommand]
+    private void ShowTestBuild()
+    {
+        if (TestBuildFullPath is not { } path) return;
+        if (File.Exists(path)) Try(() => ShellLauncher.ShowInFolder(path));
+        else if (Directory.Exists(path)) Try(() => ShellLauncher.OpenFolder(path));
+        else _state.StatusText = $"{path} isn't there any more.";
+    }
+
+    [RelayCommand]
+    private void BrowseTestBuild()
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog { Title = "The current test build", Filter = "Apps and installers|*.exe;*.msi;*.bat;*.cmd;*.lnk|All files|*.*" };
+        var start = TestBuildFullPath is { } current ? System.IO.Path.GetDirectoryName(current) : Project.RepoPath;
+        if (!string.IsNullOrWhiteSpace(start) && Directory.Exists(start)) dialog.InitialDirectory = start;
+        if (dialog.ShowDialog() == true) TestBuildPath = dialog.FileName;
+    }
+
     private void NotifyDetails()
     {
         foreach (var p in new[] { nameof(Name), nameof(Key), nameof(FilePrefix), nameof(Group), nameof(Status), nameof(RepoPath), nameof(GitHubUrl), nameof(PromptPreamble), nameof(Description) })
             OnPropertyChanged(p);
         RefreshIssueSync();
         RefreshShip();
+        RefreshTestBuild();
     }
 
     // ───────────── Board state ─────────────

@@ -1,8 +1,11 @@
 namespace ProJict.Core.Chat;
 
-public enum ChatSegmentKind { Text, Mention, Channel, Item, Link }
+public enum ChatSegmentKind { Text, Mention, Channel, Item, Link, Action }
 
-/// <summary>A piece of a message: plain text, an @mention, a #channel, an item (# and its id) or a web link.</summary>
+/// <summary>
+/// A piece of a message: plain text, an @mention, a #channel, an item (# and its id), a web link, or a word that is a
+/// button for you (an agent's "Approve" while its ship plan waits for you).
+/// </summary>
 public sealed record ChatSegment(ChatSegmentKind Kind, string Text, string? Target = null);
 
 /// <summary>@mentions, #channel and item links, and web links in chat messages.</summary>

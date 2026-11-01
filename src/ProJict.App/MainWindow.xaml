@@ -24,6 +24,8 @@
     </Window.Resources>
     <Window.InputBindings>
         <KeyBinding Gesture="Ctrl+K" Command="{Binding SearchCommand}" />
+        <KeyBinding Gesture="Alt+Left" Command="{Binding GoBackCommand}" />
+        <KeyBinding Gesture="Alt+Right" Command="{Binding GoForwardCommand}" />
         <KeyBinding Gesture="Ctrl+Shift+F" Command="{Binding SearchCommand}" />
         <KeyBinding Gesture="Ctrl+Shift+N" Command="{Binding NewProjectCommand}" />
         <KeyBinding Gesture="Ctrl+E" Command="{Binding ExportCommand}" />
@@ -50,10 +52,21 @@
                 BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}" BorderThickness="0,0,1,0">
             <DockPanel Margin="8,10,8,8">
                 <StackPanel DockPanel.Dock="Top">
-                    <StackPanel Orientation="Horizontal" Margin="8,2,0,12">
-                        <Image Source="Assets/ProJict.ico" Width="24" Height="24" />
-                        <TextBlock Text="ProJict" FontSize="18" FontWeight="SemiBold" Margin="10,0,0,0" VerticalAlignment="Center" />
-                    </StackPanel>
+                    <DockPanel Margin="8,2,0,12">
+                        <!-- Back and forward through where you've been -->
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button Style="{StaticResource SubtleButton}" Command="{Binding GoBackCommand}" Padding="6,4" ToolTip="Back (Alt+←)" AutomationProperties.Name="Back">
+                                <TextBlock Style="{StaticResource Icon}" Text="&#xE72B;" FontSize="12" />
+                            </Button>
+                            <Button Style="{StaticResource SubtleButton}" Command="{Binding GoForwardCommand}" Padding="6,4" ToolTip="Forward (Alt+→)" AutomationProperties.Name="Forward">
+                                <TextBlock Style="{StaticResource Icon}" Text="&#xE72A;" FontSize="12" />
+                            </Button>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <Image Source="Assets/ProJict.ico" Width="24" Height="24" />
+                            <TextBlock Text="ProJict" FontSize="18" FontWeight="SemiBold" Margin="10,0,0,0" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </DockPanel>
 
                     <Button Style="{StaticResource NavButton}" Command="{Binding SearchCommand}" ToolTip="Search all projects (Ctrl+K)">
                         <Grid>
@@ -343,10 +356,22 @@
                 <TextBlock Style="{StaticResource Icon}" Text="&#xE72D;" Margin="0,0,10,0" />
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                     <Button Style="{StaticResource AccentButtonStyle}" Content="Let in" Command="{Binding ApproveJoinCommand}" Margin="6,0" />
+                    <Button Style="{StaticResource SubtleButton}" Content="It's me" Command="{Binding ApproveJoinAsMeCommand}"
+                            ToolTip="It's you, on another computer: let it in, then type the 6-digit code shown here on that computer. It then takes part under your name." />
                     <Button Style="{StaticResource SubtleButton}" Content="Deny" Command="{Binding DenyJoinCommand}" />
                     <Button Style="{StaticResource SubtleButton}" Content="Block" Command="{Binding BlockJoinCommand}" />
                 </StackPanel>
                 <TextBlock Text="{Binding PendingJoin.Text}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+            </DockPanel>
+        </Border>
+
+        <!-- A code to type on your other computer, to confirm it's you -->
+        <Border Padding="14,8" Background="{DynamicResource SystemFillColorAttentionBackgroundBrush}"
+                BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}" BorderThickness="0,1,0,0"
+                Visibility="{Binding SelfCodeText, Converter={StaticResource EmptyToVis}}">
+            <DockPanel>
+                <TextBlock Style="{StaticResource Icon}" Text="&#xE72E;" Margin="0,0,10,0" />
+                <TextBlock Text="{Binding SelfCodeText}" VerticalAlignment="Center" TextWrapping="Wrap" FontWeight="SemiBold" />
             </DockPanel>
         </Border>
 

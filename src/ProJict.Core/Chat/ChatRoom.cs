@@ -443,6 +443,23 @@ public sealed class ChatRoom
         Changed?.Invoke(channel);
     }
 
+    /// <summary>
+    /// 👍 (<paramref name="up"/> true) or 👎 on someone else's message, or neither (null); the same one again takes it back.
+    /// One per person or agent: a new one replaces theirs.
+    /// </summary>
+    public void React(ChatChannel channel, ChatActor actor, Guid id, bool? up)
+    {
+        var message = Message(channel, id);
+        if (message.Notice || message.Deleted) throw new ChatException("You can't answer that.");
+        if (!CanSee(channel, actor)) throw new ChatException($"You can't answer in #{channel.Name}.");
+        if (string.Equals(message.By, actor.Name, StringComparison.OrdinalIgnoreCase)) throw new ChatException("That's your own message.");
+        var mine = message.Reactions?.FirstOrDefault(r => string.Equals(r.By, actor.Name, StringComparison.OrdinalIgnoreCase));
+        if (mine != null) message.Reactions!.Remove(mine);
+        if (up is { } yes && (mine == null || mine.Up != yes)) (message.Reactions ??= []).Add(new ChatReaction { By = actor.Name, Up = yes, At = Now });
+        if (message.Reactions is { Count: 0 }) message.Reactions = null;
+        Changed?.Invoke(channel);
+    }
+
     /// <summary>Your own messages, or any as a moderator; the text and files go, a "deleted" line stays.</summary>
     public void DeleteMessage(ChatChannel channel, ChatActor actor, Guid id)
     {

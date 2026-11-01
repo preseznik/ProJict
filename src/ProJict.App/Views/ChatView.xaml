@@ -60,7 +60,7 @@
         </DataTemplate>
 
         <DataTemplate x:Key="ChannelRow" DataType="{x:Type vm:ChannelRowViewModel}">
-            <Border x:Name="Row" Padding="8,5" Margin="0,0,0,1" CornerRadius="4" Background="Transparent" Cursor="Hand"
+            <Border x:Name="Row" Padding="8,3" Margin="0,0,0,1" CornerRadius="4" Background="Transparent" Cursor="Hand"
                     ToolTip="{Binding ToolTip}" AutomationProperties.Name="{Binding Name}">
                 <Border.InputBindings>
                     <MouseBinding MouseAction="LeftClick" Command="{Binding DataContext.OpenCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
@@ -78,7 +78,7 @@
                                        ToolTip="Invite only" Visibility="{Binding IsInviteOnly, Converter={StaticResource BoolToVis}}" />
                         </StackPanel>
                         <TextBlock Text="{Binding Subtitle}" Style="{StaticResource MutedText}" FontSize="11" TextTrimming="CharacterEllipsis"
-                                   Visibility="{Binding Subtitle, Converter={StaticResource EmptyToVis}}" />
+                                   Visibility="{Binding ShowSubtitle, Converter={StaticResource BoolToVis}}" />
                     </StackPanel>
                     <Border x:Name="Count" Grid.Column="1" CornerRadius="8" Padding="6,0" MinWidth="18" VerticalAlignment="Center" Margin="6,0,0,0"
                             Background="{DynamicResource SubtleFillColorTertiaryBrush}" Visibility="{Binding HasUnread, Converter={StaticResource BoolToVis}}">
@@ -192,8 +192,23 @@
                                        Visibility="{Binding EditedText, Converter={StaticResource EmptyToVis}}" />
                             <ItemsControl ItemsSource="{Binding Attachments}" ItemTemplate="{StaticResource ChatFile}" ItemsPanel="{StaticResource Wrap}"
                                           Focusable="False" Margin="0,4,0,0" Visibility="{Binding HasAttachments, Converter={StaticResource BoolToVis}}" />
+                            <!-- Thumbs given: a yes or no to the message -->
+                            <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
+                                <Button Style="{StaticResource SubtleButton}" Padding="6,1" Margin="0,0,4,0" Command="{Binding ThumbUpCommand}" ToolTip="{Binding UpsToolTip}"
+                                        Visibility="{Binding HasUps, Converter={StaticResource BoolToVis}}" AutomationProperties.Name="Yes answers">
+                                    <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource Icon}" Text="&#xE8E1;" FontSize="11" /><TextBlock Text="{Binding Ups}" FontSize="11" Margin="4,0,0,0" /></StackPanel>
+                                </Button>
+                                <Button Style="{StaticResource SubtleButton}" Padding="6,1" Command="{Binding ThumbDownCommand}" ToolTip="{Binding DownsToolTip}"
+                                        Visibility="{Binding HasDowns, Converter={StaticResource BoolToVis}}" AutomationProperties.Name="No answers">
+                                    <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource Icon}" Text="&#xE8E0;" FontSize="11" /><TextBlock Text="{Binding Downs}" FontSize="11" Margin="4,0,0,0" /></StackPanel>
+                                </Button>
+                            </StackPanel>
                         </StackPanel>
                         <StackPanel x:Name="Actions" Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Top" Opacity="0">
+                            <Button Style="{StaticResource SubtleIconButton}" FontSize="12" Padding="5,3" Content="&#xE8E1;" ToolTip="Yes (👍)" AutomationProperties.Name="Thumbs up"
+                                    Command="{Binding ThumbUpCommand}" Visibility="{Binding CanReact, Converter={StaticResource BoolToVis}}" />
+                            <Button Style="{StaticResource SubtleIconButton}" FontSize="12" Padding="5,3" Content="&#xE8E0;" ToolTip="No (👎)" AutomationProperties.Name="Thumbs down"
+                                    Command="{Binding ThumbDownCommand}" Visibility="{Binding CanReact, Converter={StaticResource BoolToVis}}" />
                             <Button Style="{StaticResource SubtleIconButton}" FontSize="12" Padding="5,3" Content="&#xE97A;" ToolTip="Reply" AutomationProperties.Name="Reply"
                                     Command="{Binding ReplyCommand}" />
                             <Button Style="{StaticResource SubtleIconButton}" FontSize="12" Padding="5,3" Content="&#xE70F;" ToolTip="Edit (or Up in an empty box)" AutomationProperties.Name="Edit"

@@ -185,6 +185,16 @@ public sealed partial class ChatViewModel : ObservableObject
         SyncMessages();
     }
 
+    /// <summary>What you were writing in each channel you left, until you're back (not an edit of a message).</summary>
+    private readonly Dictionary<Guid, string> _drafts = [];
+
+    partial void OnChannelChanging(ChatChannel? oldValue, ChatChannel? newValue)
+    {
+        if (oldValue == null) return;
+        if (Editing == null && Draft.Trim().Length > 0) _drafts[oldValue.Id] = Draft;
+        else _drafts.Remove(oldValue.Id);
+    }
+
     partial void OnChannelChanged(ChatChannel? value)
     {
         _shown = PageSize;
@@ -192,7 +202,7 @@ public sealed partial class ChatViewModel : ObservableObject
         Messages.Clear();
         ReplyTo = null;
         Editing = null;
-        Draft = "";
+        Draft = value != null && _drafts.Remove(value.Id, out var draft) ? draft : "";
         Pending.Clear();
         // The "New" line goes above what you hadn't read when you opened the channel.
         UnreadFrom = null;
@@ -801,8 +811,56 @@ public sealed partial class ChatViewModel : ObservableObject
             case ChatSegmentKind.Link:
                 ShellLauncher.OpenUrl(segment.Target!);
                 break;
+            case ChatSegmentKind.Action when segment.Target?.Split(':') is [var id, var word] && Guid.TryParse(id, out var projectId):
+                if (_state.Projects.FirstOrDefault(p => p.Id == projectId) is not { OpenShip.State: ShipState.Planned } shipping)
+                {
+                    _state.StatusText = "That ship plan isn't waiting for you any more.";
+                    RebuildMessages();
+                    break;
+                }
+                var board = _main.GetProjectViewModel(shipping);
+                if (word == "Approve") board.ApproveShipCommand.Execute(null);
+                else board.DeclineShipCommand.Execute(null);
+                // The words are plain again once it's decided.
+                RebuildMessages();
+                break;
         }
     }
+
+    // ───────────── Buttons in agents' messages ─────────────
+
+    /// <summary>Shows the messages afresh (their buttons come and go with what they're about).</summary>
+    private void RebuildMessages()
+    {
+        _messageVms.Clear();
+        Messages.Clear();
+        SyncMessages();
+    }
+
+    /// <summary>
+    /// Your own project whose ship plan, posted by the message's agent, waits for you: the channel's project, one the
+    /// message names, or the agent's only one. Guests don't approve here, so in another ProJict's channels there's none.
+    /// </summary>
+    internal Project? ShipWaitingFor(ChatChannel? channel, ChatMessage message)
+    {
+        if (channel == null || !message.Agent || PlaceOf(channel).Host != null) return null;
+        // Only what it wrote about this request, not about an earlier one.
+        var waiting = _state.Projects.Where(p => p.Remote == null && p.OpenShip is { State: ShipState.Planned, PlannedBy: { } by } ship &&
+                                                 message.At >= ship.RequestedAt &&
+                                                 string.Equals(Core.Agents.AgentNaming.Identity(by), message.By, StringComparison.OrdinalIgnoreCase)).ToList();
+        return waiting.FirstOrDefault(p => channel.Link?.ProjectId == p.Id) ?? waiting.FirstOrDefault(p => message.Text.Contains(p.Name, StringComparison.OrdinalIgnoreCase))
+               ?? (waiting.Count == 1 ? waiting[0] : null);
+    }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"\b(Approve|Decline)\b")]
+    private static partial System.Text.RegularExpressions.Regex ShipWords();
+
+    /// <summary>"Approve" and "Decline" in the message's plain text become buttons for that project's ship plan.</summary>
+    internal static IReadOnlyList<ChatSegment> WithShipButtons(IReadOnlyList<ChatSegment> segments, Project project) =>
+        segments.SelectMany(s => s.Kind != ChatSegmentKind.Text ? [s]
+            : ShipWords().Split(s.Text).Where(part => part.Length > 0)
+                .Select(part => part is "Approve" or "Decline" ? new ChatSegment(ChatSegmentKind.Action, part, $"{project.Id}:{part}") : new ChatSegment(ChatSegmentKind.Text, part)))
+            .ToList();
 
     /// <summary>Who can be @mentioned in the channel: its members, and you.</summary>
     internal IEnumerable<string> MentionNames => (Channel?.Members.Select(m => m.Name) ?? []).Append(NameIn(Channel));
@@ -902,6 +960,15 @@ public sealed partial class ChatViewModel : ObservableObject
         }
     }
 
+    /// <summary>👍 or 👎 on a message (the same again takes it back); an agent hears it as a yes or no to what it wrote.</summary>
+    internal void React(ChatMessageViewModel message, bool up)
+    {
+        if (Channel is not { } channel) return;
+        var take = message.Model.Reactions?.Any(r => string.Equals(r.By, NameIn(channel), StringComparison.OrdinalIgnoreCase) && r.Up == up) == true;
+        if (Act(channel, (r, me) => r.React(channel, me, message.Model.Id, up), "react", ("message", message.Model.Id.ToString()), ("up", take ? null : up)))
+            RebuildMessages();
+    }
+
     internal void CopyText(string text)
     {
         try
@@ -977,6 +1044,8 @@ public sealed partial class ChannelRowViewModel(ChatChannel model, ChatViewModel
     }
     public bool IsInviteOnly => model.Access == ChannelAccess.InviteOnly;
     public bool IsSelected => owner.Channel == model;
+    /// <summary>A channel's topic shows only while it's open (it's in the tooltip too); a private conversation's last line always.</summary>
+    public bool ShowSubtitle => Subtitle != null && (model.Direct || IsSelected);
     public int Unread { get; } = ChatRoom.Unread(model, owner.NameIn(model)).Count();
     public bool HasUnread => Unread > 0;
     public bool HasMention { get; } = model.Direct ? ChatRoom.Unread(model, owner.NameIn(model)).Any() : ChatRoom.UnreadMentions(model, owner.NameIn(model)).Any();
@@ -1101,8 +1170,11 @@ public sealed partial class ChatSegmentViewModel(ChatSegment segment, ChatViewMo
     public string Text => segment.Text;
     public bool IsLink => segment.Kind is ChatSegmentKind.Channel or ChatSegmentKind.Item or ChatSegmentKind.Link;
     public bool IsMention => segment.Kind == ChatSegmentKind.Mention;
+    public bool IsAction => segment.Kind == ChatSegmentKind.Action;
+    public bool IsPrimaryAction => IsAction && segment.Text == "Approve";
     public string? ToolTip => segment.Kind switch
     {
+        ChatSegmentKind.Action => segment.Text == "Approve" ? "Approve the ship plan: the agent runs it" : "Decline the ship plan: nothing of it runs",
         ChatSegmentKind.Channel => "Open the channel",
         ChatSegmentKind.Item => "Show the item on its board",
         ChatSegmentKind.Link => segment.Target,
@@ -1169,8 +1241,10 @@ public sealed partial class ChatMessageViewModel : ObservableObject
         IsDeleted = Model.Deleted;
         EditedText = Model.EditedAt != null && !Model.Deleted ? "(edited)" : null;
         MentionsMe = !IsMine && _owner.Channel is { } here && ChatRoom.Mentions(here, Model, _owner.NameIn(here));
+        var parsed = ChatText.Parse(Model.Text, _owner.MentionNames, _owner.IsChannelName, _owner.FindItem);
+        if (_owner.ShipWaitingFor(_owner.Channel, Model) is { } shipping) parsed = ChatViewModel.WithShipButtons(parsed, shipping);
         Segments = Model.Deleted ? [new ChatSegmentViewModel(new ChatSegment(ChatSegmentKind.Text, "(deleted)"), _owner)]
-            : ChatText.Parse(Model.Text, _owner.MentionNames, _owner.IsChannelName, _owner.FindItem).Select(s => new ChatSegmentViewModel(s, _owner)).ToList();
+            : parsed.Select(s => new ChatSegmentViewModel(s, _owner)).ToList();
         var owner = _owner.AttachmentOwner;
         Attachments = (Model.Attachments ?? []).Select(a => new AttachmentViewModel(owner, a, () => { })).ToList();
         var replied = Model.ReplyTo is { } r ? _owner.Channel?.Messages.FirstOrDefault(m => m.Id == r) : null;
@@ -1185,6 +1259,20 @@ public sealed partial class ChatMessageViewModel : ObservableObject
         var line = text.Replace("\r\n", "\n").Split('\n')[0];
         return line.Length > 90 ? line[..90] + "…" : line;
     }
+
+    // Thumbs: yours shows filled; on an agent's message it's a yes or no it hears.
+    public int Ups => Model.Reactions?.Count(r => r.Up) ?? 0;
+    public int Downs => Model.Reactions?.Count(r => !r.Up) ?? 0;
+    public bool HasUps => Ups > 0;
+    public bool HasDowns => Downs > 0;
+    public bool CanReact => !Model.Notice && !Model.Deleted && !IsMine && _owner.MayWrite(_owner.Channel);
+    private ChatReaction? Mine => Model.Reactions?.FirstOrDefault(r => string.Equals(r.By, _owner.NameIn(_owner.Channel), StringComparison.OrdinalIgnoreCase));
+    public bool IsUpMine => Mine is { Up: true };
+    public bool IsDownMine => Mine is { Up: false };
+    public string UpsToolTip => "Yes: " + string.Join(", ", Model.Reactions?.Where(r => r.Up).Select(r => r.By) ?? []);
+    public string DownsToolTip => "No: " + string.Join(", ", Model.Reactions?.Where(r => !r.Up).Select(r => r.By) ?? []);
+    [RelayCommand] private void ThumbUp() => _owner.React(this, true);
+    [RelayCommand] private void ThumbDown() => _owner.React(this, false);
 
     [RelayCommand] private void Reply() => _owner.StartReply(this);
     [RelayCommand] private void Edit() => _owner.StartEdit(this);

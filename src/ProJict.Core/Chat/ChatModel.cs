@@ -49,6 +49,16 @@ public sealed class ChatMessage
     public string? About { get; set; }
     public string? AboutText { get; set; }
     public List<Attachment>? Attachments { get; set; }
+    /// <summary>Thumbs up or down, one per person or agent; null while there are none. On an agent's message they're a yes or no to it.</summary>
+    public List<ChatReaction>? Reactions { get; set; }
+}
+
+/// <summary>A 👍 (yes) or 👎 (no) on a message.</summary>
+public sealed class ChatReaction
+{
+    public string By { get; set; } = "";
+    public bool Up { get; set; }
+    public DateTime At { get; set; } = DateTime.Now;
 }
 
 /// <summary>A #channel: its members and moderators, who was kicked, and its messages (oldest first).</summary>

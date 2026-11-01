@@ -61,7 +61,10 @@ public sealed partial class AgentTools : IMcpToolHost
                 ("description", "string", "What the project is.", false),
                 ("instructions", "string", "Standing instructions for agents and Copy prompt: engine version, conventions, how to test…", false),
                 ("ship_steps", "string[]", "The steps this project has, from commit, build, package, push and release (replaces the list).", false),
-                ("ship_how_to", "string", "How to ship it: what an agent does for each step, e.g. bump the version in …, run build.ps1, test, commit, push, publish the release.", false)),
+                ("ship_how_to", "string", "How to ship it: what an agent does for each step, e.g. bump the version in …, run build.ps1, test, commit, push, publish the release.", false),
+                ("test_build", "string", "The current test build for the user to try: an app, installer, folder or file, full path or relative to the repo folder " +
+                 "(e.g. artifacts/Game-Setup-1.2.exe). It shows on the project page with a Run button. Set it after you make a build worth trying; empty clears it.", false),
+                ("test_build_note", "string", "With test_build: what it is or what to try, in a line.", false)),
             UpdateProject);
         Add("set_name", "Pick your name",
             "Picks a short name of your own that you sign everything with from now on (comments, history, check-outs, chat), e.g. Ada or Quill. " +
@@ -195,14 +198,15 @@ public sealed partial class AgentTools : IMcpToolHost
 
     /// <summary>
     /// How the agent signs in a project: its name, or in a project shared with this ProJict "Ada (via Alice)", since it
-    /// works there through Alice's connection (the host checks that).
+    /// works there through Alice's connection (the host checks that). Where this computer is the host's own user, its
+    /// agents are the host's too, and sign with their own names.
     /// </summary>
     private string SignAs(McpSession session, Project project) =>
-        project.Remote != null ? AgentNaming.Via(session.AgentName, GuestNameIn(project)) : session.AgentName;
+        project.Remote != null && HostOf(project) is not { IsSelf: true } ? AgentNaming.Via(session.AgentName, GuestNameIn(project)) : session.AgentName;
 
     /// <summary>Whether something signed <paramref name="by"/> in the project is the agent's own work.</summary>
     private bool OwnIn(McpSession session, Project project, string by) =>
-        AgentNaming.IsOwnWork(session, project.Remote != null ? AgentNaming.WithoutVia(by, GuestNameIn(project)) ?? "" : by);
+        AgentNaming.IsOwnWork(session, project.Remote != null && HostOf(project) is not { IsSelf: true } ? AgentNaming.WithoutVia(by, GuestNameIn(project)) ?? "" : by);
 
     private enum Change { Comment, AddItems, Edit, HostOnly }
 
@@ -253,7 +257,7 @@ public sealed partial class AgentTools : IMcpToolHost
         "the others and items on hold are off limits: list_items leaves them out, and you may read and comment on them but not check them out, " +
         "change or complete them. Ask the user questions or report progress with add_comment, and check list_comments for their " +
         "answers. File problems you notice with add_item, and put documentation or reports for people in a note with write_doc. " +
-        "Keep a project's details (repo folder, GitHub link, description, instructions, how it's shipped) up to date with update_project. " +
+        "Keep a project's details (repo folder, GitHub link, description, instructions, how it's shipped) up to date with update_project, and set its test_build when you make a build worth trying (the user runs it from the project page). " +
         "When you start a longer step (running tests, a build, a bigger change), tell the user with set_status; it shows live in ProJict. " +
         "Items with a gitHubIssue stand for that GitHub issue: mention \"Fixes #<number>\" in the commit or pull request that resolves one. " +
         "When a project shows a shipRequest, the user wants it committed, built, packaged, pushed or released: read it with ship_request, post your " +
@@ -548,8 +552,19 @@ public sealed partial class AgentTools : IMcpToolHost
             if (howTo.Length > MaxDetailLength) throw new McpToolException($"how to ship can be up to {MaxDetailLength} characters.");
             changed.Add("how to ship");
         }
+        var testBuild = args.String("test_build")?.Trim();
+        var testNote = args.String("test_build_note")?.Trim();
+        if (testBuild is { Length: > 0 })
+        {
+            var full = new TestBuild { Path = testBuild }.FullPath(project.RepoPath);
+            if (!File.Exists(full) && !Directory.Exists(full))
+                throw new McpToolException($"There's no file or folder {full} on the ProJict computer" +
+                                           (Path.IsPathRooted(testBuild) || project.RepoPath != null ? "." : " (a relative path needs the project's repo folder)."));
+        }
+        if (testBuild != null) changed.Add("test build");
+        else if (testNote != null) throw new McpToolException("Give test_build_note together with test_build.");
         if (changed.Count == 0)
-            throw new McpToolException("Nothing to change: give repo_path, github_url, description, instructions, ship_steps or ship_how_to.");
+            throw new McpToolException("Nothing to change: give repo_path, github_url, description, instructions, ship_steps, ship_how_to or test_build.");
         var ships = steps != null || howTo != null;
         if (ships)
         {
@@ -565,6 +580,8 @@ public sealed partial class AgentTools : IMcpToolHost
             if (description != null) p.Description = description.Length == 0 ? null : description;
             if (instructions != null) p.PromptPreamble = instructions.Length == 0 ? null : instructions;
             if (ships) ShipFlow.AgentChange(p, steps, howTo, agent, DateTime.Now);
+            if (testBuild != null)
+                p.TestBuild = testBuild.Length == 0 ? null : new TestBuild { Path = testBuild, Note = testNote is { Length: > 0 } ? testNote : null, SetBy = agent, Agent = true };
         });
         _state.StatusText = $"{agent} changed {project.Name}'s {string.Join(", ", changed)}.";
         var result = new JsonObject { ["project"] = project.Name, ["changed"] = new JsonArray(changed.Select(c => (JsonNode)c).ToArray()) };
@@ -1169,7 +1186,7 @@ public sealed partial class AgentTools : IMcpToolHost
         return Json(new JsonObject
         {
             ["state"] = request.State.ToString().ToLowerInvariant(),
-            ["next"] = waits ? "Wait for the user's approval (ship_request shows it); run nothing yet."
+            ["next"] = waits ? "Wait for the user's approval (ship_request shows it); run nothing yet. If you tell them in Chat, the words Approve and Decline in your message become buttons for them."
                 : "It runs without approval: go ahead, report each step with report_ship, then finish_ship.",
         });
     }
@@ -1301,6 +1318,8 @@ public sealed partial class AgentTools : IMcpToolHost
             json["status"] = p.Status.ToString();
         }
         if (p.Remote != null) json["sharedBy"] = SharedText(p);
+        if (p.TestBuild is { } build)
+            json["testBuild"] = $"{build.Path}{(build.Note != null ? $" ({build.Note})" : "")}, set by {build.SetBy} {build.SetAt:yyyy-MM-dd HH:mm}";
         // Only the user changes it (Details › Private); update_project has no say.
         if (p.Private) json["private"] = "only on this computer: people this ProJict shares with, and their agents, don't see it or its channels";
         if (!string.IsNullOrWhiteSpace(p.RepoPath)) json["repoPath"] = p.RepoPath;
@@ -1427,6 +1446,8 @@ public sealed partial class AgentTools : IMcpToolHost
             : GuestAccess.CanAddItems(host.Role) ? "you may comment and add items"
             : GuestAccess.CanComment(host.Role) ? "you may comment"
             : "you can only read it";
+        if (host is { IsSelf: true })
+            return $"{remote.HostName}'s ProJict, where this computer is {remote.HostName} too: {may}; what you do there is signed with your own name.";
         return $"{remote.HostName}'s ProJict, where you work through {GuestNameIn(project)} ({(host?.Role ?? remote.Role).ToString().ToLowerInvariant()}): {may}; " +
                $"what you do there is signed {AgentNaming.Via("<your name>", GuestNameIn(project))}.";
     }

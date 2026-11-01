@@ -109,6 +109,7 @@ public sealed partial class MainViewModel : ObservableObject
         {
             OnPropertyChanged(nameof(PendingJoin));
             OnPropertyChanged(nameof(HasPendingJoin));
+            OnPropertyChanged(nameof(SelfCodeText));
         };
         Issues.Synced += p =>
         {
@@ -118,6 +119,11 @@ public sealed partial class MainViewModel : ObservableObject
         Feed = new FeedViewModel(state, this);
         AgentActivity = new AgentActivityViewModel(state, this);
         Chat = new ChatViewModel(state, this);
+        // Another channel opened from Chat's own list is a new place too.
+        Chat.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(ChatViewModel.Channel) && CurrentView == Chat) Arrived();
+        };
         Guest.ChatChanged += connection => Chat.OnRemoteChanged(connection);
         Chat.CountsChanged += () =>
         {
@@ -275,6 +281,8 @@ public sealed partial class MainViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(CurrentProject));
         SendViewing();
+        // Chat is a place once its channel is set (ShowChannel says so).
+        if (value != Chat) Arrived();
     }
 
     // ───────────── Sharing ─────────────
@@ -301,6 +309,17 @@ public sealed partial class MainViewModel : ObservableObject
     public bool HasPendingJoin => Host.Requests.Count > 0;
 
     [RelayCommand] private void ApproveJoin() { if (PendingJoin is { } r) Host.Answer(r, Services.Sharing.JoinAnswer.Approve); }
+    /// <summary>It's you, on another computer: let in, then confirmed with a code typed there.</summary>
+    [RelayCommand]
+    private void ApproveJoinAsMe()
+    {
+        if (PendingJoin is not { } r) return;
+        r.Self = true;
+        Host.Answer(r, Services.Sharing.JoinAnswer.Approve);
+    }
+
+    /// <summary>The codes to type on your other computers, while they wait (a bar under the join bar).</summary>
+    public string? SelfCodeText => Host.SelfCodeLines is { Count: > 0 } lines ? string.Join("\n", lines) : null;
     [RelayCommand] private void DenyJoin() { if (PendingJoin is { } r) Host.Answer(r, Services.Sharing.JoinAnswer.Deny); }
     [RelayCommand] private void BlockJoin() { if (PendingJoin is { } r) Host.Answer(r, Services.Sharing.JoinAnswer.Block); }
 
@@ -507,6 +526,8 @@ public sealed partial class MainViewModel : ObservableObject
         _syncingSelection = true;
         SelectedProjectItem = null;
         _syncingSelection = false;
+        // From one project's Agents to another's: the view stays, the place changes.
+        Arrived();
     }
 
     // ───────────── Chat ─────────────
@@ -527,6 +548,8 @@ public sealed partial class MainViewModel : ObservableObject
         SelectedProjectItem = null;
         _syncingSelection = false;
         Chat.Show(channel, message);
+        // Another channel in Chat: the view stays, the place changes.
+        Arrived();
     }
 
     /// <summary>Opens Chat with the form to start a channel about a project, category or item, its name suggested from it.</summary>

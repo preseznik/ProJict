@@ -406,7 +406,36 @@ public sealed partial class AgentTools
         return lines;
     }
 
+    /// <summary>Thumbs a reaction stays news for an agent that wasn't connected when it came.</summary>
+    private static readonly TimeSpan AnswersKeptFor = TimeSpan.FromDays(3);
+
+    /// <summary>
+    /// 👍 and 👎 others gave the agent's messages, each once: a yes or no to what it asked or said, so nobody has to type it.
+    /// "iztok answered yes (👍) to your message “Shall I ship 1.4?” in #grid2vr".
+    /// </summary>
+    private List<string> AnswerLines(McpSession session)
+    {
+        var lines = new List<string>();
+        var since = DateTime.Now - AnswersKeptFor;
+        foreach (var channel in Chat.Visible(ActorOf(session)))
+            foreach (var m in channel.Messages)
+            {
+                if (m.Reactions == null || !string.Equals(m.By, session.AgentName, StringComparison.OrdinalIgnoreCase)) continue;
+                foreach (var r in m.Reactions.Where(r => r.At > since && session.Noticed.Add($"answer:{m.Id}:{r.By}:{r.Up}:{r.At.Ticks}")))
+                    lines.Add($"{r.By} answered {(r.Up ? "yes (👍)" : "no (👎)")} to your message “{Short(OneLine(m.Text))}” in {Display(channel, session)}" +
+                              $" (id {ShortId(m.Id)}): take it as {(r.Up ? "approval" : "a decline")}.");
+            }
+        return lines;
+    }
+
     private List<string> LocalChatLines(McpSession session)
+    {
+        var answers = AnswerLines(session);
+        var lines = LocalNewsLines(session);
+        return answers.Count == 0 ? lines : [.. lines, "Chat answers: " + string.Join(" ", answers)];
+    }
+
+    private List<string> LocalNewsLines(McpSession session)
     {
         if (Chat.Channels.Count == 0) return [];
         var fresh = Waiting(session).Where(w => !session.Noticed.Contains($"chat:{w.Message.Id}")).ToList();
@@ -484,6 +513,8 @@ public sealed partial class AgentTools
             ["replyTo"] = m.ReplyTo is { } r ? ShortId(r) : null,
             ["edited"] = m.EditedAt != null && !m.Deleted ? true : null,
             ["mentionsYou"] = ChatRoom.Mentions(channel, m, you) ? true : null,
+            ["yes"] = m.Reactions?.Any(r => r.Up) == true ? new JsonArray(m.Reactions.Where(r => r.Up).Select(r => (JsonNode)r.By).ToArray()) : null,
+            ["no"] = m.Reactions?.Any(r => !r.Up) == true ? new JsonArray(m.Reactions.Where(r => !r.Up).Select(r => (JsonNode)r.By).ToArray()) : null,
             ["attachments"] = m.Attachments is { Count: > 0 } files ? Paths(files) : null,
         };
     }

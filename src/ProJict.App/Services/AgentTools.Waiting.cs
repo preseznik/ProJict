@@ -34,8 +34,11 @@ public sealed partial class AgentTools
         return result;
     }
 
-    /// <summary>Comments, work sent back and ship requests waiting for the agent.</summary>
-    private List<string> WorkLines(McpSession session)
+    /// <summary>
+    /// Comments, work sent back and ship requests waiting for the agent; ship requests in <paramref name="projects"/> (by
+    /// default the ones it works in).
+    /// </summary>
+    private List<string> WorkLines(McpSession session, IEnumerable<Guid>? projects = null)
     {
         var now = DateTime.Now;
         var lines = new List<string>();
@@ -70,14 +73,20 @@ public sealed partial class AgentTools
                               "claim_item to work on it again, or add_comment to ask.");
             }
 
-        foreach (var id in _main.Agents.ProjectsOf(session))
+        foreach (var id in projects ?? _main.Agents.ProjectsOf(session))
         {
-            if (LocalProjects.FirstOrDefault(p => p.Id == id) is not { OpenShip: { } ship } project) continue;
-            if (ship.State == ShipState.Requested && session.Noticed.Add($"ship:{ship.Id}:requested"))
-                lines.Add($"{ship.RequestedBy} wants {project.Name} shipped ({ShipFlow.Describe(ship.Steps)}): read ship_request project={project.Name}, " +
-                          "then post your plan with plan_ship and wait for approval.");
-            else if (ship.State == ShipState.Approved && ship.PlannedBy is { } planner && AgentNaming.IsOwnWork(session, planner) && session.Noticed.Add($"ship:{ship.Id}:approved"))
-                lines.Add($"{ship.DecidedBy ?? "The user"} approved your ship plan for {project.Name}: run it, report_ship each step, then finish_ship.");
+            if (LocalProjects.FirstOrDefault(p => p.Id == id) is not { } project) continue;
+            if (project.OpenShip is { } ship)
+            {
+                if (ship.State == ShipState.Requested && session.Noticed.Add($"ship:{ship.Id}:requested"))
+                    lines.Add($"{ship.RequestedBy} wants {project.Name} shipped ({ShipFlow.Describe(ship.Steps)}): read ship_request project={project.Name}, " +
+                              "then post your plan with plan_ship and wait for approval.");
+                else if (ship.State == ShipState.Approved && ship.PlannedBy is { } planner && AgentNaming.IsOwnWork(session, planner) && session.Noticed.Add($"ship:{ship.Id}:approved"))
+                    lines.Add($"{ship.DecidedBy ?? "The user"} approved your ship plan for {project.Name}: run it, report_ship each step, then finish_ship.");
+            }
+            else if (project.Ships?.LastOrDefault() is { State: ShipState.Declined, PlannedBy: { } planner } declined && AgentNaming.IsOwnWork(session, planner) &&
+                     session.Noticed.Add($"ship:{declined.Id}:declined"))
+                lines.Add($"{declined.DecidedBy ?? "The user"} declined your ship plan for {project.Name}: run none of it. ship_request shows the log.");
         }
         return lines;
     }

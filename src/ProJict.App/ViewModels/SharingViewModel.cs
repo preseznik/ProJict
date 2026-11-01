@@ -31,12 +31,30 @@ public sealed partial class SharingViewModel : ObservableObject
         _trust?.TrySetResult(false);
     }
 
+    // ───────────── You, on another computer ─────────────
+
+    /// <summary>A ProJict you're connected to asks whether this computer is its user: the code it shows goes here.</summary>
+    public HostConnection? SelfAsking => Guest.Connections.FirstOrDefault(c => c.SelfAsked);
+    public string? SelfQuestion => SelfAsking is { } c ? $"{c.HostName}'s ProJict asks whether this computer is {c.HostName}. If it is, type the 6-digit code it shows." : null;
+    public string? SelfMessage => SelfAsking?.SelfMessage ?? Guest.Connections.Select(c => c.SelfMessage).FirstOrDefault(m => m != null);
+    [ObservableProperty] private string _selfCode = "";
+
+    [RelayCommand]
+    private void ConfirmSelf()
+    {
+        if (SelfAsking is not { } c || SelfCode.Trim().Length == 0) return;
+        Guest.AnswerSelf(c, SelfCode);
+        SelfCode = "";
+    }
+
+    [RelayCommand] private void DeclineSelf() { if (SelfAsking is { } c) Guest.AnswerSelf(c, null); }
+
     public void Refresh()
     {
         foreach (var p in new[]
                  {
                      nameof(IsSharing), nameof(PortText), nameof(HostStatus), nameof(Requests), nameof(HasRequests), nameof(Invites), nameof(HasInvites),
-                     nameof(Guests), nameof(HasGuests), nameof(Hosts), nameof(HasHosts),
+                     nameof(Guests), nameof(HasGuests), nameof(Hosts), nameof(HasHosts), nameof(SelfAsking), nameof(SelfQuestion), nameof(SelfMessage),
                  })
             OnPropertyChanged(p);
     }
@@ -121,6 +139,13 @@ public sealed partial class SharingViewModel : ObservableObject
     public IReadOnlyList<JoinRequest> Requests => Host.Requests.ToList();
     public bool HasRequests => Host.Requests.Count > 0;
     [RelayCommand] private void Approve(JoinRequest? request) { if (request != null) Host.Answer(request, JoinAnswer.Approve); }
+    [RelayCommand]
+    private void ApproveAsMe(JoinRequest? request)
+    {
+        if (request == null) return;
+        request.Self = true;
+        Host.Answer(request, JoinAnswer.Approve);
+    }
     [RelayCommand] private void Deny(JoinRequest? request) { if (request != null) Host.Answer(request, JoinAnswer.Deny); }
     [RelayCommand] private void Block(JoinRequest? request) { if (request != null) Host.Answer(request, JoinAnswer.Block); }
 
@@ -213,11 +238,25 @@ public sealed class InviteRow(Invite invite, Action revoke)
 /// <summary>Someone allowed to connect: their role, what they see, whether they're here now.</summary>
 public sealed class GuestRow(GuestAccount account, HostService host)
 {
-    public string Name => account.Name;
+    public string Name => account.Self ? $"You, on {account.Device ?? account.Name}" : account.Name;
     public string Details =>
+        (host.SelfCodeFor(account) is { } code ? $"Type {code} in its ProJict to confirm it's you · " : "") +
         $"{account.Device ?? "?"} · {(account.Groups == null ? "all groups" : string.Join(", ", account.Groups))} · " +
         (account.Blocked ? "blocked" : host.IsConnected(account) ? "connected now"
             : account.LastSeen is { } seen ? $"last here {seen.ToString("d MMM HH:mm", CultureInfo.CurrentCulture)}" : "not connected yet");
+
+    /// <summary>"This is me…" (a code to type there) while it's connected and a guest; "Not me" once it's you.</summary>
+    public string SelfText => account.Self ? "Not me" : host.SelfCodeFor(account) != null ? "Cancel code" : "This is me…";
+    public bool CanSelf => account.Self || (host.IsConnected(account) && !account.Blocked);
+    /// <summary>You on another computer act as an editor: its role only counts again after "Not me".</summary>
+    public bool IsGuest => !account.Self;
+    public string SelfToolTip => account.Self ? "It's a guest again, under its own name" : "It's you, on another computer: type the code shown here in its ProJict";
+    public IRelayCommand ToggleSelf => new RelayCommand(() =>
+    {
+        if (account.Self) host.EndSelf(account);
+        else if (host.SelfCodeFor(account) != null) host.CancelSelf(account);
+        else host.StartSelf(account);
+    });
     public IReadOnlyList<GuestRole> Roles { get; } = Enum.GetValues<GuestRole>();
 
     /// <summary>Changing it reconnects them with the new role.</summary>

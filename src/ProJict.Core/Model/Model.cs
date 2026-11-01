@@ -259,6 +259,25 @@ public sealed class GitHubReleaseInfo
     public string? Error { get; set; }
 }
 
+/// <summary>
+/// The project's current test build: an app, installer, folder or file to try, set by you or an agent after building.
+/// A relative path is in the project's repo folder.
+/// </summary>
+public sealed class TestBuild
+{
+    public string Path { get; set; } = "";
+    /// <summary>What it is or what to try, in a line ("0.1.31 with the office zoom").</summary>
+    public string? Note { get; set; }
+    public DateTime SetAt { get; set; } = DateTime.Now;
+    public string? SetBy { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Agent { get; set; }
+
+    /// <summary>Where it is on this computer: as given, or in the repo folder when relative.</summary>
+    public string FullPath(string? repoPath) =>
+        System.IO.Path.IsPathRooted(Path) || string.IsNullOrWhiteSpace(repoPath) ? Path : System.IO.Path.GetFullPath(System.IO.Path.Combine(repoPath, Path));
+}
+
 public sealed class Project
 {
     public const string InboxKey = "Inbox";
@@ -292,6 +311,8 @@ public sealed class Project
     public IssueSync? Issues { get; set; }
     /// <summary>How the project is shipped; null until set in Details (then all steps, no instructions).</summary>
     public ShipSettings? Shipping { get; set; }
+    /// <summary>The build to try now (shown on the project page with Run); null while there's none. Not part of undo.</summary>
+    public TestBuild? TestBuild { get; set; }
     /// <summary>Ship requests, oldest first (the last few are kept); null while there were none. Not part of undo.</summary>
     public List<ShipRequest>? Ships { get; set; }
     /// <summary>On a guest: the ProJict this project is shown from. Such projects live only in memory and are never saved here.</summary>

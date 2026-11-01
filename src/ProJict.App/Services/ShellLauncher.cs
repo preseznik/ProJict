@@ -12,6 +12,10 @@ public static class ShellLauncher
     public static void OpenFile(string path) =>
         Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
 
+    /// <summary>Starts an app or opens a file as Explorer would, in its own folder (so a game finds its data next to it).</summary>
+    public static void Run(string path) =>
+        Process.Start(new ProcessStartInfo(path) { UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(path) ?? "" });
+
     public static void ShowInFolder(string path) =>
         Process.Start(new ProcessStartInfo("explorer.exe", $"/select,{Quote(path)}") { UseShellExecute = true });
 
