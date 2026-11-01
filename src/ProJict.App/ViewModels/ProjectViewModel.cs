@@ -347,6 +347,8 @@ public sealed partial class ProjectViewModel : ObservableObject
         RefreshIssueSync();
         RefreshShip();
         RefreshTestBuild();
+        RefreshCleanup();
+        RefreshStudio();
     }
 
     // ───────────── Board state ─────────────
@@ -380,7 +382,7 @@ public sealed partial class ProjectViewModel : ObservableObject
     }
 
     /// <summary>"Working on" found nothing: the board says why, e.g. that a connected agent hasn't checked anything out.</summary>
-    public bool ShowWorkingOnHint => ShowWorkingOn && !Categories.Any(c => c.IsVisible);
+    public bool ShowWorkingOnHint => ShowWorkingOn && !IsFocused && !Categories.Any(c => c.IsVisible);
 
     public string WorkingOnHintText
     {
@@ -548,6 +550,13 @@ public sealed partial class ProjectViewModel : ObservableObject
 
     public void ApplyFilter()
     {
+        if (ApplyFocus())
+        {
+            OnPropertyChanged(nameof(IsFilterActive));
+            OnPropertyChanged(nameof(HideEmptyToolTip));
+            RefreshWorkingOnHint();
+            return;
+        }
         var active = IsFilterActive;
         var terms = (FilterText ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         var tag = TagFilter ?? AllTags;
@@ -761,6 +770,8 @@ public sealed partial class ProjectViewModel : ObservableObject
     {
         var item = TxtListParser.ParseLine(text);
         if (item == null) return;
+        // Focused on one item, a new one in its category would vanish: the focus widens to the category.
+        if (FocusItem != null) FocusOn(category.Model);
         Mutate(() => category.Model.Items.Add(item), [category], kind: EditKind.Add);
         RefreshTagFilters();
     }
@@ -771,6 +782,7 @@ public sealed partial class ProjectViewModel : ObservableObject
     /// </summary>
     public async Task AddItemWithAttachments(CategoryViewModel category, IReadOnlyList<string> files, byte[]? png)
     {
+        if (FocusItem != null) FocusOn(category.Model);
         List<Attachment> added;
         try
         {
@@ -1982,21 +1994,8 @@ public sealed partial class ProjectViewModel : ObservableObject
     }
 
     /// <summary>Clears the filter, expands the item's category (and DONE section) and focuses it.</summary>
-    public void Reveal(TodoItem item)
-    {
-        SelectedTab = 0;
-        FilterText = "";
-        TagFilter = AllTags;
-        StateFilter = StateFilters[0];
-        PriorityFilter = PriorityFilters[0];
-        WorkedBy = null;
-        if (Project.Find(item.Id) is not { } loc || CategoryFor(loc.Category) is not { } category) return;
-        category.IsExpanded = true;
-        if (loc.Item.IsDone || Project.Walk().Any(l => l.Depth == 0 && l.Item.IsDone && l.Item.Descendants().Contains(item)))
-            category.IsDoneExpanded = true;
-        Application.Current.Dispatcher.BeginInvoke(() => FocusRequested?.Invoke(item.Id, -1),
-            System.Windows.Threading.DispatcherPriority.Background);
-    }
+    /// <summary>A link to the item (Chat, the Feed, search, a notification, an agent's card): the board focuses on it.</summary>
+    public void Reveal(TodoItem item) => FocusOn(item);
 
     public void RevealNote(NoteDoc note)
     {

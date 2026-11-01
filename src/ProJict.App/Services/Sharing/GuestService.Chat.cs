@@ -13,6 +13,8 @@ public sealed partial class HostConnection
     public ChatRoom? Chat { get; internal set; }
     /// <summary>The name the host knows you by; you write in its Chat with it.</summary>
     public string? MyName { get; internal set; }
+    /// <summary>What the host refused that an agent here sent it (by the agent's name), until the agent hears it.</summary>
+    internal List<(string Agent, string Why)> AgentRefusals { get; } = [];
 }
 
 /// <summary>
@@ -55,7 +57,8 @@ public sealed partial class GuestService
                 if (Guid.TryParse((string?)message["id"], out var id)) connection.Chat?.Drop(id);
                 break;
             case "chatError":
-                _state.StatusText = $"{connection.HostName}'s ProJict: {(string?)message["message"]}";
+                if ((string?)message["as"] is { Length: > 0 } agent) connection.AgentRefusals.Add((agent, (string?)message["message"] ?? ""));
+                else _state.StatusText = $"{connection.HostName}'s ProJict: {(string?)message["message"]}";
                 break;
         }
     }

@@ -82,7 +82,30 @@ public sealed partial class FeedViewModel : ObservableObject
     public bool IsFiltered => SearchText.Trim().Length > 0 || ProjectFilter != AllProjects || KindFilter != KindOptions[0] || WhoFilter != Everyone;
     public string EmptyText => _all.Count == 0
         ? "Nothing has happened yet. Items you add and finish, comments, and what AI agents do will show up here."
-        : "Nothing matches. Try a longer period or clear the filters.";
+        : WhoFilter == _askedWho && !_all.Any(e => string.Equals(e.Who, _askedWho, StringComparison.OrdinalIgnoreCase))
+            ? $"{_askedWho} hasn't done anything that shows here yet. The Feed has items, comments, notes, releases and shipping, but not chat messages or reading."
+            : "Nothing matches. Try a longer period or clear the filters.";
+
+    /// <summary>Someone whose work you asked for (an agent's "Show its work"), kept among the choices though they did nothing here yet.</summary>
+    private string? _askedWho;
+
+    /// <summary>Everything one person or agent did, by who signed it (not by text, which would also find others mentioning them).</summary>
+    public void ShowWorkOf(string name)
+    {
+        SearchText = "";
+        ProjectFilter = AllProjects;
+        KindFilter = KindOptions[0];
+        Period = Periods.First(p => p.Days == null);
+        var known = WhoChoices.FirstOrDefault(w => string.Equals(w, name, StringComparison.OrdinalIgnoreCase));
+        if (known == null)
+        {
+            _askedWho = name;
+            WhoChoices = [.. WhoChoices, name];
+            OnPropertyChanged(nameof(WhoChoices));
+        }
+        WhoFilter = known ?? name;
+        OnPropertyChanged(nameof(EmptyText));
+    }
 
     partial void OnSearchTextChanged(string value) => Reapply();
     partial void OnProjectFilterChanged(string value) => Reapply();
@@ -112,7 +135,9 @@ public sealed partial class FeedViewModel : ObservableObject
             .Concat(ActivityFeed.ApiTokens(tokens, DateTime.Now, _state.UserName))
             .Concat(ActivityFeed.Channels(_state.Chat.Channels, _state.Projects)).OrderByDescending(e => e.At)];
         ProjectChoices = [AllProjects, .. _state.Projects.Select(p => p.Name).Order(StringComparer.CurrentCultureIgnoreCase)];
-        WhoChoices = [Everyone, People, Agents, .. _all.Select(e => e.Who).Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.CurrentCultureIgnoreCase)];
+        if (_askedWho != null && WhoFilter != _askedWho) _askedWho = null;
+        WhoChoices = [Everyone, People, Agents, .. _all.Select(e => e.Who).Append(_askedWho).OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase)
+            .Order(StringComparer.CurrentCultureIgnoreCase)];
         OnPropertyChanged(nameof(ProjectChoices));
         OnPropertyChanged(nameof(WhoChoices));
         if (!ProjectChoices.Contains(ProjectFilter)) ProjectFilter = AllProjects;

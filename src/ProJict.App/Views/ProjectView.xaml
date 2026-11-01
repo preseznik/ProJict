@@ -255,6 +255,8 @@
                         <Button Style="{StaticResource SubtleIconButton}" Content="&#xE710;" AutomationProperties.Name="Add item" ToolTip="Add item" Click="AddItemButton_Click"
                                 Visibility="{Binding Owner.CanAddItems, Converter={StaticResource BoolToVis}}" />
                         <Button Style="{StaticResource SubtleIconButton}" Content="&#xE8C8;" AutomationProperties.Name="Copy category prompt" ToolTip="Copy this category's open items as an AI prompt" Command="{Binding CopyPromptCommand}" />
+                        <Button x:Name="FocusButton" Style="{StaticResource SubtleIconButton}" Content="&#xE890;" AutomationProperties.Name="Focus" ToolTip="{Binding FocusToolTip}"
+                                Command="{Binding ToggleFocusCommand}" />
                         <Button Style="{StaticResource SubtleIconButton}" Content="&#xE712;" AutomationProperties.Name="More" ToolTip="More" Click="CategoryMore_Click" />
                     </StackPanel>
                 </Grid>
@@ -440,6 +442,10 @@
                         ToolTip="Ask an AI agent to commit, build, package, push or release this project; you approve its plan first">
                     <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource Icon}" Text="&#xE724;" /><TextBlock Text="Ship" Margin="6,0,0,0" /></StackPanel>
                 </Button>
+                <Button Style="{StaticResource SubtleButton}" AutomationProperties.Name="Clean up" Command="{Binding StartCleanupCommand}" Visibility="{Binding CanCleanUp, Converter={StaticResource BoolToVis}}"
+                        ToolTip="Ask an AI agent what could go from the repo folder (old builds, copies, leftovers); you decide, and it goes to the Recycle Bin">
+                    <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource Icon}" Text="&#xEA99;" /><TextBlock Text="Clean up" Margin="6,0,0,0" /></StackPanel>
+                </Button>
                 <Button Style="{StaticResource SubtleButton}" AutomationProperties.Name="Export" Command="{Binding ExportCommand}" ToolTip="Export to TODO/DONE text files">
                     <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource Icon}" Text="&#xEDE1;" /><TextBlock Text="Export" Margin="6,0,0,0" /></StackPanel>
                 </Button>
@@ -522,6 +528,19 @@
                     </Grid>
 
                     <DockPanel Grid.Row="1">
+                    <!-- Focus: only one item or category shows, and the way back. -->
+                    <Border x:Name="FocusBar" DockPanel.Dock="Top" Style="{StaticResource Card}" Padding="14,6" Margin="4,0,8,8"
+                            Visibility="{Binding IsFocused, Converter={StaticResource BoolToVis}}">
+                        <DockPanel>
+                            <Button DockPanel.Dock="Right" Style="{StaticResource SubtleButton}" Command="{Binding LeaveFocusCommand}" Margin="12,0,0,0"
+                                    ToolTip="Show the whole board again, with your filters as they were">
+                                <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource Icon}" Text="&#xE711;" /><TextBlock Text="Leave focus" Margin="6,0,0,0" /></StackPanel>
+                            </Button>
+                            <TextBlock DockPanel.Dock="Left" Style="{StaticResource Icon}" Text="&#xE890;" Margin="0,0,10,0" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                            <TextBlock Text="{Binding FocusText}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                        </DockPanel>
+                    </Border>
                     <!-- "Working on" found nothing: why, and where to see what agents are doing. -->
                     <Border x:Name="WorkingOnHint" DockPanel.Dock="Top" Style="{StaticResource Card}" Padding="14,10" Margin="4,0,8,8"
                             Visibility="{Binding ShowWorkingOnHint, Converter={StaticResource BoolToVis}}">
@@ -601,6 +620,76 @@
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
                             </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- A clean-up of the repo folder: the agent's plan to tick, then the Recycle Bin. -->
+                    <Border x:Name="CleanupCard" DockPanel.Dock="Top" Style="{StaticResource Card}" Padding="14,10" Margin="4,0,8,8"
+                            Visibility="{Binding HasCleanupCard, Converter={StaticResource BoolToVis}}">
+                        <StackPanel>
+                            <DockPanel>
+                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                    <Button Content="Withdraw" Command="{Binding WithdrawCleanupCommand}" Margin="6,0,0,0"
+                                            Visibility="{Binding CanWithdrawCleanup, Converter={StaticResource BoolToVis}}" />
+                                    <Button Content="Decline" Command="{Binding DeclineCleanupCommand}" Margin="6,0,0,0"
+                                            Visibility="{Binding CleanupWaitsForYou, Converter={StaticResource BoolToVis}}" />
+                                    <Button Content="{Binding CleanUpSafeText}" Command="{Binding CleanUpSafeCommand}" IsEnabled="{Binding CanCleanUpSafe}" Margin="6,0,0,0"
+                                            Visibility="{Binding CleanupWaitsForYou, Converter={StaticResource BoolToVis}}" ToolTip="Moves the ticked safe lines to the Recycle Bin" />
+                                    <Button Content="{Binding CleanUpAllText}" Style="{StaticResource AccentButtonStyle}" Command="{Binding CleanUpAllCommand}" IsEnabled="{Binding CanCleanUpAll}"
+                                            Margin="6,0,0,0" Visibility="{Binding CleanupWaitsForYou, Converter={StaticResource BoolToVis}}"
+                                            ToolTip="Moves every ticked line, safe and thorough, to the Recycle Bin" />
+                                    <Button Style="{StaticResource SubtleIconButton}" Content="&#xE711;" Command="{Binding DismissCleanupCommand}" Margin="6,0,0,0" ToolTip="Close"
+                                            AutomationProperties.Name="Close the clean-up" Visibility="{Binding CanDismissCleanup, Converter={StaticResource BoolToVis}}" />
+                                </StackPanel>
+                                <WrapPanel VerticalAlignment="Center">
+                                    <TextBlock Style="{StaticResource Icon}" Text="&#xEA99;" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                    <TextBlock Text="Clean-up of the repo folder" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                    <Border Style="{StaticResource TagChip}" Background="{DynamicResource SubtleFillColorSecondaryBrush}" Margin="8,0,0,0" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding CleanupStateText}" FontSize="11" />
+                                    </Border>
+                                    <Ellipse Style="{StaticResource UnreadDot}" Margin="6,0,0,0" Visibility="{Binding CleanupWaitsForYou, Converter={StaticResource BoolToVis}}" />
+                                </WrapPanel>
+                            </DockPanel>
+                            <TextBlock Text="{Binding CleanupStatusText}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,6,0,0" />
+                            <Border Margin="0,8,0,0" Visibility="{Binding HasCleanupEntries, Converter={StaticResource BoolToVis}}">
+                                <ScrollViewer MaxHeight="300" VerticalScrollBarVisibility="Auto">
+                                    <ItemsControl ItemsSource="{Binding CleanupEntries}" Focusable="False">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate DataType="{x:Type vm:CleanupEntryRow}">
+                                                <DockPanel Margin="0,1">
+                                                    <TextBlock DockPanel.Dock="Right" Text="{Binding Size}" Style="{StaticResource MutedText}" FontSize="12" Width="72" TextAlignment="Right" />
+                                                    <CheckBox IsChecked="{Binding IsChecked}" IsEnabled="{Binding IsEditable}" MinWidth="0" VerticalAlignment="Top" Margin="0,0,6,0"
+                                                              AutomationProperties.Name="{Binding Path}" />
+                                                    <Border x:Name="Level" Style="{StaticResource TagChip}" Background="{DynamicResource SystemFillColorCautionBrush}" Margin="0,1,8,0" VerticalAlignment="Top" Width="62">
+                                                        <TextBlock Text="{Binding Level}" FontSize="11" HorizontalAlignment="Center" Foreground="Black" />
+                                                    </Border>
+                                                    <StackPanel>
+                                                        <TextBlock Text="{Binding Path}" FontFamily="{StaticResource MonoFont}" FontSize="12" TextTrimming="CharacterEllipsis" ToolTip="{Binding Path}" />
+                                                        <TextBlock Text="{Binding Reason}" Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap" />
+                                                        <TextBlock Text="{Binding Result}" FontSize="11" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                                                                   Visibility="{Binding Result, Converter={StaticResource EmptyToVis}}" />
+                                                    </StackPanel>
+                                                </DockPanel>
+                                                <DataTemplate.Triggers>
+                                                    <DataTrigger Binding="{Binding IsSafe}" Value="True">
+                                                        <Setter TargetName="Level" Property="Background" Value="{DynamicResource SystemFillColorSuccessBrush}" />
+                                                    </DataTrigger>
+                                                </DataTemplate.Triggers>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
+                            </Border>
+                            <ItemsControl ItemsSource="{Binding CleanupLog}" Focusable="False" Margin="0,8,0,0">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:ShipLogLine}">
+                                        <TextBlock TextWrapping="Wrap" FontSize="12" Margin="0,1,0,0">
+                                            <Run Text="{Binding Time, Mode=OneWay}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" /><Run Text="   " /><Run
+                                                 Text="{Binding By, Mode=OneWay}" FontWeight="SemiBold" /><Run Text="   " /><Run Text="{Binding Text, Mode=OneWay}" />
+                                        </TextBlock>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
                         </StackPanel>
                     </Border>
 
@@ -783,6 +872,7 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
                         <Grid.Resources>
                             <Style TargetType="TextBlock" BasedOn="{StaticResource MutedText}">
@@ -884,6 +974,31 @@
                             <CheckBox Content="Private" IsChecked="{Binding IsPrivate}" AutomationProperties.Name="Private project" />
                             <TextBlock Margin="0,4,0,0" FontSize="12" TextWrapping="Wrap"
                                        Text="Only on this computer: people you share with, and their agents, don't see it or its channels, even when its group is shared with them. You and your own agents still do." />
+                        </StackPanel>
+
+                        <!-- The project's game studio: its roles and what each expects; hiring is in the Agents view. -->
+                        <TextBlock Grid.Row="9" Text="Game studio" Visibility="{Binding CanHaveStudio, Converter={StaticResource BoolToVis}}" />
+                        <StackPanel x:Name="StudioDetails" Grid.Row="9" Grid.Column="1" Margin="0,4" Visibility="{Binding CanHaveStudio, Converter={StaticResource BoolToVis}}">
+                            <Button Content="Set up a game studio" Command="{Binding SetUpStudioCommand}" HorizontalAlignment="Left"
+                                    Visibility="{Binding HasStudio, Converter={StaticResource InvBoolToVis}}" />
+                            <TextBlock Margin="0,4,0,6" FontSize="12" TextWrapping="Wrap" Text="{Binding StudioHint}" />
+                            <ItemsControl ItemsSource="{Binding StudioRoles}" Focusable="False" Visibility="{Binding HasStudio, Converter={StaticResource BoolToVis}}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:StudioRoleRow}">
+                                        <Border Style="{StaticResource Card}" Padding="10,8" Margin="0,0,0,6">
+                                            <StackPanel>
+                                                <DockPanel>
+                                                    <TextBlock DockPanel.Dock="Right" Text="{Binding HolderText}" Style="{StaticResource MutedText}" FontSize="12"
+                                                               VerticalAlignment="Center" Margin="10,0,0,0" />
+                                                    <TextBox Text="{Binding Name, UpdateSourceTrigger=LostFocus}" FontWeight="SemiBold" AutomationProperties.Name="Role name" />
+                                                </DockPanel>
+                                                <TextBox Text="{Binding Definition, UpdateSourceTrigger=LostFocus}" AcceptsReturn="True" TextWrapping="Wrap" Margin="0,6,0,0"
+                                                         MinHeight="54" VerticalContentAlignment="Top" AutomationProperties.Name="What the role expects" />
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
                         </StackPanel>
                     </Grid>
                 </ScrollViewer>

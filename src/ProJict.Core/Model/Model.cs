@@ -313,6 +313,12 @@ public sealed class Project
     public ShipSettings? Shipping { get; set; }
     /// <summary>The build to try now (shown on the project page with Run); null while there's none. Not part of undo.</summary>
     public TestBuild? TestBuild { get; set; }
+    /// <summary>Clean-ups of the project's folder, oldest first (the last few are kept); null while there were none. Not part of undo.</summary>
+    public List<CleanupRequest>? Cleanups { get; set; }
+    /// <summary>The clean-up waiting for a plan or your decision: agents do no other work here meanwhile.</summary>
+    [JsonIgnore] public CleanupRequest? OpenCleanup => Cleanups?.LastOrDefault(c => c.IsOpen);
+    /// <summary>The project's game studio, if it has one: its roles and the agents hired to them.</summary>
+    public Studio? Studio { get; set; }
     /// <summary>Ship requests, oldest first (the last few are kept); null while there were none. Not part of undo.</summary>
     public List<ShipRequest>? Ships { get; set; }
     /// <summary>On a guest: the ProJict this project is shown from. Such projects live only in memory and are never saved here.</summary>

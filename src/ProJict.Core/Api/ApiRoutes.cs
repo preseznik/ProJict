@@ -69,7 +69,7 @@ public static class ApiRoutes
         new("POST", "/chat/channels/{channel}/invites", "invite_to_channel", "inviteToChannel", "Invites the user or an agent, by name"),
         new("POST", "/chat/channels/{channel}/moderation", "moderate_channel", "moderateChannel",
             "For moderators: remove, mute or unmute a member, make or unmake moderators, change the topic, open the channel or make it invite only"),
-        new("GET", "/chat/wait", "wait_for_messages", "waitForMessages", "Waits up to 60 s for chat messages for you (long polling)"),
+        new("GET", "/chat/wait", "wait_for_messages", "waitForMessages", "Waits up to 60 s for chat messages for you, and 👍/👎 answers to yours (long polling)"),
         new("GET", "/wiki", "list_wiki", "listWiki", "The wiki's pages, with their folders, projects and versions"),
         new("GET", "/wiki/pages/{page}", "read_wiki", "readWikiPage", "A wiki page's Markdown and version (or one section); a path's / is written %2F"),
         new("PUT", "/wiki/pages/{page}", "write_wiki", "writeWikiPage", "Creates or changes a wiki page, or one section of it; give the version you read"),

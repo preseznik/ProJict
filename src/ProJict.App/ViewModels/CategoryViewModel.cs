@@ -78,8 +78,26 @@ public sealed partial class CategoryViewModel : ObservableObject
     public string OpenCountText => $"({OpenCount})";
     public bool HasDone => DoneCount > 0;
 
-    /// <summary>Done rows show when expanded, in side-by-side layout, or when a filter matches some of them.</summary>
-    public bool ShowDoneRows => IsDoneExpanded || Owner.SideBySide || (Owner.IsFilterActive && DoneRows.Any(r => r.IsVisible));
+    /// <summary>Done rows show when expanded, in side-by-side layout, or when a filter or the focused item shows some of them.</summary>
+    public bool ShowDoneRows => IsDoneExpanded || Owner.SideBySide ||
+                                ((Owner.IsFocused ? Owner.FocusItem != null : Owner.IsFilterActive) && DoneRows.Any(r => r.IsVisible));
+
+    /// <summary>The board is focused on this category (its eye button then leaves the focus).</summary>
+    public bool IsFocusTarget => Owner.FocusCategory?.Id == Model.Id;
+    public string FocusToolTip => IsFocusTarget ? "Leave focus: show the whole board again, with your filters" : "Focus: show only this category";
+
+    [RelayCommand]
+    private void ToggleFocus()
+    {
+        if (IsFocusTarget) Owner.LeaveFocus();
+        else Owner.FocusOn(Model);
+    }
+
+    public void RefreshFocus()
+    {
+        OnPropertyChanged(nameof(IsFocusTarget));
+        OnPropertyChanged(nameof(FocusToolTip));
+    }
 
     /// <summary>Chat channels about this category.</summary>
     public List<ChannelChip> Channels => Owner.Main.ChannelChips(Owner.Project.Id, Model.Id);

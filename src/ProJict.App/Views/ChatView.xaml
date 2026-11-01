@@ -187,7 +187,7 @@
                                     </TextBlock>
                                 </Border>
                             </Button>
-                            <local:ChatTextBlock x:Name="Text" Segments="{Binding Segments}" TextWrapping="Wrap" Margin="0,0,0,2" />
+                            <local:ChatMessageText x:Name="Text" Segments="{Binding Segments}" Margin="0,0,0,2" />
                             <TextBlock Text="{Binding EditedText}" FontSize="11" Foreground="{DynamicResource TextFillColorTertiaryBrush}"
                                        Visibility="{Binding EditedText, Converter={StaticResource EmptyToVis}}" />
                             <ItemsControl ItemsSource="{Binding Attachments}" ItemTemplate="{StaticResource ChatFile}" ItemsPanel="{StaticResource Wrap}"
@@ -247,8 +247,8 @@
                     <Setter TargetName="Body" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
                 </DataTrigger>
                 <DataTrigger Binding="{Binding IsDeleted}" Value="True">
-                    <Setter TargetName="Text" Property="FontStyle" Value="Italic" />
-                    <Setter TargetName="Text" Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}" />
+                    <Setter TargetName="Text" Property="TextElement.FontStyle" Value="Italic" />
+                    <Setter TargetName="Text" Property="TextElement.Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}" />
                 </DataTrigger>
             </DataTemplate.Triggers>
         </DataTemplate>

@@ -134,7 +134,7 @@ public sealed partial class AppState : ObservableObject
     public bool NeedsAttention(Project project) =>
         project.Walk().Any(l => l.Item.NeedsReview || HasUnread(ReadKey(l.Item.Id), l.Item.Comments)) ||
         project.Categories.Any(c => HasUnread(ReadKey(c.Id), c.Comments)) ||
-        project.OpenShip?.State == ShipState.Planned;
+        project.OpenShip?.State == ShipState.Planned || project.OpenCleanup?.State == CleanupState.Planned;
 
     /// <summary>What waits for you in a project, for its red dot's tooltip; empty when nothing does.</summary>
     public string AttentionSummary(Project project)
@@ -146,6 +146,7 @@ public sealed partial class AppState : ObservableObject
         if (review > 0) parts.Add(review == 1 ? "1 item to review" : $"{review} items to review");
         if (discussions > 0) parts.Add(discussions == 1 ? "new comments in 1 discussion" : $"new comments in {discussions} discussions");
         if (project.OpenShip?.State == ShipState.Planned) parts.Add("a ship plan to approve");
+        if (project.OpenCleanup?.State == CleanupState.Planned) parts.Add("a clean-up plan to decide on");
         return parts.Count == 0 ? "" : $"Waiting for you: {string.Join(", ", parts)}. On the board, All states › Needs you shows them.";
     }
 

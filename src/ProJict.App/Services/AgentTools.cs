@@ -171,6 +171,7 @@ public sealed partial class AgentTools : IMcpToolHost
             FinishShip);
         AddChatTools();
         AddWikiTools();
+        AddCleanupTools();
     }
 
     public IReadOnlyList<McpTool> Tools => _tools;
@@ -218,6 +219,8 @@ public sealed partial class AgentTools : IMcpToolHost
     /// </summary>
     private void MayChange(Project project, Change change)
     {
+        // While its folder is being cleaned up, a project takes no other work (comments are fine).
+        if (change is Change.Edit or Change.AddItems) CheckNoCleanup(project);
         if (project.Remote is not { } remote) return;
         var name = remote.HostName;
         if (change == Change.HostOnly)
@@ -267,12 +270,15 @@ public sealed partial class AgentTools : IMcpToolHost
         "When a project shows a shipRequest, the user wants it committed, built, packaged, pushed or released: read it with ship_request, post your " +
         "plan with plan_ship and wait for their approval in ProJict; only then run the steps, report each with report_ship and end with finish_ship " +
         "(record a published release with draft_release save=true). " +
+        "When a project shows a studio, it's a game studio and the user hires agents to its roles: if you have one, work as it expects. " +
+        "When a project shows a cleanupRequest, the user wants its repo folder cleaned up: read it with cleanup_request, scan the folder and post your plan " +
+        "with plan_cleanup; ProJict moves what they approve to the Recycle Bin, so never remove files yourself, and do no other work there until it's decided. " +
         "The user and agents also talk live in Chat #channels (list_channels, join_channel to read one, read_channel, post_message, create_channel), and privately: " +
         "post_message to channel @name writes to the user or an agent only. Keep Chat human. " + ChatStyle + " To listen, call " +
         "wait_for_messages. What waits for you shows in a tool result's waitingForYou list, each thing once: chat invitations, @mentions and new " +
         "messages, private ones included (read them with read_channel and reply with post_message: say hello when invited, and answer what you're asked, or say you " +
         "can't now), the user's comments on items you worked on (answer with add_comment), work the user sent back (get_item for why, then " +
-        "claim_item to work on it again), and ship requests in your project. Deal with them before going on, or say why not. " +
+        "claim_item to work on it again), ship requests and clean-up requests in your project. Deal with them before going on, or say why not. " +
         "Between tool calls nothing reaches you, so if your client can run a command in the background and tell you about each line it prints " +
         "(Claude Code's Monitor tool, for one), start a chat watcher once you've picked your name and keep it running: " +
         (remote
@@ -462,6 +468,8 @@ public sealed partial class AgentTools : IMcpToolHost
             "plan_ship" => "Posted a plan for shipping",
             "report_ship" => $"Reported the {args.String("step")} step: {args.String("outcome")}",
             "finish_ship" => args.String("outcome") == "shipped" ? "Shipped it" : "Couldn't ship it",
+            "cleanup_request" => "Read the clean-up request",
+            "plan_cleanup" => "Posted a clean-up plan",
             _ => tool.Replace('_', ' '),
         };
         Remember(session, new AgentAction(DateTime.Now, text, project?.Id, item?.Id, tool));
@@ -490,7 +498,7 @@ public sealed partial class AgentTools : IMcpToolHost
 
     private string ListProjects(McpSession session, Args args, List<Attachment> files) => Json(new JsonObject
     {
-        ["projects"] = new JsonArray(ReachableProjects.Select(p => (JsonNode)ProjectJson(p)).ToArray()),
+        ["projects"] = new JsonArray(ReachableProjects.Select(p => (JsonNode)WithStudio(ProjectJson(p), p, session)).ToArray()),
     });
 
     private string CurrentProject(McpSession session, Args args, List<Attachment> files)
@@ -504,7 +512,7 @@ public sealed partial class AgentTools : IMcpToolHost
                                           "Pass \"project\" to the other tools, or ask the user to set the project's local repo folder in ProJict (Details tab).",
                 ToolProblem.NotFound);
         _main.Agents.WorkingIn(session, match.Project);
-        var json = ProjectJson(match.Project);
+        var json = WithStudio(ProjectJson(match.Project), match.Project, session);
         json["matchedBy"] = match.How;
         if (!string.IsNullOrWhiteSpace(match.Project.PromptPreamble)) json["instructions"] = match.Project.PromptPreamble.Trim();
         json["agentsMayWorkOn"] = (AgentAccess.Describe(RulesFor(match.Project).Allowed) ?? "no items at the moment (you can still read, comment and add items)") +
@@ -1347,6 +1355,7 @@ public sealed partial class AgentTools : IMcpToolHost
         json["done"] = stats.Done;
         if (stats.ToReview > 0) json["toReview"] = stats.ToReview;
         if (p.OpenShip is { } ship) json["shipRequest"] = $"{ShipFlow.Describe(ship.Steps)}, {ShipFlow.StateName(ship.State)} (ship_request has it all)";
+        if (p.OpenCleanup is { } cleanup) json["cleanupRequest"] = $"{CleanupFlow.StateName(cleanup.State)}: no other work here until it's decided (cleanup_request has it all)";
         return json;
     }
 

@@ -20,8 +20,13 @@ public sealed partial class HostService
     private readonly Dictionary<Guid, DispatcherTimer> _chatTimers = [];
 
     /// <summary>The guest in Chat: a person, who reaches the projects shared with it and never sees your private ones.</summary>
+    /// <summary>
+    /// How Chat sees a guest: in the channels about projects shared with them and the ones they're invited to. A ProJict
+    /// linked as you (and its agents) also takes part in the Open channels about nothing in particular, as you and your
+    /// agents do here; private projects' channels stay hidden either way.
+    /// </summary>
     private ChatActor ChatActorOf(GuestAccount account) =>
-        new(NameOf(account), false, Projects: Visible(account).Select(p => p.Id).ToHashSet(), Guest: true,
+        new(NameOf(account), false, Projects: Visible(account).Select(p => p.Id).ToHashSet(), Guest: !account.Self,
             Hidden: _state.Projects.Where(p => p.Private).Select(p => p.Id).ToHashSet());
 
     private static JsonNode ChannelJson(ChatChannel channel) => JsonNode.Parse(Json.Serialize(ChatRoom.ForGuest(channel)))!;
@@ -103,7 +108,8 @@ public sealed partial class HostService
         var room = _state.Chat;
         var op = (string?)message["op"] ?? "";
         string? Text(string name) => (string?)message[name];
-        JsonObject Refuse(string why) => Wire.Message("chatError", ("message", why));
+        // Whose it was, so a guest's agent hears why (older guests show it in their status bar).
+        JsonObject Refuse(string why) => Wire.Message("chatError", ("message", why), ("as", Text("as")));
         if (Text("as") is { } agentName && agentName.Trim().Length > 0)
         {
             if (!account.Self && !Data.GuestAgents) return Refuse("This ProJict doesn't let guests' AI agents take part.");

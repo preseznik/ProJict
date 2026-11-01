@@ -28,6 +28,20 @@ public sealed class OfficeCamera(double width, double height)
         MoveTo(x - roomX * zoom, y - roomY * zoom);
     }
 
+    /// <summary>Zoomed to <paramref name="zoom"/> with the room point (x, y) in the middle, as far as the walls allow.</summary>
+    public void FocusOn(double x, double y, double zoom)
+    {
+        Zoom = Math.Clamp(zoom, 1, MaxZoom);
+        MoveTo(Width / 2 - x * Zoom, Height / 2 - y * Zoom);
+    }
+
+    /// <summary>A given view, e.g. on the way from one to another; kept within the walls.</summary>
+    public void Set(double zoom, double offsetX, double offsetY)
+    {
+        Zoom = Math.Clamp(zoom, 1, MaxZoom);
+        MoveTo(offsetX, offsetY);
+    }
+
     /// <summary>Drags the room along by (dx, dy).</summary>
     public void PanBy(double dx, double dy) => MoveTo(OffsetX + dx, OffsetY + dy);
 

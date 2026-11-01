@@ -73,8 +73,9 @@ public sealed partial class AgentTools
                 ("topic", "string", "For set_topic: the new topic (empty clears it).", false)),
             ModerateChannel);
         Add("wait_for_messages", "Wait for chat messages",
-            $"Listens for new chat messages for you: in channels you're in, or anywhere you're @mentioned. Returns at once when some wait, " +
-            $"else as soon as one arrives, or empty after the time given (at most {MaxWaitSeconds} s). Call it again to keep listening.",
+            $"Listens for new chat messages for you: in channels you're in, or anywhere you're @mentioned; and for 👍/👎 answers to your own " +
+            $"messages (answers: a 👍 means yes, take it as approval; a 👎 means no). Returns at once when some wait, else as soon as one arrives, " +
+            $"or empty after the time given (at most {MaxWaitSeconds} s). Call it again to keep listening.",
             Schema(("seconds", "integer", $"How long to wait (default and most {MaxWaitSeconds}).", false),
                 ("channel", "string", "Only this channel.", false)),
             (_, _, _) => throw new InvalidOperationException("wait_for_messages runs asynchronously."), readOnly: true);
@@ -312,16 +313,16 @@ public sealed partial class AgentTools
         {
             RequireChat();
             var channel = args.String("channel") != null ? ChannelFor(session, args) : null;
-            // Any change can be for it: a message, an @mention, an invitation.
+            // Any change can be for it: a message, an @mention, an invitation, a 👍 or 👎 on its message.
             listener = c =>
             {
-                if ((channel == null || c == channel) && Waiting(session, channel).Count > 0) arrived.TrySetResult();
+                if ((channel == null || c == channel) && (Waiting(session, channel).Count > 0 || NewAnswers(session, channel).Any())) arrived.TrySetResult();
             };
-            if (Waiting(session, channel).Count > 0) arrived.TrySetResult();
+            if (Waiting(session, channel).Count > 0 || NewAnswers(session, channel).Any()) arrived.TrySetResult();
             else Chat.Changed += listener;
             return channel;
         });
-        // The office shows it at the water cooler while it listens.
+        // The office shows it listening at its desk, headphones on, meanwhile.
         session.Listening = true;
         try
         {
@@ -335,6 +336,7 @@ public sealed partial class AgentTools
         return await Run(session, () =>
         {
             var waiting = Waiting(session, only);
+            var answers = NewAnswers(session, only).ToList();
             var json = new JsonObject
             {
                 ["messages"] = new JsonArray(waiting.Select(w =>
@@ -344,9 +346,23 @@ public sealed partial class AgentTools
                     return (JsonNode)node;
                 }).ToArray()),
             };
-            if (waiting.Count == 0) json["note"] = $"Nothing new in {seconds} s. Call wait_for_messages again to keep listening.";
+            if (answers.Count > 0)
+                json["answers"] = new JsonArray(answers.Select(a => (JsonNode)new JsonObject
+                {
+                    ["channel"] = Display(a.Channel, session),
+                    ["message"] = ShortId(a.Message.Id),
+                    ["text"] = Short(OneLine(a.Message.Text)),
+                    ["by"] = a.Reaction.By,
+                    ["answer"] = a.Reaction.Up ? "yes" : "no",
+                    ["at"] = Time(a.Reaction.At),
+                    ["meaning"] = a.Reaction.Up ? "approval: go ahead" : "a decline: don't",
+                }).ToArray());
+            foreach (var a in answers) session.Noticed.Add(a.Key);
+            if (waiting.Count == 0 && answers.Count == 0) json["note"] = $"Nothing new in {seconds} s. Call wait_for_messages again to keep listening.";
             foreach (var group in waiting.GroupBy(w => w.Channel)) Delivered(session, group.Key, group.Select(w => w.Message).ToList());
-            RecordText(session, waiting.Count == 0 ? "Listened in Chat" : $"Got {Count(waiting.Count, "chat message")}", waiting.FirstOrDefault().Channel, "wait_for_messages");
+            var got = new[] { waiting.Count > 0 ? Count(waiting.Count, "chat message") : null, answers.Count > 0 ? Count(answers.Count, "answer") : null }.OfType<string>().ToList();
+            RecordText(session, got.Count == 0 ? "Listened in Chat" : "Got " + string.Join(" and ", got), waiting.FirstOrDefault().Channel ?? answers.FirstOrDefault().Channel,
+                "wait_for_messages");
             return Json(json);
         });
     }
@@ -402,6 +418,7 @@ public sealed partial class AgentTools
         if (!_state.AppSettings.AgentsUseChat || (session.ReadOnly && !_state.AppSettings.ReadOnlyTokensUseChat)) return [];
         var lines = LocalChatLines(session);
         if (SharedChatLine(session) is { } shared) lines.Add(shared);
+        lines.AddRange(SharedRefusalLines(session));
         if (lines.Count > 0 && WatchTip(session) is { } tip) lines.Add(tip);
         return lines;
     }
@@ -413,19 +430,22 @@ public sealed partial class AgentTools
     /// 👍 and 👎 others gave the agent's messages, each once: a yes or no to what it asked or said, so nobody has to type it.
     /// "iztok answered yes (👍) to your message “Shall I ship 1.4?” in #grid2vr".
     /// </summary>
-    private List<string> AnswerLines(McpSession session)
+    private List<string> AnswerLines(McpSession session) =>
+        [.. NewAnswers(session).ToList().Where(a => session.Noticed.Add(a.Key)).Select(a =>
+            $"{a.Reaction.By} answered {(a.Reaction.Up ? "yes (👍)" : "no (👎)")} to your message “{Short(OneLine(a.Message.Text))}” in {Display(a.Channel, session)}" +
+            $" (id {ShortId(a.Message.Id)}): take it as {(a.Reaction.Up ? "approval" : "a decline")}.")];
+
+    /// <summary>👍 and 👎 on the agent's messages that it hasn't heard about yet (in one channel, or in all it sees).</summary>
+    private IEnumerable<(ChatChannel Channel, ChatMessage Message, ChatReaction Reaction, string Key)> NewAnswers(McpSession session, ChatChannel? only = null)
     {
-        var lines = new List<string>();
         var since = DateTime.Now - AnswersKeptFor;
-        foreach (var channel in Chat.Visible(ActorOf(session)))
+        foreach (var channel in Chat.Visible(ActorOf(session)).Where(c => only == null || c == only))
             foreach (var m in channel.Messages)
             {
                 if (m.Reactions == null || !string.Equals(m.By, session.AgentName, StringComparison.OrdinalIgnoreCase)) continue;
-                foreach (var r in m.Reactions.Where(r => r.At > since && session.Noticed.Add($"answer:{m.Id}:{r.By}:{r.Up}:{r.At.Ticks}")))
-                    lines.Add($"{r.By} answered {(r.Up ? "yes (👍)" : "no (👎)")} to your message “{Short(OneLine(m.Text))}” in {Display(channel, session)}" +
-                              $" (id {ShortId(m.Id)}): take it as {(r.Up ? "approval" : "a decline")}.");
+                foreach (var r in m.Reactions.Where(r => r.At > since))
+                    if ($"answer:{m.Id}:{r.By}:{r.Up}:{r.At.Ticks}" is var key && !session.Noticed.Contains(key)) yield return (channel, m, r, key);
             }
-        return lines;
     }
 
     private List<string> LocalChatLines(McpSession session)

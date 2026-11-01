@@ -39,7 +39,7 @@ public static class GuestAccess
 
     /// <summary>Only the host changes these; a guest's values are replaced by the host's.</summary>
     private static readonly string[] HostFields =
-        ["id", "name", "key", "filePrefix", "group", "status", "isInbox", "repoPath", "gitHubUrl", "issues", "gitHubRelease", "archivedFiles", "shipping", "ships", "testBuild", "createdAt", "updatedAt"];
+        ["id", "name", "key", "filePrefix", "group", "status", "isInbox", "repoPath", "gitHubUrl", "issues", "gitHubRelease", "archivedFiles", "shipping", "ships", "testBuild", "cleanups", "studio", "createdAt", "updatedAt"];
 
     /// <summary>The longest agent name a guest's agent may sign with ("Ada" in "Ada (via Alice)").</summary>
     private const int MaxAgentName = 40;

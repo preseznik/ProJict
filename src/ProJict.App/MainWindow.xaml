@@ -301,6 +301,8 @@
                                         <TextBlock Style="{StaticResource Icon}" Text="&#xE72E;" FontSize="11" Margin="0,0,6,0" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                                    ToolTip="{x:Static vm:ProjectListItemViewModel.PrivateToolTip}" Visibility="{Binding IsPrivate, Converter={StaticResource BoolToVis}}"
                                                    AutomationProperties.Name="Private" />
+                                        <TextBlock Style="{StaticResource Icon}" Text="&#xEA99;" FontSize="11" Margin="0,0,6,0" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                                                   ToolTip="{Binding CleanupToolTip}" Visibility="{Binding HasCleanup, Converter={StaticResource BoolToVis}}" />
                                         <TextBlock Style="{StaticResource Icon}" Text="&#xE724;" FontSize="11" Margin="0,0,6,0" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
                                                    ToolTip="{Binding ShipToolTip}" Visibility="{Binding HasShip, Converter={StaticResource BoolToVis}}" />
                                         <Ellipse Style="{StaticResource UnreadDot}" Margin="0,0,6,0" ToolTip="{Binding AttentionToolTip}"
@@ -316,6 +318,8 @@
                                                       ToolTip="Live chat about this project with AI agents" />
                                             <MenuItem Header="Ship…" Command="{Binding PlacementTarget.Tag.ShipProjectCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"
                                                       ToolTip="Ask an AI agent to commit, build, package, push or release it; you approve its plan first" />
+                                            <MenuItem Header="Clean up…" Command="{Binding PlacementTarget.Tag.CleanUpProjectCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"
+                                                      ToolTip="Ask an AI agent what could go from the repo folder; you decide, and it goes to the Recycle Bin" />
                                             <MenuItem Header="Hide" Command="{Binding PlacementTarget.Tag.HideProjectCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" />
                                             <MenuItem Header="Private" IsChecked="{Binding IsPrivate, Mode=OneWay}" Visibility="{Binding CanBePrivate, Converter={StaticResource BoolToVis}}"
                                                       Command="{Binding PlacementTarget.Tag.TogglePrivateCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"

@@ -20,7 +20,78 @@ public partial class OfficeView : UserControl
     {
         InitializeComponent();
         // Rebuilt (another view and back, or the theme changed), it shows the room as it was left.
-        DataContextChanged += (_, _) => ShowCamera();
+        DataContextChanged += (_, e) =>
+        {
+            if (e.OldValue is OfficeViewModel old) old.PropertyChanged -= OnOfficeChanged;
+            if (e.NewValue is OfficeViewModel office) office.PropertyChanged += OnOfficeChanged;
+            ShowCamera();
+        };
+    }
+
+    // ───────────── Focusing an agent ─────────────
+    // A click on a robot focuses it (OfficeViewModel.Focus): the view flies in on it (and its activity screen), the rest
+    // dimmed. A click on the room, a double-click or Fit lets go.
+
+    private const double FocusZoom = 2.4;
+    private static readonly TimeSpan FlightTime = TimeSpan.FromMilliseconds(380);
+    private (double Zoom, double X, double Y) _flightFrom, _flightTo;
+    private TimeSpan _flightStart;
+    private bool _flying;
+
+    private void OnOfficeChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(OfficeViewModel.Focused) || DataContext is not OfficeViewModel { Focused: { } agent } office || Camera is not { } camera) return;
+        // The robot's middle (at the cooler, with what it says over its head), or between it and its screen when that shows.
+        var (x, y) = (agent.X, agent.Activity == OfficeActivity.Talking ? agent.Y - 28 * agent.Scale - agent.LabelSize().Height / 2 : agent.Y - 30 * agent.Scale);
+        if (office.Screen.Shown) (x, y) = ((x + office.Screen.Middle.X) / 2, (y + office.Screen.Middle.Y) / 2);
+        var target = new OfficeCamera(OfficeViewModel.Width, OfficeViewModel.Height);
+        target.FocusOn(x, y, Math.Max(FocusZoom, camera.Zoom));
+        FlyTo(target.Zoom, target.OffsetX, target.OffsetY);
+    }
+
+    private void FlyTo(double zoom, double x, double y)
+    {
+        if (Camera is not { } camera) return;
+        if (!SystemParameters.ClientAreaAnimation)
+        {
+            camera.Set(zoom, x, y);
+            ShowCamera();
+            return;
+        }
+        _flightFrom = (camera.Zoom, camera.OffsetX, camera.OffsetY);
+        _flightTo = (zoom, x, y);
+        _flightStart = TimeSpan.MinValue;
+        if (_flying) return;
+        _flying = true;
+        CompositionTarget.Rendering += OnFlightFrame;
+    }
+
+    private void OnFlightFrame(object? sender, EventArgs e)
+    {
+        var now = e is RenderingEventArgs r ? r.RenderingTime : TimeSpan.Zero;
+        if (_flightStart == TimeSpan.MinValue) _flightStart = now;
+        var t = Math.Clamp((now - _flightStart) / FlightTime, 0, 1);
+        // Eased in and out.
+        var k = t < 0.5 ? 2 * t * t : 1 - Math.Pow(-2 * t + 2, 2) / 2;
+        Camera?.Set(_flightFrom.Zoom + (_flightTo.Zoom - _flightFrom.Zoom) * k, _flightFrom.X + (_flightTo.X - _flightFrom.X) * k,
+            _flightFrom.Y + (_flightTo.Y - _flightFrom.Y) * k);
+        ShowCamera();
+        if (t < 1) return;
+        _flying = false;
+        CompositionTarget.Rendering -= OnFlightFrame;
+    }
+
+    private void StopFlight()
+    {
+        if (!_flying) return;
+        _flying = false;
+        CompositionTarget.Rendering -= OnFlightFrame;
+    }
+
+    /// <summary>Lets go of the focused agent (the camera stays where it is).</summary>
+    private void Unfocus()
+    {
+        if (DataContext is OfficeViewModel { Focused: not null } office) office.Focus(null);
     }
 
     // ───────────── Zoom and pan ─────────────
@@ -33,6 +104,7 @@ public partial class OfficeView : UserControl
     private void Room_MouseWheel(object sender, MouseWheelEventArgs e)
     {
         if (Camera is not { } camera) return;
+        StopFlight();
         var factor = Math.Pow(1.2, e.Delta / 120.0);
         // Already the whole room: the wheel scrolls the page around it.
         if (factor < 1 && !camera.IsZoomed) return;
@@ -55,6 +127,9 @@ public partial class OfficeView : UserControl
             e.Handled = true;
             return;
         }
+        // A click on the room lets go of a focused agent.
+        if (e.ChangedButton == MouseButton.Left) Unfocus();
+        StopFlight();
         if (Camera is not { IsZoomed: true }) return;
         _panFrom = e.GetPosition(Room);
         _panButton = e.ChangedButton;
@@ -89,6 +164,8 @@ public partial class OfficeView : UserControl
 
     private void FitRoom()
     {
+        StopFlight();
+        Unfocus();
         Camera?.Reset();
         ShowCamera();
     }
@@ -117,6 +194,12 @@ public partial class OfficeView : UserControl
     }
 
     private void Agent_Unloaded(object sender, RoutedEventArgs e) => ((sender as Canvas)?.Tag as Robot)?.Detach();
+
+    /// <summary>A robot's Hire as… or Swap roles with: the line picked.</summary>
+    private void StudioChoice_Click(object sender, RoutedEventArgs e)
+    {
+        if (e.OriginalSource is MenuItem { DataContext: StudioChoice choice }) choice.Command.Execute(null);
+    }
 
     /// <summary>One robot on screen: where it's drawn now, and its walk to where its agent should be.</summary>
     private sealed class Robot

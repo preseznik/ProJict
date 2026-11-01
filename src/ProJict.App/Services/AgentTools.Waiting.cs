@@ -76,6 +76,10 @@ public sealed partial class AgentTools
         foreach (var id in projects ?? _main.Agents.ProjectsOf(session))
         {
             if (LocalProjects.FirstOrDefault(p => p.Id == id) is not { } project) continue;
+            foreach (var (key, line) in CleanupLines(session, project))
+                if (session.Noticed.Add(key)) lines.Add(line);
+            foreach (var (key, line) in StudioLines(session, project))
+                if (session.Noticed.Add(key)) lines.Add(line);
             if (project.OpenShip is { } ship)
             {
                 if (ship.State == ShipState.Requested && session.Noticed.Add($"ship:{ship.Id}:requested"))

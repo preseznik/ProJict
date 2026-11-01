@@ -133,6 +133,9 @@ public sealed partial class ItemRowViewModel : ObservableObject
     }
 
     [RelayCommand] private void StartChannel() => Owner.Main.StartChannel(Owner.Project, Category.Model, Item);
+    /// <summary>The board is focused on this item.</summary>
+    public bool IsFocusTarget => Owner.FocusItem?.Id == Item.Id;
+    [RelayCommand] private void Focus() => Owner.FocusOn(Item);
 
     private string ContributorToolTip(string name)
     {

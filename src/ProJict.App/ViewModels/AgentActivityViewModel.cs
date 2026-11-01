@@ -17,7 +17,7 @@ namespace ProJict.App.ViewModels;
 /// month, each period with its stats. Optionally for one project. Its Settings panel limits the cards to agents that
 /// did something lately (idle sessions stay connected until they're closed) and how far back the earlier work goes.
 /// </summary>
-public sealed partial class AgentActivityViewModel : ObservableObject
+public sealed partial class AgentActivityViewModel : ObservableObject, IStudioHiring
 {
     public const string AllProjects = "All projects";
     /// <summary>An agent counts as busy this long after its last call, or after setting its status.</summary>
@@ -206,7 +206,8 @@ public sealed partial class AgentActivityViewModel : ObservableObject
     {
         foreach (var row in AllAgents)
             if (row.Session is { } session)
-                row.Tick(OfficeActivities.Name(OfficeActivities.Of(session, now, session.Claimed.Count > 0 && CheckedOut(session, null).Count > 0)), ProjectNames(session));
+                row.Tick(OfficeActivities.Name(OfficeActivities.Of(session, now, session.Claimed.Count > 0 && CheckedOut(session, null).Count > 0, IsWatching(session))),
+                    ProjectNames(session));
     }
 
     /// <summary>Your channels the agent isn't in yet (not private conversations), to invite it to.</summary>
@@ -239,15 +240,7 @@ public sealed partial class AgentActivityViewModel : ObservableObject
     internal void ShowWorkOf(string name)
     {
         _main.ShowFeed();
-        var feed = _main.Feed;
-        feed.Period = FeedViewModel.Periods.First(p => p.Days == null);
-        if (feed.WhoChoices.Contains(name, StringComparer.OrdinalIgnoreCase))
-            feed.WhoFilter = feed.WhoChoices.First(w => string.Equals(w, name, StringComparison.OrdinalIgnoreCase));
-        else
-        {
-            feed.WhoFilter = FeedViewModel.Agents;
-            feed.SearchText = name;
-        }
+        _main.Feed.ShowWorkOf(name);
     }
 
     /// <summary>Its card comes into view, also when it's idle (hidden) or works outside the project shown.</summary>
@@ -471,6 +464,7 @@ public sealed partial class AgentActivityViewModel : ObservableObject
         _historyEvents = [.. ActivityFeed.Build(_state.Projects.Where(p => p.Remote == null && (project == null || p == project)), _state.Settings, _state.UserName)
             .Where(e => e.Agent)];
         OnPropertyChanged(nameof(Subtitle));
+        foreach (var name in new[] { nameof(CanHaveStudio), nameof(ShowsStudio), nameof(ShowsOffice), nameof(OfficeTitle) }) OnPropertyChanged(name);
         BuildHistory();
     }
 
@@ -499,8 +493,101 @@ public sealed partial class AgentActivityViewModel : ObservableObject
     {
         if (!View.ShowOffice) return;
         var project = FilterProject;
-        Office.Update(Live, DateTime.Now, s => s.Claimed.Count > 0 && CheckedOut(s, project).Count > 0, LastSaid);
+        Office.Update(Live, DateTime.Now, s => s.Claimed.Count > 0 && CheckedOut(s, project).Count > 0, IsWatching, LastSaid, Studio);
     }
+
+    // ───────────── The studio ─────────────
+
+    /// <summary>One of your projects is shown: its room can be the office or its game studio.</summary>
+    public bool CanHaveStudio => FilterProject is { Remote: null, IsInbox: false };
+
+    /// <summary>The project's game studio shows instead of the office; the first time it's set up with the usual roles.</summary>
+    public bool ShowsStudio
+    {
+        get => FilterProject?.Studio?.Shown == true;
+        set
+        {
+            if (FilterProject is not { Remote: null, IsInbox: false } project || value == ShowsStudio) return;
+            project.Studio ??= StudioFlow.NewGame();
+            project.Studio.Shown = value;
+            _main.GetProjectViewModel(project).RefreshStudio();
+            _state.MarkDirty(project);
+            if (value)
+                _state.StatusText = $"{project.Name}'s game studio: agents working here wait in the lobby until you hire them (right-click a robot › Hire as…). " +
+                                    "The roles and what they expect are in the project's Details.";
+            RefreshStudio();
+        }
+    }
+
+    public bool ShowsOffice
+    {
+        get => !ShowsStudio;
+        set { if (value) ShowsStudio = false; }
+    }
+
+    public string OfficeTitle => ShowsStudio ? $"{FilterProject!.Name} studio" : "Office";
+
+    private StudioContext? Studio => FilterProject is { Remote: null, Studio: { Shown: true } studio } project
+        ? new StudioContext(project.Name, studio, this, MilestonesOf(project))
+        : null;
+
+    /// <summary>
+    /// The studio's milestone board: all of the project's items done, and its categories with items as milestones, the
+    /// unfinished first (in the board's order), five at most.
+    /// </summary>
+    private MilestoneBoard MilestonesOf(Project project)
+    {
+        var categories = project.Categories.Select(c => (Category: c, Total: c.Walk().Count(), Done: c.Walk().Count(l => l.Item.IsDone)))
+            .Where(x => x.Total > 0).ToList();
+        var rows = categories.Where(x => x.Done < x.Total).Concat(categories.Where(x => x.Done == x.Total)).Take(5)
+            .Select(x => new MilestoneRow(x.Category.Name, x.Done, x.Total, new RelayCommand(() => _main.OpenProject(project).FocusOn(x.Category)))).ToList();
+        return new MilestoneBoard(rows, categories.Sum(x => x.Done), categories.Sum(x => x.Total));
+    }
+
+    void IStudioHiring.Hire(string agent, StudioRole role) => ChangeStudio(studio => StudioFlow.Hire(studio, agent, role, _state.UserName) is { } replaced
+        ? $"Hired {agent} as {role.Name} instead of {replaced}, who's back in the lobby. {agent} is told what the role expects."
+        : $"Hired {agent} as {role.Name}. It's told what the role expects.");
+
+    void IStudioHiring.Fire(string agent) => ChangeStudio(studio =>
+    {
+        var role = StudioFlow.RoleOf(studio, agent)?.Name;
+        StudioFlow.Fire(studio, agent, _state.UserName);
+        return $"{agent} is no longer the {role}: back in the lobby.";
+    });
+
+    void IStudioHiring.Swap(string agent, string other) => ChangeStudio(studio =>
+    {
+        StudioFlow.Swap(studio, agent, other, _state.UserName);
+        return $"{agent} and {other} swapped roles; both are told.";
+    });
+
+    private void ChangeStudio(Func<Studio, string> change)
+    {
+        if (FilterProject is not { Studio: { } studio } project) return;
+        try
+        {
+            _state.StatusText = change(studio);
+        }
+        catch (InvalidOperationException ex)
+        {
+            _state.StatusText = ex.Message;
+            return;
+        }
+        _state.MarkDirty(project);
+        _main.GetProjectViewModel(project).RefreshStudio();
+        RefreshStudio();
+    }
+
+    private void RefreshStudio()
+    {
+        foreach (var name in new[] { nameof(CanHaveStudio), nameof(ShowsStudio), nameof(ShowsOffice), nameof(OfficeTitle) }) OnPropertyChanged(name);
+        foreach (var card in Live) card.Refresh();
+        UpdateOffice();
+    }
+
+    /// <summary>The agent's role in the shown project's studio, for its card.</summary>
+    internal string? StudioRoleOf(McpSession session) =>
+        FilterProject is { Studio: { Shown: true } studio } ? StudioFlow.RoleOf(studio, session.AgentName)?.Name : null;
 
     /// <summary>The agent's latest message in Chat since it connected (for its speech bubble at the cooler).</summary>
     private string? LastSaid(McpSession session)
@@ -679,13 +766,17 @@ public sealed partial class AgentCardViewModel : ObservableObject
     public bool IsBusy { get; private set; }
     public string StatusText { get; private set; } = "";
     public string StatusAge { get; private set; } = "";
+    /// <summary>It hears Chat right away: a chat watcher runs for it, or it's waiting for messages.</summary>
+    public bool HearsChat { get; private set; }
+    public string HearsChatToolTip { get; private set; } = "";
 
     public void Refresh()
     {
         var names = _owner.ProjectNames(Session);
         var since = Session.ConnectedAt.ToString(Session.ConnectedAt.Date == DateTime.Today ? "HH:mm" : "d MMM HH:mm", CultureInfo.CurrentCulture);
         // "Claude Code · login fix · In GRID2VR · since 22:41": what it runs in (when it has a name of its own) and what it works on.
-        var about = new[] { Session.Name != null ? Session.Client : null, Session.Label, _owner.IsWatching(Session) ? "watching Chat" : null }.Where(s => s != null);
+        var about = new[] { _owner.StudioRoleOf(Session), Session.Name != null ? Session.Client : null, Session.Label, _owner.IsWatching(Session) ? "watching Chat" : null }
+            .Where(s => s != null);
         Where = string.Join(" · ", about.Append((names.Count == 0 ? "Connected" : "In " + string.Join(", ", names)) + " · since " + since));
         var actions = Session.Recent.Where(a => _only == null || a.ProjectId == null || a.ProjectId == _only.Id).ToList();
         Recent = actions.AsEnumerable().Reverse().Take(6).Select((a, i) => new AgentActionRow(a, i == 0, _owner)).ToList();
@@ -707,6 +798,14 @@ public sealed partial class AgentCardViewModel : ObservableObject
         IsBusy = now - (Session.LastActive ?? Session.ConnectedAt) < AgentActivityViewModel.BusyFor ||
                  (statusFresh && now - Session.StatusAt!.Value < AgentActivityViewModel.BusyFor);
         StatusAge = IsBusy ? Age(at, now) : $"idle · {Age(at, now)}";
+        var watching = _owner.IsWatching(Session);
+        HearsChat = watching || Session.Listening;
+        HearsChatToolTip = watching
+            ? "Listening: a chat watcher runs for it, so it hears your messages in Chat and answers right away, even while it's idle. " +
+              "Agents without one only see them with their next step."
+            : "Listening: it's waiting for messages in Chat, so it answers as soon as you write.";
+        OnPropertyChanged(nameof(HearsChat));
+        OnPropertyChanged(nameof(HearsChatToolTip));
         OnPropertyChanged(nameof(StatusText));
         OnPropertyChanged(nameof(StatusAge));
         OnPropertyChanged(nameof(IsBusy));

@@ -367,6 +367,8 @@ public partial class ProjectView : UserControl
             foreach (var chip in row.Channels) menu.Items.Add(Item($"Open {chip.Text}", chip.OpenCommand));
             if (row.Owner.CanStartChannels) menu.Items.Add(Item("Start a chat channel…", row.StartChannelCommand));
         }
+        if (!row.IsFocusTarget) menu.Items.Add(Item("Focus", row.FocusCommand));
+        if (row.Owner.IsFocused) menu.Items.Add(Item("Leave focus", row.Owner.LeaveFocusCommand));
         if (row.Contributors.Count > 0)
         {
             var workedBy = new MenuItem { Header = "Show what was worked on by" };

@@ -38,6 +38,9 @@ public sealed partial class ProjectListItemViewModel(Project project, MainViewMo
     /// <summary>A ship request in progress shows as a glyph next to the count (and the red dot while its plan waits for you).</summary>
     public bool HasShip => Project.OpenShip != null;
     public string? ShipToolTip => Project.OpenShip is { } s ? $"Ship request ({ShipFlow.Describe(s.Steps)}): {ShipFlow.StateName(s.State)}" : null;
+    /// <summary>A clean-up of its folder is open: a glyph next to the count (no other agent work there meanwhile).</summary>
+    public bool HasCleanup => Project.OpenCleanup != null;
+    public string? CleanupToolTip => Project.OpenCleanup is { } c ? $"Clean-up of the repo folder: {CleanupFlow.StateName(c.State)}" : null;
 
     /// <summary>Private: a lock next to the name, and right-click › Private ticked.</summary>
     public bool IsPrivate => Project.Private;
@@ -859,6 +862,14 @@ public sealed partial class MainViewModel : ObservableObject
     private void TogglePrivate(ProjectListItemViewModel? item)
     {
         if (item != null) SetPrivate(item.Project, !item.Project.Private);
+    }
+
+    /// <summary>Right-click › Clean up…: asks the agents working in the project for a clean-up plan of its folder.</summary>
+    [RelayCommand]
+    private void CleanUpProject(ProjectListItemViewModel? item)
+    {
+        if (item == null || NotYours(item.Project) || item.Project.IsInbox) return;
+        OpenProject(item.Project).StartCleanupCommand.Execute(null);
     }
 
     /// <summary>Right-click › Ship…: opens the project with a new ship request to fill in.</summary>

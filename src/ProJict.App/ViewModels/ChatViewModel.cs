@@ -511,6 +511,7 @@ public sealed partial class ChatViewModel : ObservableObject
         if (Channel?.Link is not { } link || _state.Projects.FirstOrDefault(p => p.Id == link.ProjectId) is not { } project) return;
         var board = _main.OpenProject(project);
         if (link.ItemId is { } itemId && project.Find(itemId) is { } loc) board.Reveal(loc.Item);
+        else if (link.CategoryId is { } categoryId && project.Categories.FirstOrDefault(c => c.Id == categoryId) is { } category) board.FocusOn(category);
     }
 
     // ───────────── Inviting ─────────────

@@ -4,9 +4,11 @@
              xmlns:vm="clr-namespace:ProJict.App.ViewModels">
     <!--
         The office in one-point perspective (800 × 520 room units, scaled to fit): ceiling, back wall with a window whose
-        sky follows the time of day, side walls with four desks each, a wooden floor, a plant and a water cooler. Desks
+        sky follows the time of day, side walls with four desks each, a wooden floor, a plant and a water cooler. As a
+        project's game studio, the desks are its roles' stations (with their things and a name plate), a banner with the
+        project's name hangs on the back wall, and agents not hired yet wait by the bench and the lobby door. Desks
         show their agent's work on the monitor; agents are robots drawn around their seat (sitting) or hips (standing),
-        mirrored on the right wall, posed and animated by what they do. Desks and agents share one layer, back to front.
+        mirrored on the right wall, posed and animated by what they do. Desks, the cooler and agents share one layer, back to front.
     -->
     <UserControl.Resources>
         <SolidColorBrush x:Key="Wood" Color="#C49A6C" />
@@ -36,6 +38,90 @@
                 <Rectangle Canvas.Left="58" Canvas.Top="-56" Width="5" Height="56" Fill="{StaticResource WoodDark}" />
                 <Rectangle Canvas.Left="6" Canvas.Top="-54" Width="54" Height="22" Fill="{StaticResource WoodDark}" Opacity="0.55" />
                 <Rectangle Canvas.Left="0" Canvas.Top="-62" Width="68" Height="8" RadiusX="2" RadiusY="2" Fill="{StaticResource Wood}" />
+                <!-- In the studio: its role's name plate, on the front of the desk -->
+                <Border x:Name="Plate" Canvas.Left="4" Canvas.Top="-52" Width="58" Height="14" CornerRadius="3" Background="#E61F2937"
+                        Visibility="{Binding RoleName, Converter={StaticResource EmptyToVis}}" RenderTransformOrigin="0.5,0.5">
+                    <Border.RenderTransform>
+                        <ScaleTransform ScaleX="{Binding TextFlip}" />
+                    </Border.RenderTransform>
+                    <Viewbox Stretch="Uniform" StretchDirection="DownOnly" Margin="4,1">
+                        <TextBlock Text="{Binding RoleName}" FontSize="10" FontWeight="SemiBold" Foreground="White" />
+                    </Viewbox>
+                </Border>
+                <!-- In the studio: the station's things, by role: a board on the wall above the monitor, something on the desk -->
+                <Canvas x:Name="LeadThings" Visibility="Collapsed">
+                    <Rectangle Canvas.Left="12" Canvas.Top="-148" Width="32" Height="30" RadiusX="3" RadiusY="3" Fill="#FEF3C7" Stroke="#D97706" StrokeThickness="2" />
+                    <Path Fill="#F59E0B" Data="M 28,-143 L 31,-136 L 38.5,-135.5 L 33,-130.5 L 34.5,-123 L 28,-127 L 21.5,-123 L 23,-130.5 L 17.5,-135.5 L 25,-136 Z" />
+                    <Rectangle Canvas.Left="58" Canvas.Top="-80" Width="2.5" Height="18" Fill="{StaticResource Metal}" />
+                    <Path Fill="#FBBF24" Data="M 51,-86 L 67,-86 L 64,-79 L 54,-79 Z" />
+                </Canvas>
+                <Canvas x:Name="DesignThings" Visibility="Collapsed">
+                    <Rectangle Canvas.Left="2" Canvas.Top="-152" Width="52" Height="38" RadiusX="2" RadiusY="2" Fill="White" Stroke="#9CA3AF" StrokeThickness="2" />
+                    <Rectangle Canvas.Left="7" Canvas.Top="-146" Width="13" Height="9" Fill="Transparent" Stroke="#3B82F6" StrokeThickness="1.5" />
+                    <Path Stroke="#3B82F6" StrokeThickness="1.5" Data="M 20,-141.5 L 31,-141.5 M 28,-144 L 31,-141.5 L 28,-139" />
+                    <Ellipse Canvas.Left="33" Canvas.Top="-147" Width="15" Height="11" Stroke="#EF4444" StrokeThickness="1.5" />
+                    <Path Stroke="#10B981" StrokeThickness="1.5" Data="M 7,-124 L 17,-121 L 26,-126 L 38,-120 L 48,-123" />
+                    <Rectangle Canvas.Left="54" Canvas.Top="-72" Width="12" Height="10" Fill="#FDE68A" />
+                    <Rectangle Canvas.Left="57" Canvas.Top="-69" Width="12" Height="7" Fill="#BFDBFE" />
+                </Canvas>
+                <Canvas x:Name="LevelThings" Visibility="Collapsed">
+                    <Rectangle Canvas.Left="2" Canvas.Top="-152" Width="52" Height="38" RadiusX="2" RadiusY="2" Fill="#BBF7D0" Stroke="#8E6A45" StrokeThickness="2" />
+                    <Path Stroke="#8E6A45" StrokeThickness="2.5" StrokeLineJoin="Round" Data="M 8,-120 C 12,-142 22,-120 28,-136 C 32,-148 46,-144 48,-124" />
+                    <Ellipse Canvas.Left="5" Canvas.Top="-123" Width="5" Height="5" Fill="#EF4444" />
+                    <Ellipse Canvas.Left="45" Canvas.Top="-127" Width="5" Height="5" Fill="#2563EB" />
+                    <Ellipse Canvas.Left="16" Canvas.Top="-147" Width="9" Height="7" Fill="#60A5FA" Opacity="0.8" />
+                    <Path Fill="#86EFAC" Stroke="#15803D" StrokeThickness="1" Data="M 52,-62 L 58,-74 L 63,-68 L 68,-62 Z" />
+                </Canvas>
+                <Canvas x:Name="CodeThings" Visibility="Collapsed">
+                    <Rectangle Canvas.Left="2" Canvas.Top="-150" Width="52" Height="34" RadiusX="2" RadiusY="2" Fill="#1F2937" />
+                    <TextBlock Canvas.Left="8" Canvas.Top="-147" Text="{}{ }" FontSize="18" FontWeight="Bold" Foreground="#4ADE80" />
+                    <Rectangle Canvas.Left="32" Canvas.Top="-140" Width="16" Height="2" Fill="#60A5FA" />
+                    <Rectangle Canvas.Left="32" Canvas.Top="-134" Width="12" Height="2" Fill="#F472B6" />
+                    <Rectangle Canvas.Left="32" Canvas.Top="-128" Width="14" Height="2" Fill="#FBBF24" />
+                    <Rectangle Canvas.Left="56" Canvas.Top="-74" Width="3" Height="12" Fill="{StaticResource Metal}" />
+                    <Rectangle Canvas.Left="44" Canvas.Top="-100" Width="26" Height="27" RadiusX="2" RadiusY="2" Fill="#111827" />
+                    <Rectangle Canvas.Left="52" Canvas.Top="-94" Width="14" Height="2" Fill="#4ADE80" />
+                    <Rectangle Canvas.Left="54" Canvas.Top="-88" Width="12" Height="2" Fill="#60A5FA" />
+                    <Rectangle Canvas.Left="52" Canvas.Top="-82" Width="10" Height="2" Fill="#F472B6" />
+                </Canvas>
+                <Canvas x:Name="ArtThings" Visibility="Collapsed">
+                    <Rectangle Canvas.Left="4" Canvas.Top="-152" Width="48" Height="38" Fill="#8E6A45" />
+                    <Rectangle Canvas.Left="7" Canvas.Top="-149" Width="42" Height="32" Fill="#93C5FD" />
+                    <Ellipse Canvas.Left="35" Canvas.Top="-146" Width="8" Height="8" Fill="#FDE047" />
+                    <Path Fill="#22C55E" Data="M 7,-117 L 7,-127 C 17,-137 25,-125 33,-130 C 40,-134 46,-129 49,-126 L 49,-117 Z" />
+                    <Ellipse Canvas.Left="50" Canvas.Top="-68" Width="18" Height="7" Fill="#F5E6C8" Stroke="#8E6A45" StrokeThickness="1" />
+                    <Ellipse Canvas.Left="53" Canvas.Top="-66" Width="3" Height="3" Fill="#EF4444" />
+                    <Ellipse Canvas.Left="58" Canvas.Top="-67" Width="3" Height="3" Fill="#3B82F6" />
+                    <Ellipse Canvas.Left="63" Canvas.Top="-66" Width="3" Height="3" Fill="#22C55E" />
+                </Canvas>
+                <Canvas x:Name="SoundThings" Visibility="Collapsed">
+                    <Rectangle Canvas.Left="2" Canvas.Top="-150" Width="52" Height="32" RadiusX="2" RadiusY="2" Fill="#1F2937" />
+                    <Path Stroke="#A78BFA" StrokeThickness="2" Data="M 6,-134 L 11,-142 L 16,-126 L 21,-146 L 26,-122 L 31,-140 L 36,-130 L 41,-138 L 46,-132 L 50,-134" />
+                    <Rectangle Canvas.Left="54" Canvas.Top="-88" Width="13" Height="26" RadiusX="2" RadiusY="2" Fill="#1F2937" />
+                    <Ellipse Canvas.Left="56.5" Canvas.Top="-85" Width="8" Height="8" Fill="#4B5563" />
+                    <Ellipse Canvas.Left="58" Canvas.Top="-74" Width="5" Height="5" Fill="#4B5563" />
+                </Canvas>
+                <Canvas x:Name="QAThings" Visibility="Collapsed">
+                    <Rectangle Canvas.Left="2" Canvas.Top="-152" Width="52" Height="38" RadiusX="2" RadiusY="2" Fill="#D6B98C" Stroke="#8E6A45" StrokeThickness="2" />
+                    <Rectangle Canvas.Left="7" Canvas.Top="-147" Width="12" Height="9" Fill="#FCA5A5" />
+                    <Rectangle Canvas.Left="22" Canvas.Top="-145" Width="12" Height="9" Fill="#FDE68A" />
+                    <Rectangle Canvas.Left="37" Canvas.Top="-148" Width="12" Height="9" Fill="#FCA5A5" />
+                    <Rectangle Canvas.Left="11" Canvas.Top="-132" Width="12" Height="9" Fill="#BBF7D0" />
+                    <Rectangle Canvas.Left="28" Canvas.Top="-131" Width="12" Height="9" Fill="#FCA5A5" />
+                    <Path Fill="#374151" Data="M 50,-67 C 50,-73 68,-73 68,-67 C 70,-62 65,-60 63,-63 L 55,-63 C 53,-60 48,-62 50,-67 Z" />
+                    <Ellipse Canvas.Left="53" Canvas.Top="-69" Width="3" Height="3" Fill="#9CA3AF" />
+                    <Ellipse Canvas.Left="62" Canvas.Top="-69" Width="3" Height="3" Fill="#F87171" />
+                </Canvas>
+                <Canvas x:Name="ProductionThings" Visibility="Collapsed">
+                    <Rectangle Canvas.Left="2" Canvas.Top="-152" Width="52" Height="38" RadiusX="2" RadiusY="2" Fill="White" Stroke="#9CA3AF" StrokeThickness="2" />
+                    <Rectangle Canvas.Left="6" Canvas.Top="-146" Width="22" Height="5" Fill="#60A5FA" />
+                    <Rectangle Canvas.Left="16" Canvas.Top="-138" Width="20" Height="5" Fill="#A78BFA" />
+                    <Rectangle Canvas.Left="26" Canvas.Top="-130" Width="22" Height="5" Fill="#34D399" />
+                    <Rectangle Canvas.Left="10" Canvas.Top="-122" Width="16" Height="5" Fill="#FBBF24" />
+                    <Rectangle Canvas.Left="34" Canvas.Top="-150" Width="1.5" Height="34" Fill="#EF4444" />
+                    <Rectangle Canvas.Left="53" Canvas.Top="-76" Width="15" Height="14" Fill="White" Stroke="#9CA3AF" StrokeThickness="1" />
+                    <Rectangle Canvas.Left="53" Canvas.Top="-76" Width="15" Height="4" Fill="#EF4444" />
+                </Canvas>
                 <!-- Monitor -->
                 <Rectangle Canvas.Left="24" Canvas.Top="-72" Width="6" Height="11" Fill="{StaticResource Metal}" />
                 <Rectangle Canvas.Left="16" Canvas.Top="-64" Width="22" Height="3" RadiusX="1" RadiusY="1" Fill="{StaticResource Metal}" />
@@ -73,6 +159,12 @@
                         <Rectangle Height="2" Margin="4,2,4,0" Fill="#9CA3AF" />
                         <Rectangle Height="2" Margin="4,2,10,0" Fill="#9CA3AF" />
                     </StackPanel>
+                    <!-- Listening: a chat window -->
+                    <Canvas x:Name="ChatWindow" Visibility="Collapsed" Background="#1F2937">
+                        <Rectangle Canvas.Left="3" Canvas.Top="4" Width="18" Height="5" RadiusX="2.5" RadiusY="2.5" Fill="#E5E7EB" />
+                        <Rectangle Canvas.Left="16" Canvas.Top="12" Width="19" Height="5" RadiusX="2.5" RadiusY="2.5" Fill="#34D399" />
+                        <Rectangle Canvas.Left="3" Canvas.Top="20" Width="12" Height="5" RadiusX="2.5" RadiusY="2.5" Fill="#E5E7EB" />
+                    </Canvas>
                     <!-- Away at the cooler: a screen saver -->
                     <Ellipse x:Name="Saver" Width="5" Height="5" Fill="#60A5FA" Opacity="0.7" HorizontalAlignment="Left" VerticalAlignment="Top" Visibility="Collapsed">
                         <Ellipse.RenderTransform>
@@ -98,8 +190,19 @@
                 <DataTrigger Binding="{Binding Screen}" Value="Managing">
                     <Setter TargetName="List" Property="Visibility" Value="Visible" />
                 </DataTrigger>
+                <DataTrigger Binding="{Binding Station}" Value="Lead"><Setter TargetName="LeadThings" Property="Visibility" Value="Visible" /></DataTrigger>
+                <DataTrigger Binding="{Binding Station}" Value="Design"><Setter TargetName="DesignThings" Property="Visibility" Value="Visible" /></DataTrigger>
+                <DataTrigger Binding="{Binding Station}" Value="Level"><Setter TargetName="LevelThings" Property="Visibility" Value="Visible" /></DataTrigger>
+                <DataTrigger Binding="{Binding Station}" Value="Code"><Setter TargetName="CodeThings" Property="Visibility" Value="Visible" /></DataTrigger>
+                <DataTrigger Binding="{Binding Station}" Value="Art"><Setter TargetName="ArtThings" Property="Visibility" Value="Visible" /></DataTrigger>
+                <DataTrigger Binding="{Binding Station}" Value="Sound"><Setter TargetName="SoundThings" Property="Visibility" Value="Visible" /></DataTrigger>
+                <DataTrigger Binding="{Binding Station}" Value="QA"><Setter TargetName="QAThings" Property="Visibility" Value="Visible" /></DataTrigger>
+                <DataTrigger Binding="{Binding Station}" Value="Production"><Setter TargetName="ProductionThings" Property="Visibility" Value="Visible" /></DataTrigger>
                 <DataTrigger Binding="{Binding Screen}" Value="Reading">
                     <Setter TargetName="Page" Property="Visibility" Value="Visible" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Screen}" Value="Listening">
+                    <Setter TargetName="ChatWindow" Property="Visibility" Value="Visible" />
                 </DataTrigger>
                 <DataTrigger Binding="{Binding Screen}" Value="Away">
                     <Setter TargetName="Saver" Property="Visibility" Value="Visible" />
@@ -119,6 +222,61 @@
             </DataTemplate.Triggers>
         </DataTemplate>
 
+        <!-- The water cooler at the front, drawn by depth: its base is at (X, Y). -->
+        <DataTemplate DataType="{x:Type vm:OfficeCoolerViewModel}">
+            <Canvas IsHitTestVisible="False">
+                <Canvas.RenderTransform>
+                    <TransformGroup>
+                        <ScaleTransform ScaleX="{Binding Scale}" ScaleY="{Binding Scale}" />
+                        <TranslateTransform X="{Binding X}" Y="{Binding Y}" />
+                    </TransformGroup>
+                </Canvas.RenderTransform>
+                <Ellipse Canvas.Left="-27" Canvas.Top="-5" Width="54" Height="10" Fill="Black" Opacity="0.14" />
+                <!-- Cabinet, taps and drip tray -->
+                <Rectangle Canvas.Left="-20" Canvas.Top="-64" Width="40" Height="64" RadiusX="3" RadiusY="3" Fill="#E5E7EB" Stroke="#9CA3AF" StrokeThickness="1" />
+                <Rectangle Canvas.Left="-20" Canvas.Top="-64" Width="11" Height="64" RadiusX="3" RadiusY="3" Fill="White" Opacity="0.5" />
+                <Rectangle Canvas.Left="-13" Canvas.Top="-54" Width="26" Height="20" RadiusX="2" RadiusY="2" Fill="#CBD5E1" />
+                <Rectangle Canvas.Left="-9" Canvas.Top="-51" Width="6" Height="6" RadiusX="1" RadiusY="1" Fill="#60A5FA" />
+                <Rectangle Canvas.Left="3" Canvas.Top="-51" Width="6" Height="6" RadiusX="1" RadiusY="1" Fill="#F87171" />
+                <Rectangle Canvas.Left="-11" Canvas.Top="-37" Width="22" Height="3" Fill="#94A3B8" />
+                <!-- Cups on the side -->
+                <Rectangle Canvas.Left="20" Canvas.Top="-58" Width="6" Height="24" RadiusX="1" RadiusY="1" Fill="#F8FAFC" Stroke="#9CA3AF" StrokeThickness="0.8" />
+                <!-- The bottle -->
+                <Rectangle Canvas.Left="-7" Canvas.Top="-70" Width="14" Height="7" Fill="#BAE6FD" />
+                <Rectangle Canvas.Left="-17" Canvas.Top="-114" Width="34" Height="46" RadiusX="13" RadiusY="13" Fill="#7DD3FC" Opacity="0.9" />
+                <Rectangle Canvas.Left="-17" Canvas.Top="-96" Width="34" Height="2.5" Fill="#38BDF8" Opacity="0.6" />
+                <Rectangle Canvas.Left="-11" Canvas.Top="-108" Width="5" Height="32" RadiusX="2.5" RadiusY="2.5" Fill="White" Opacity="0.55" />
+            </Canvas>
+        </DataTemplate>
+
+        <!-- Behind a focused agent: the rest of the room dimmed. Clicks go through, to another robot or the room. -->
+        <DataTemplate DataType="{x:Type vm:OfficeDimViewModel}">
+            <Rectangle Width="800" Height="520" Fill="#0B0F19" Opacity="0.55" IsHitTestVisible="False"
+                       Visibility="{Binding Shown, Converter={StaticResource BoolToVis}}" />
+        </DataTemplate>
+
+        <!-- The focused agent's activity on a big screen above its desk. -->
+        <DataTemplate DataType="{x:Type vm:OfficeScreenViewModel}">
+            <Canvas IsHitTestVisible="False" Visibility="{Binding Shown, Converter={StaticResource BoolToVis}}">
+                <Border Width="170" Height="112" CornerRadius="5" Background="#111827" BorderBrush="#4B5563" BorderThickness="2" Padding="7,5">
+                    <Border.RenderTransform>
+                        <TranslateTransform X="{Binding X}" Y="{Binding Y}" />
+                    </Border.RenderTransform>
+                    <StackPanel>
+                        <TextBlock Text="{Binding Title}" FontSize="9" FontWeight="Bold" Foreground="#E5E7EB" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding Status}" FontSize="6.5" Foreground="#4ADE80" TextTrimming="CharacterEllipsis" Margin="0,1,0,3" />
+                        <ItemsControl ItemsSource="{Binding Lines}" Focusable="False">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding}" FontSize="6" FontFamily="{StaticResource MonoFont}" Foreground="#93C5FD" TextTrimming="CharacterEllipsis" Margin="0,0,0,1.5" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+            </Canvas>
+        </DataTemplate>
+
         <!--
             An agent: a robot drawn facing the left wall around (0,0), its seat when sitting or its hips when standing
             (legs below). The code-behind places, scales and mirrors it (Mover, BodyScale) and walks it from place to
@@ -136,6 +294,12 @@
                     <ContextMenu>
                         <MenuItem Header="Show its card" Command="{Binding ShowCardCommand}" />
                         <MenuItem Header="Private message" Command="{Binding Card.PrivateMessageCommand}" />
+                        <Separator Visibility="{Binding InStudio, Converter={StaticResource BoolToVis}}" />
+                        <MenuItem Header="Hire as" ItemsSource="{Binding HireChoices}" DisplayMemberPath="Text" Click="StudioChoice_Click"
+                                  Visibility="{Binding InStudio, Converter={StaticResource BoolToVis}}" />
+                        <MenuItem Header="Swap roles with" ItemsSource="{Binding SwapChoices}" DisplayMemberPath="Text" Click="StudioChoice_Click"
+                                  Visibility="{Binding HasSwapChoices, Converter={StaticResource BoolToVis}}" />
+                        <MenuItem Header="Fire (back to the lobby)" Command="{Binding FireCommand}" Visibility="{Binding CanFire, Converter={StaticResource BoolToVis}}" />
                     </ContextMenu>
                 </Canvas.ContextMenu>
                 <Canvas>
@@ -205,6 +369,14 @@
                                 <ScaleTransform x:Name="Talk" CenterY="0.8" />
                             </Rectangle.RenderTransform>
                         </Rectangle>
+                        <!-- Headphones: it hears Chat right away -->
+                        <Canvas Visibility="{Binding HearsChat, Converter={StaticResource BoolToVis}}">
+                            <Path Data="M -20,-48 C -20,-75 20,-75 20,-48" Stroke="#374151" StrokeThickness="3" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                            <Rectangle Canvas.Left="-24" Canvas.Top="-57" Width="8" Height="15" RadiusX="3" RadiusY="3" Fill="#374151" />
+                            <Rectangle Canvas.Left="16" Canvas.Top="-57" Width="8" Height="15" RadiusX="3" RadiusY="3" Fill="#374151" />
+                            <Ellipse Canvas.Left="-22.5" Canvas.Top="-51.5" Width="4" Height="4" Fill="#34D399" />
+                            <Ellipse Canvas.Left="18.5" Canvas.Top="-51.5" Width="4" Height="4" Fill="#34D399" />
+                        </Canvas>
                     </Canvas>
                     <!-- Sleeping -->
                     <TextBlock x:Name="Zzz" Canvas.Left="6" Canvas.Top="-90" Text="z z Z" FontSize="12" FontWeight="Bold" Foreground="#60A5FA" Visibility="Collapsed"
@@ -216,12 +388,16 @@
                             </TransformGroup>
                         </TextBlock.RenderTransform>
                     </TextBlock>
-                    <!-- Its name and what it says, at full size above its head -->
+                    <!-- Its name and what it says, at full size above its head (at the cooler lifted clear of the others', with a line down) -->
                     <Canvas Canvas.Top="-80">
                         <Canvas.RenderTransform>
                             <ScaleTransform x:Name="LabelScale" />
                         </Canvas.RenderTransform>
+                        <Rectangle Canvas.Left="-0.75" Canvas.Top="{Binding LeaderTop}" Width="1.5" Height="{Binding Lift}" Fill="#94A3B8" />
                         <Grid Canvas.Left="-100" Canvas.Top="-90" Width="200" Height="90">
+                            <Grid.RenderTransform>
+                                <TranslateTransform Y="{Binding LeaderTop}" />
+                            </Grid.RenderTransform>
                             <StackPanel VerticalAlignment="Bottom">
                                 <Border x:Name="Bubble" HorizontalAlignment="Center" MaxWidth="150" Padding="8,3,8,4" CornerRadius="9" Background="White" BorderBrush="#CBD5E1"
                                         BorderThickness="1" Margin="0,0,0,3" Visibility="Collapsed">
@@ -289,6 +465,25 @@
                     </DataTrigger.EnterActions>
                     <DataTrigger.ExitActions>
                         <StopStoryboard BeginStoryboardName="Chatter" />
+                    </DataTrigger.ExitActions>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Activity}" Value="Listening">
+                    <Setter TargetName="Arm" Property="Visibility" Value="Collapsed" />
+                    <Setter TargetName="Antenna" Property="Fill" Value="#34D399" />
+                    <Setter TargetName="Head" Property="RenderTransform">
+                        <Setter.Value>
+                            <RotateTransform Angle="5" CenterY="-36" />
+                        </Setter.Value>
+                    </Setter>
+                    <DataTrigger.EnterActions>
+                        <BeginStoryboard x:Name="Attend">
+                            <Storyboard>
+                                <DoubleAnimation Storyboard.TargetName="Antenna" Storyboard.TargetProperty="Opacity" From="1" To="0.3" Duration="0:0:1.6" AutoReverse="True" RepeatBehavior="Forever" />
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </DataTrigger.EnterActions>
+                    <DataTrigger.ExitActions>
+                        <StopStoryboard BeginStoryboardName="Attend" />
                     </DataTrigger.ExitActions>
                 </DataTrigger>
                 <DataTrigger Binding="{Binding Activity}" Value="Resting">
@@ -381,8 +576,8 @@
                     <!-- Floor boards running to the back -->
                     <Path Stroke="#8E6A45" StrokeThickness="1" Opacity="0.25"
                           Data="M 400,300 L 400,520 M 310,300 L 200,520 M 490,300 L 600,520 M 265,300 L 100,520 M 535,300 L 700,520" />
-                    <!-- A rug in the middle -->
-                    <Ellipse Canvas.Left="300" Canvas.Top="380" Width="200" Height="70" Fill="{DynamicResource AccentFillColorDefaultBrush}" Opacity="0.13" />
+                    <!-- A rug under the water cooler, where they chat -->
+                    <Ellipse Canvas.Left="270" Canvas.Top="420" Width="260" Height="80" Fill="{DynamicResource AccentFillColorDefaultBrush}" Opacity="0.13" />
                     <!-- Edges -->
                     <Path Stroke="{DynamicResource DividerStrokeColorDefaultBrush}" StrokeThickness="1.5"
                           Data="M 0,0 L 220,70 L 580,70 L 800,0 M 220,70 L 220,300 L 580,300 L 580,70 M 220,300 L 0,520 M 580,300 L 800,520" />
@@ -416,6 +611,8 @@
                             <RotateTransform CenterX="275" CenterY="132" Angle="{Binding MinuteAngle}" />
                         </Line.RenderTransform>
                     </Line>
+                    <!-- A board of sticky notes (the studio's milestone board hangs there instead) -->
+                    <Canvas Visibility="{Binding IsStudio, Converter={StaticResource InvBoolToVis}}">
                     <Rectangle Canvas.Left="494" Canvas.Top="116" Width="72" Height="54" Fill="White" Stroke="#9CA3AF" StrokeThickness="1.5" />
                     <Path Stroke="#CBD5E1" StrokeThickness="1" Data="M 518,120 L 518,166 M 542,120 L 542,166" />
                     <Rectangle Canvas.Left="499" Canvas.Top="121" Width="14" Height="10" Fill="#FDE68A" />
@@ -427,14 +624,81 @@
                     <Rectangle Canvas.Left="547" Canvas.Top="134" Width="14" Height="10" Fill="#BBF7D0" />
                     <Rectangle Canvas.Left="547" Canvas.Top="147" Width="14" Height="10" Fill="#BBF7D0" />
                     <Rectangle Canvas.Left="490" Canvas.Top="170" Width="80" Height="3" Fill="#9CA3AF" />
-                    <!-- A plant in the left corner -->
-                    <Rectangle Canvas.Left="244" Canvas.Top="276" Width="22" Height="24" Fill="#B45309" Opacity="0.85" />
-                    <Ellipse Canvas.Left="236" Canvas.Top="236" Width="22" Height="40" Fill="#16A34A" Opacity="0.9" />
-                    <Ellipse Canvas.Left="252" Canvas.Top="232" Width="20" Height="44" Fill="#22C55E" Opacity="0.9" />
-                    <!-- The water cooler, under the window -->
-                    <Rectangle Canvas.Left="388" Canvas.Top="258" Width="24" Height="42" RadiusX="2" RadiusY="2" Fill="#E5E7EB" Stroke="#9CA3AF" StrokeThickness="1" />
-                    <Rectangle Canvas.Left="392" Canvas.Top="224" Width="16" Height="34" RadiusX="7" RadiusY="7" Fill="#7DD3FC" Opacity="0.85" />
-                    <Rectangle Canvas.Left="396" Canvas.Top="274" Width="8" Height="3" Fill="#60A5FA" />
+                    </Canvas>
+                    <!-- The studio's milestone board: how much of the project is done, and of each category; a click shows it on the board -->
+                    <Border x:Name="MilestoneBoard" Canvas.Left="484" Canvas.Top="102" Width="92" CornerRadius="2" Background="White" BorderBrush="#9CA3AF" BorderThickness="1.5"
+                            Padding="5,4,5,3" Visibility="{Binding IsStudio, Converter={StaticResource BoolToVis}}">
+                        <StackPanel>
+                            <TextBlock Text="MILESTONES" FontSize="7" FontWeight="Bold" Foreground="#6B7280" />
+                            <StackPanel Orientation="Horizontal" Margin="0,1,0,2">
+                                <TextBlock Text="{Binding OverallText}" FontSize="17" FontWeight="Bold" Foreground="#7C3AED" />
+                                <TextBlock Text="done" FontSize="7" Foreground="#6B7280" VerticalAlignment="Bottom" Margin="3,0,0,3" />
+                            </StackPanel>
+                            <Grid Height="3.5" Margin="0,0,0,5">
+                                <Rectangle Fill="#E5E7EB" RadiusX="1.5" RadiusY="1.5" />
+                                <Rectangle HorizontalAlignment="Left" Width="{Binding OverallFill}" Fill="#7C3AED" RadiusX="1.5" RadiusY="1.5" />
+                            </Grid>
+                            <ItemsControl ItemsSource="{Binding Milestones}" Focusable="False">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:MilestoneRow}">
+                                        <Button Command="{Binding Open}" ToolTip="{Binding ToolTip}" Cursor="Hand" Focusable="False" Margin="0,0,0,3" HorizontalAlignment="Stretch">
+                                            <Button.Template>
+                                                <ControlTemplate TargetType="Button">
+                                                    <Border Background="Transparent">
+                                                        <ContentPresenter HorizontalAlignment="Stretch" />
+                                                    </Border>
+                                                </ControlTemplate>
+                                            </Button.Template>
+                                            <StackPanel>
+                                                <DockPanel>
+                                                    <TextBlock x:Name="Percent" DockPanel.Dock="Right" Text="{Binding Text}" FontSize="6.5" FontWeight="SemiBold" Foreground="#374151" Margin="3,0,0,0" />
+                                                    <TextBlock Text="{Binding Name}" FontSize="6.5" Foreground="#1F2937" TextTrimming="CharacterEllipsis" />
+                                                </DockPanel>
+                                                <Grid Height="4" Margin="0,1,0,0">
+                                                    <Rectangle Fill="#E5E7EB" RadiusX="2" RadiusY="2" />
+                                                    <Rectangle x:Name="Fill" HorizontalAlignment="Left" Width="{Binding FillWidth}" Fill="#60A5FA" RadiusX="2" RadiusY="2" />
+                                                </Grid>
+                                            </StackPanel>
+                                        </Button>
+                                        <DataTemplate.Triggers>
+                                            <DataTrigger Binding="{Binding IsComplete}" Value="True">
+                                                <Setter TargetName="Fill" Property="Fill" Value="#22C55E" />
+                                                <Setter TargetName="Percent" Property="Foreground" Value="#16A34A" />
+                                            </DataTrigger>
+                                        </DataTemplate.Triggers>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+                    <!-- A plant in the left corner (the studio's lobby door is there) -->
+                    <Canvas Visibility="{Binding IsStudio, Converter={StaticResource InvBoolToVis}}">
+                        <Rectangle Canvas.Left="244" Canvas.Top="276" Width="22" Height="24" Fill="#B45309" Opacity="0.85" />
+                        <Ellipse Canvas.Left="236" Canvas.Top="236" Width="22" Height="40" Fill="#16A34A" Opacity="0.9" />
+                        <Ellipse Canvas.Left="252" Canvas.Top="232" Width="20" Height="44" Fill="#22C55E" Opacity="0.9" />
+                    </Canvas>
+                    <!-- The studio: its banner, the lobby door and the bench where agents wait to be hired -->
+                    <Canvas Visibility="{Binding IsStudio, Converter={StaticResource BoolToVis}}">
+                        <Line X1="318" Y1="70" X2="322" Y2="78" Stroke="#6B7280" StrokeThickness="1" />
+                        <Line X1="482" Y1="70" X2="478" Y2="78" Stroke="#6B7280" StrokeThickness="1" />
+                        <Border Canvas.Left="306" Canvas.Top="76" Width="188" Height="22" CornerRadius="3" Background="#7C3AED">
+                            <Viewbox Stretch="Uniform" StretchDirection="DownOnly" Margin="8,2">
+                                <TextBlock Text="{Binding BannerText}" FontSize="13" FontWeight="Bold" Foreground="White" />
+                            </Viewbox>
+                        </Border>
+                        <Rectangle Canvas.Left="230" Canvas.Top="212" Width="42" Height="88" Fill="#8E6A45" />
+                        <Rectangle Canvas.Left="234" Canvas.Top="216" Width="34" Height="84" Fill="#B88A5A" />
+                        <Rectangle Canvas.Left="238" Canvas.Top="222" Width="26" Height="30" Fill="#A0784C" Opacity="0.6" />
+                        <Rectangle Canvas.Left="238" Canvas.Top="258" Width="26" Height="34" Fill="#A0784C" Opacity="0.6" />
+                        <Ellipse Canvas.Left="260" Canvas.Top="256" Width="5" Height="5" Fill="#FCD34D" />
+                        <Border Canvas.Left="232" Canvas.Top="198" Width="38" Height="12" CornerRadius="2" Background="#1F2937">
+                            <TextBlock Text="LOBBY" FontSize="7.5" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <Rectangle Canvas.Left="334" Canvas.Top="282" Width="140" Height="7" RadiusX="2" RadiusY="2" Fill="#8E6A45" />
+                        <Rectangle Canvas.Left="334" Canvas.Top="270" Width="140" Height="5" RadiusX="2" RadiusY="2" Fill="#A0784C" />
+                        <Rectangle Canvas.Left="340" Canvas.Top="289" Width="4" Height="11" Fill="{StaticResource Metal}" />
+                        <Rectangle Canvas.Left="464" Canvas.Top="289" Width="4" Height="11" Fill="{StaticResource Metal}" />
+                    </Canvas>
                     <!-- Desks and agents, back to front -->
                     <ItemsControl ItemsSource="{Binding Scene}" Focusable="False">
                         <ItemsControl.ItemsPanel>
@@ -448,7 +712,7 @@
                             </Style>
                         </ItemsControl.ItemContainerStyle>
                     </ItemsControl>
-                    <TextBlock Canvas.Left="0" Canvas.Top="440" Width="800" TextAlignment="Center" Text="Nobody's in yet: agents take a desk when they connect."
+                    <TextBlock Canvas.Left="0" Canvas.Top="478" Width="800" TextAlignment="Center" Text="Nobody's in yet: agents take a desk when they connect."
                                Style="{StaticResource MutedText}" FontSize="16" Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVis}}" />
                 </Canvas>
             </Canvas>

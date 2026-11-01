@@ -57,6 +57,7 @@ public sealed partial class AgentTools
             ["topic"] = channel.Topic,
             ["access"] = channel.Access == ChannelAccess.Open ? "open" : "invite_only",
             ["member"] = member != null,
+            ["join"] = member != null ? null : JoinProblem(host, channel, me) is { } problem ? problem : "join_channel",
             ["members"] = channel.Members.Count,
             ["unread"] = unread.Count > 0 ? unread.Count : null,
             ["mentionsYou"] = unread.Any(m => ChatRoom.Mentions(channel, m, me)) ? true : null,
@@ -64,6 +65,16 @@ public sealed partial class AgentTools
             ["startedBy"] = channel.CreatedBy,
         };
     }
+
+    /// <summary>Why the agent can't simply join that ProJict's channel (it decides; this says it before asking), or null.</summary>
+    private static string? JoinProblem(HostConnection host, ChatChannel channel, string me) =>
+        channel.Access == ChannelAccess.InviteOnly
+            ? $"{SharedName(host, channel)} is invite only: ask {host.HostName} or one of its moderators to invite you (as {me})."
+            : !host.IsSelf && channel.Link == null
+                ? $"{SharedName(host, channel)} isn't about a project, so in {host.HostName}'s ProJict only those invited take part in it: ask {host.HostName} to invite " +
+                  $"you (as {me}). If that ProJict is your user's own on another computer, they can link this one as them there (Sharing › This is me…), and its " +
+                  "agents then join like theirs."
+                : null;
 
     private IEnumerable<JsonNode> SharedChannelsJson(McpSession session, Core.Model.Project? only) =>
         ReachableHosts(session, ChatHosts)
@@ -99,13 +110,15 @@ public sealed partial class AgentTools
             throw new McpToolException($"{host.HostName} doesn't let guests' AI agents take part (or runs an older ProJict), so you can't join {SharedName(host, channel)}.", ToolProblem.Forbidden);
         if (!GuestAccess.CanComment(host.Role))
             throw new McpToolException($"You take part in {host.HostName}'s ProJict through {host.MyName}, who is a viewer there, so you can't join its channels.", ToolProblem.Forbidden);
+        if (!leave && ChatRoom.Member(channel, ViaIn(session, host)) == null && JoinProblem(host, channel, ViaIn(session, host)) is { } problem)
+            throw new McpToolException(problem, ToolProblem.Forbidden);
         _main.Guest.ChatOp(host, leave ? "leave" : "join", ("channel", channel.Id.ToString()), ("as", session.AgentName));
         return Json(new JsonObject
         {
             ["channel"] = SharedName(host, channel),
             [leave ? "left" : "joined"] = true,
             ["as"] = ViaIn(session, host),
-            ["note"] = $"Sent to {host.HostName}'s ProJict; read_channel shows its messages once you're in.",
+            ["note"] = $"Sent to {host.HostName}'s ProJict; read_channel shows its messages once you're in. If it says no, you hear why in waitingForYou.",
         });
     }
 
@@ -185,6 +198,19 @@ public sealed partial class AgentTools
         });
         return "Chat in another ProJict: " + string.Join("; ", parts) +
                ". Read them with read_channel (the channel as named here), and reply with post_message to the same channel.";
+    }
+
+    /// <summary>What other ProJicts refused that the agent sent them (joining, posting), each once.</summary>
+    private List<string> SharedRefusalLines(McpSession session)
+    {
+        var lines = new List<string>();
+        foreach (var host in ChatHosts)
+            foreach (var refusal in host.AgentRefusals.Where(r => string.Equals(r.Agent, session.AgentName, StringComparison.OrdinalIgnoreCase)).ToList())
+            {
+                host.AgentRefusals.Remove(refusal);
+                lines.Add($"{host.HostName}'s ProJict said no to what you sent it: {refusal.Why}");
+            }
+        return lines;
     }
 
     /// <summary>For a chat watcher: a line per message for the agent in other ProJicts' channels.</summary>

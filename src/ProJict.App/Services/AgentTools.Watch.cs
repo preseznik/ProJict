@@ -78,6 +78,7 @@ public sealed partial class AgentTools
                         foreach (var group in waiting.GroupBy(w => w.Channel)) Delivered(identity, group.Key, group.Select(w => w.Message).ToList());
                         found.AddRange(waiting.Select(w => WatchLine(w.Channel, w.Message, identity)));
                         found.AddRange(SharedWatchLines(identity));
+                        found.AddRange(SharedRefusalLines(identity).Select(l => "[ProJict] " + l));
                         found.AddRange(WatchAnswerLines(identity));
                     }
                     found.AddRange(WatchWorkLines(identity));
