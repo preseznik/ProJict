@@ -126,6 +126,11 @@ public sealed partial class MainViewModel : ObservableObject
         };
         Guest.ChatChanged += connection => Chat.OnRemoteChanged(connection);
         Wiki = new WikiViewModel(state, this);
+        Diagrams = new Services.DiagramService(state.DiagramCacheRoot, state.WebViewDataRoot, System.Windows.Threading.Dispatcher.CurrentDispatcher);
+        Diagrams.Drawn += () => Wiki.Page?.RedrawDiagrams();
+        // One ProJict per process; a test making a second one draws with the newest.
+        Views.WikiRenderer.Diagrams.RemoveAll(d => d is Views.MermaidDiagram);
+        Views.WikiRenderer.Diagrams.Add(new Views.MermaidDiagram(Diagrams));
         // Another page opened from the wiki's own tree or links is a new place too.
         Wiki.PropertyChanged += (_, e) =>
         {
@@ -248,6 +253,8 @@ public sealed partial class MainViewModel : ObservableObject
     public ChatViewModel Chat { get; }
     /// <summary>The workspace's wiki.</summary>
     public WikiViewModel Wiki { get; }
+    /// <summary>Draws the wiki's Mermaid diagrams (in a WebView2 nobody sees).</summary>
+    public Services.DiagramService Diagrams { get; }
     /// <summary>The sidebar's Wiki count: pages agents changed (or with clashing edits) that you haven't checked.</summary>
     public string WikiReviewCount => Wiki.ReviewCount is > 0 and var n ? n.ToString(System.Globalization.CultureInfo.CurrentCulture) : "";
     public bool HasWikiReview => Wiki.ReviewCount > 0;

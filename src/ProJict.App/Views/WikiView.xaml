@@ -246,7 +246,7 @@
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
                     </WrapPanel>
-                    <FlowDocumentScrollViewer x:Name="Reader" Document="{Binding Document}" VerticalScrollBarVisibility="Auto" IsToolBarVisible="False"
+                    <FlowDocumentScrollViewer x:Name="Reader" VerticalScrollBarVisibility="Auto" IsToolBarVisible="False"
                                               AutomationProperties.Name="Page" MouseDoubleClick="Reader_MouseDoubleClick" />
                 </DockPanel>
 
@@ -266,7 +266,7 @@
                     <Border Grid.Column="2" BorderThickness="1" CornerRadius="4" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}" Padding="8,6,0,0">
                         <DockPanel>
                             <TextBlock DockPanel.Dock="Top" Text="Preview" Style="{StaticResource MutedText}" FontSize="11" Margin="4,0,0,4" />
-                            <FlowDocumentScrollViewer x:Name="PreviewViewer" Document="{Binding Preview}" VerticalScrollBarVisibility="Auto" IsToolBarVisible="False"
+                            <FlowDocumentScrollViewer x:Name="PreviewViewer" VerticalScrollBarVisibility="Auto" IsToolBarVisible="False"
                                                       AutomationProperties.Name="Preview" />
                         </DockPanel>
                     </Border>

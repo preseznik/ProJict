@@ -602,6 +602,21 @@ public sealed partial class WikiPageViewModel : ObservableObject
 
     // ───────────── Updates ─────────────
 
+    /// <summary>A diagram's picture is ready (or didn't draw): the page and the preview show it.</summary>
+    public void RedrawDiagrams()
+    {
+        if (Model.Text.Contains("```mermaid", StringComparison.OrdinalIgnoreCase))
+        {
+            _document = null;
+            OnPropertyChanged(nameof(Document));
+        }
+        if (IsEditing && EditText.Contains("```mermaid", StringComparison.OrdinalIgnoreCase))
+        {
+            _preview = null;
+            OnPropertyChanged(nameof(Preview));
+        }
+    }
+
     /// <summary>The page changed (here or by someone else): what shows it follows; the editor keeps what you're writing.</summary>
     public void Refresh()
     {

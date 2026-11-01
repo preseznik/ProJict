@@ -183,6 +183,14 @@ public sealed partial class AppState : ObservableObject
         ? Path.Combine(Path.GetDirectoryName(AppSettings.DefaultPath)!, "remote")
         : Path.Combine(Store.DataRoot, ".remote-cache");
 
+    /// <summary>Where pictures of wiki diagrams are kept once drawn, and WebView2's own data (it draws them).</summary>
+    public string DiagramCacheRoot => _persistAppSettings
+        ? Path.Combine(Path.GetDirectoryName(AppSettings.DefaultPath)!, "diagrams")
+        : Path.Combine(Store.DataRoot, ".diagram-cache");
+    public string WebViewDataRoot => _persistAppSettings
+        ? Path.Combine(Path.GetDirectoryName(AppSettings.DefaultPath)!, "WebView2")
+        : Path.Combine(Store.DataRoot, ".webview2");
+
     /// <summary>The local file of an attachment: in the data folder, or for another ProJict's project in the cache (null until fetched).</summary>
     public string AttachmentPath(Project? project, Attachment attachment)
     {

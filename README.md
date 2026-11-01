@@ -177,7 +177,7 @@ One wiki for the whole workspace, for what's worth keeping: how things work, dec
 - **Editing at the same time:** if someone saves a page while you're editing it, the editor says so, and your save merges with theirs paragraph by paragraph. If you both changed the same paragraph, both versions are kept: the page shows the earlier save, and a red bar offers **Compare**, **Use theirs**, **Keep the page as it is** or **Merge by hand**.
 - **AI agents** use `list_wiki`, `read_wiki` and `write_wiki` (a whole page, or one section by its heading). They pass the version they read, so their changes merge with yours the same way. A page an agent changed gets a yellow bar: **What changed** shows the diff since you last checked, **Looks good** clears it. Saving the page yourself counts as having checked it. An API token limited to some projects reaches only the pages about those projects.
 - **Sharing** (see [Sharing](#sharing)): a page about a project goes to the people you share that project with, never a private project's. A page without a project stays on your computer unless you tick **Share with everyone I share with**. In their ProJict your pages show under "<your name>'s wiki". Editors change them, as versions signed with their names and merged like yours; others read them. Their agents read what their person can, and write only when that person is an editor and you let guests' agents work: signed "Ada (via Alice)", waiting for your review. Linking, sharing, checking and deleting pages stay yours.
-- **Diagrams** (Mermaid and draw.io) come in a later version. Until then a `mermaid` or `drawio` code block shows as its code.
+- **Diagrams:** write one as text in a ` ```mermaid ` block and the page shows it drawn: flowcharts, sequence, class, state and ER diagrams, Gantt charts and the rest of [Mermaid](https://mermaid.js.org)'s kinds, in ProJict's light or dark look and in the live preview as you type. Click one to open its picture. A diagram that doesn't draw says why above its text, and agents hear it from `read_wiki`. They're drawn by Microsoft Edge WebView2, which comes with Windows 11 (on Windows 10, install it from Microsoft), and kept as pictures, so pages open at once after the first time. A `drawio` block shows as its code for now.
 
 ## More
 
@@ -200,7 +200,7 @@ One wiki for the whole workspace, for what's worth keeping: how things work, dec
 
 ## Your data
 
-Projects are saved as JSON files in the folder you chose, chat channels in its `chat` folder and wiki pages in its `wiki` folder (each with all its versions), with automatic backups in its `backups` folder. Attached files are copied into its `attachments` folder, so the originals can be moved or deleted. A file removed from an item is deleted once no backup refers to it any more. Uninstalling ProJict leaves your data where it is.
+Projects are saved as JSON files in the folder you chose, chat channels in its `chat` folder and wiki pages in its `wiki` folder (each with all its versions), with automatic backups in its `backups` folder. Pictures of wiki diagrams are kept in `%LocalAppData%\ProJict\diagrams`, and drawn again when missing. Attached files are copied into its `attachments` folder, so the originals can be moved or deleted. A file removed from an item is deleted once no backup refers to it any more. Uninstalling ProJict leaves your data where it is.
 
 ## Building from source
 
@@ -214,4 +214,4 @@ The installer is written to `artifacts\`.
 
 ## License
 
-[BSD Zero Clause License](LICENSE) (0BSD): use, copy, change and share ProJict for any purpose, with no conditions.
+[BSD Zero Clause License](LICENSE) (0BSD): use, copy, change and share ProJict for any purpose, with no conditions. It comes with [Mermaid](https://github.com/mermaid-js/mermaid) for drawing diagrams, under its own MIT license (`Assets/Diagrams/mermaid-LICENSE.txt`).

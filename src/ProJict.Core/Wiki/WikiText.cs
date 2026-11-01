@@ -115,6 +115,46 @@ public static partial class WikiText
         }
     }
 
+    /// <summary>The diagrams in a text (```mermaid and ```drawio blocks, also in lists and quotes), in order.</summary>
+    public static List<MdCode> Diagrams(string text)
+    {
+        var found = new List<MdCode>();
+        void Walk(IEnumerable<MdBlock> blocks)
+        {
+            foreach (var block in blocks)
+                switch (block)
+                {
+                    case MdCode { IsDiagram: true } code: found.Add(code); break;
+                    case MdQuote q: Walk(q.Blocks); break;
+                    case MdList l: Walk(l.Items.SelectMany(i => i.Blocks)); break;
+                }
+        }
+        Walk(Markdown.Parse(text));
+        return found;
+    }
+
+    /// <summary>
+    /// mermaid's error, said in a line: "Parse error on line 3: expecting 'AMP', 'COLON', 'PIPE', 'TESTSTR', … got
+    /// 'TAGEND'" without the excerpt and its ----^ pointer, and with the long list of what it expected cut short.
+    /// </summary>
+    public static string DiagramError(string? error)
+    {
+        var parts = new List<string>();
+        foreach (var raw in (error ?? "").Replace("\r\n", "\n").Split('\n'))
+        {
+            var line = raw.Trim();
+            if (line.Length == 0 || line.StartsWith("...", StringComparison.Ordinal) || line.All(c => c is '-' or '^')) continue;
+            if (line.StartsWith("Expecting ", StringComparison.Ordinal) && line.LastIndexOf(", got ", StringComparison.Ordinal) is > 0 and var got)
+            {
+                var expected = line["Expecting ".Length..got].Split(", ");
+                line = "expecting " + string.Join(", ", expected.Take(4)) + (expected.Length > 4 ? ", …" : "") + line[got..];
+            }
+            parts.Add(line);
+        }
+        var text = parts.Count == 0 ? "It doesn't draw." : string.Join(" ", parts);
+        return text.Length > 300 ? text[..300] + "…" : text;
+    }
+
     /// <summary>The pages whose [[links]] lead to <paramref name="page"/>.</summary>
     public static List<WikiPage> LinksTo(WikiBook book, WikiPage page) =>
         book.Pages.Where(p => p != page && Links(p.Text).Any(l => book.Resolve(l, p) == page)).OrderBy(p => p.Path, StringComparer.OrdinalIgnoreCase).ToList();

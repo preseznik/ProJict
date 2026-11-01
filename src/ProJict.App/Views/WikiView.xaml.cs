@@ -17,7 +17,38 @@ public partial class WikiView : UserControl
     public WikiView()
     {
         InitializeComponent();
-        DataContextChanged += (_, _) => Attach(DataContext as WikiViewModel);
+        // Only while shown: a view that's gone (another view, or the theme changed) lets go of the page.
+        Loaded += (_, _) => Attach(DataContext as WikiViewModel);
+        Unloaded += (_, _) => Attach(null);
+        DataContextChanged += (_, _) =>
+        {
+            if (IsLoaded) Attach(DataContext as WikiViewModel);
+        };
+    }
+
+    /// <summary>
+    /// Shows a drawn page in a viewer, taking it from one that had it before (a page belongs to one viewer at a time).
+    /// The same page drawn again (a diagram ready, the preview after typing) stays where you were scrolled to.
+    /// </summary>
+    private void Show(FlowDocumentScrollViewer viewer, System.Windows.Documents.FlowDocument? document, bool keepScroll)
+    {
+        if (ReferenceEquals(viewer.Document, document)) return;
+        var scroller = keepScroll ? FindScroller(viewer) : null;
+        var offset = scroller?.VerticalOffset ?? 0;
+        if (document?.Parent is FlowDocumentScrollViewer other && other != viewer) other.Document = null;
+        viewer.Document = document;
+        if (scroller != null && offset > 0) Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () => scroller.ScrollToVerticalOffset(offset));
+    }
+
+    private static ScrollViewer? FindScroller(DependencyObject parent)
+    {
+        for (var i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child = System.Windows.Media.VisualTreeHelper.GetChild(parent, i);
+            if (child is ScrollViewer scroller) return scroller;
+            if (FindScroller(child) is { } found) return found;
+        }
+        return null;
     }
 
     private void Attach(WikiViewModel? wiki)
@@ -41,6 +72,8 @@ public partial class WikiView : UserControl
             _page.InsertRequested -= Insert;
         }
         _page = page;
+        Show(Reader, page?.Document, keepScroll: false);
+        Show(PreviewViewer, page is { IsEditing: true } ? page.Preview : null, keepScroll: false);
         if (_page == null) return;
         _page.PropertyChanged += OnPageChanged;
         _page.InsertRequested += Insert;
@@ -49,7 +82,20 @@ public partial class WikiView : UserControl
 
     private void OnPageChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(WikiPageViewModel.IsEditing) && _page is { IsEditing: true }) FocusEditor(selectTitle: false);
+        if (_page == null) return;
+        switch (e.PropertyName)
+        {
+            case nameof(WikiPageViewModel.Document):
+                Show(Reader, _page.Document, keepScroll: true);
+                break;
+            case nameof(WikiPageViewModel.Preview) when _page.IsEditing:
+                Show(PreviewViewer, _page.Preview, keepScroll: true);
+                break;
+            case nameof(WikiPageViewModel.IsEditing) when _page.IsEditing:
+                Show(PreviewViewer, _page.Preview, keepScroll: false);
+                FocusEditor(selectTitle: false);
+                break;
+        }
     }
 
     /// <summary>Into the editor once it shows; a new page's title first, so it gets a name.</summary>

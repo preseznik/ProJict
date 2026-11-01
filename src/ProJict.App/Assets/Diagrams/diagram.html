@@ -1,0 +1,73 @@
+<!doctype html>
+<!-- ProJict draws wiki diagrams here, in a WebView2 nobody sees: mermaid.js turns a diagram's text into SVG, a canvas turns
+     that into a PNG, and the PNG goes back to ProJict, which shows it in the page. Diagrams are drawn strictly: no
+     clicks, scripts or HTML from a page get through. -->
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src https://projict-diagrams.local 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:">
+    <style>
+        body { margin: 0; background: transparent; }
+        #out { position: absolute; left: 0; top: 0; }
+    </style>
+    <script src="mermaid.min.js"></script>
+</head>
+<body>
+<div id="out"></div>
+<script>
+    function setup(dark) {
+        mermaid.initialize({
+            startOnLoad: false,
+            securityLevel: 'strict',
+            suppressErrorRendering: true,
+            theme: dark ? 'dark' : 'default',
+            fontFamily: '"Segoe UI", sans-serif',
+            // SVG text rather than HTML labels, so the picture can be drawn on a canvas.
+            htmlLabels: false,
+            flowchart: { htmlLabels: false },
+            class: { htmlLabels: false },
+            state: { htmlLabels: false },
+        });
+    }
+
+    // Draws one diagram; answers { id, png, width, height } or { id, error }.
+    async function draw(id, source, dark) {
+        const box = document.getElementById('out');
+        try {
+            setup(dark);
+            await mermaid.parse(source);
+            const { svg } = await mermaid.render('d' + id, source);
+            box.innerHTML = svg;
+            const element = box.querySelector('svg');
+            const size = element.getBoundingClientRect();
+            const box2 = element.viewBox && element.viewBox.baseVal;
+            const width = Math.ceil(box2 && box2.width ? box2.width : size.width);
+            const height = Math.ceil(box2 && box2.height ? box2.height : size.height);
+            element.setAttribute('width', width);
+            element.setAttribute('height', height);
+            element.style.maxWidth = 'none';
+            const text = new XMLSerializer().serializeToString(element);
+            const image = new Image();
+            image.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(text)));
+            await image.decode();
+            // Twice the size, so it stays sharp on high-DPI screens and when zoomed.
+            const scale = 2;
+            const canvas = document.createElement('canvas');
+            canvas.width = width * scale;
+            canvas.height = height * scale;
+            const context = canvas.getContext('2d');
+            context.scale(scale, scale);
+            context.drawImage(image, 0, 0, width, height);
+            box.innerHTML = '';
+            chrome.webview.postMessage({ id: id, png: canvas.toDataURL('image/png').split(',')[1], width: width, height: height });
+        } catch (e) {
+            box.innerHTML = '';
+            const message = (e && (e.message || e.str)) || String(e);
+            chrome.webview.postMessage({ id: id, error: message });
+        }
+    }
+
+    chrome.webview.postMessage({ ready: typeof mermaid !== 'undefined' });
+</script>
+</body>
+</html>

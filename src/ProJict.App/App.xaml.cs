@@ -229,6 +229,7 @@ public partial class App : Application
         try
         {
             MainVm?.Wiki.Page?.Leave();
+            MainVm?.Diagrams.Close();
             State?.SaveNow();
         }
         catch (Exception) { }

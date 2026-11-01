@@ -40,7 +40,8 @@ public sealed partial class AgentTools
             "added at the end). Links: [[Page name]] for pages, # and an item's 8-character id for items (#4e84570c), #name for chat channels; files you attach show " +
             "with ![](file name) or link with [name](file name). Pass the version you read: if someone changed the page since, your change is merged with theirs " +
             "paragraph by paragraph, and a real clash keeps both versions for the user to pick. Every save is a version signed with your name, and pages you " +
-            "change wait for the user's review. Write for people: headings, short paragraphs and lists. Diagrams aren't drawn yet.",
+            "change wait for the user's review. Write for people: headings, short paragraphs and lists. Diagrams: a ```mermaid block (flowchart, sequence, class, " +
+            "state, ER, gantt, …) is drawn in the page; read_wiki then says if one doesn't draw, and why.",
             Schema(("page", "string", "The page's path, e.g. GRID2VR/Architecture/Renderer (folders are made as needed); or an existing page's title or id.", true),
                 ("text", "string", "Markdown: the whole page, or the section's text.", true),
                 ("section", "string", "Write only the section under this heading.", false),
@@ -169,6 +170,7 @@ public sealed partial class AgentTools
                 : host != null ? _main.Guest.WikiFilePath(host, a) : _state.Store.AttachmentPath(a),
         }).ToArray());
         if (host != null) foreach (var a in page.Attachments ?? []) _main.Guest.FetchWikiFile(host, a);
+        if (DiagramsJson(page.Text) is { } diagrams) json["diagrams"] = diagrams;
         if (page.HasClashes) json["note"] = "Two edits of this page clashed; the user picks which to keep. The text is the page as it is now.";
         return Json(json);
     }
@@ -201,6 +203,7 @@ public sealed partial class AgentTools
             // A section is written into the version the agent read, so the merge sees just that change.
             var start = version > 0 && page.VersionAt(version) is { } read ? read.Text : page.Text;
             var result = _state.Wiki.Save(page, Compose(start), version, new WikiAuthor(session.AgentName, true));
+            DrawDiagrams(page.Text);
             if (files.Count > 0) _state.Wiki.Attach(page, files);
             _state.StatusText = $"{session.AgentName} {(result.Outcome == WikiSaveOutcome.Clashed ? "clashed with an edit of" : "changed")} the wiki page “{page.Title}”.";
             return Json(new JsonObject
@@ -227,6 +230,7 @@ public sealed partial class AgentTools
         try
         {
             var page = _state.Wiki.Create(path, text, new WikiAuthor(session.AgentName, true), about?.Id);
+            DrawDiagrams(page.Text);
             if (files.Count > 0) _state.Wiki.Attach(page, files);
             _state.StatusText = $"{session.AgentName} started the wiki page “{page.Title}”.";
             return Json(new JsonObject
@@ -239,6 +243,35 @@ public sealed partial class AgentTools
             });
         }
         catch (WikiException ex) { throw new McpToolException(ex.Message); }
+    }
+
+    /// <summary>Starts drawing a page's Mermaid diagrams right away, so read_wiki can say soon if one doesn't draw.</summary>
+    private void DrawDiagrams(string text)
+    {
+        foreach (var diagram in WikiText.Diagrams(text).Where(d => d.Language!.Equals("mermaid", StringComparison.OrdinalIgnoreCase)))
+            _main.Diagrams.Request(diagram.Language!, diagram.Code, ProJict.App.Views.MermaidDiagram.IsDark());
+    }
+
+    /// <summary>The page's diagrams and how they're doing: drawn, being drawn, or why not; null when it has none.</summary>
+    private JsonArray? DiagramsJson(string text)
+    {
+        var diagrams = WikiText.Diagrams(text);
+        if (diagrams.Count == 0) return null;
+        DrawDiagrams(text);
+        var dark = ProJict.App.Views.MermaidDiagram.IsDark();
+        return new JsonArray(diagrams.Select((d, i) =>
+        {
+            var key = DiagramService.Key(d.Language!, d.Code, dark);
+            var drawable = d.Language!.Equals("mermaid", StringComparison.OrdinalIgnoreCase);
+            var error = drawable ? _main.Diagrams.ErrorFor(key) : null;
+            return (JsonNode)new JsonObject
+            {
+                ["diagram"] = i + 1,
+                ["language"] = d.Language,
+                ["state"] = !drawable ? "not drawn yet (only mermaid diagrams are, for now)" : error != null ? "doesn't draw" : _main.Diagrams.PictureFor(key) != null ? "drawn" : "being drawn",
+                ["error"] = error,
+            };
+        }).ToArray());
     }
 
     /// <summary>A page of another ProJict: written there through this ProJict's user, when that ProJict and their role allow it.</summary>

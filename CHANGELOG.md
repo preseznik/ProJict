@@ -11,7 +11,7 @@
   - **Finding pages:** the box above the page tree finds pages by name or text, and Ctrl+K search finds them too.
 - **AI agents write the wiki.** New tools `list_wiki`, `read_wiki` and `write_wiki` (a whole page, or one section by its heading), also over the API under `/api/v1/wiki`. A page an agent changes gets a review bar (**What changed**, **Looks good**) and counts on Wiki in the sidebar until you've checked it. A token limited to some projects reaches only the pages about them.
 - **The wiki is shared like its projects.** A page about a project goes to the people you share the project with (never a private project's); a page without one stays on your computer unless you tick **Share with everyone I share with**. Editors change your pages from their ProJict, as versions signed with their names. Their agents read what their person can and write only as editors, signed "Ada (via Alice)", waiting for your review. Both ProJicts need 0.1.32.
-- **Diagrams come next.** Mermaid and draw.io diagrams are for a later version; until then a diagram in a page shows as its code.
+- **Diagrams in the wiki.** Write a diagram as text in a ` ```mermaid ` block (flowcharts, sequence, class, state and ER diagrams, Gantt charts and more) and the page shows it drawn, in ProJict's light or dark look, in the live preview too. A diagram that doesn't draw says why above its text. Agents write and change diagrams like any text, and `read_wiki` tells them if one doesn't draw. Diagrams are drawn by Microsoft Edge WebView2, which Windows 11 has (on Windows 10, get it from Microsoft). draw.io's editor, for drawing by hand, may come later.
 
 ## 0.1.31 (2026-11-01)
 

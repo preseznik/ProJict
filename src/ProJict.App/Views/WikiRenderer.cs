@@ -28,8 +28,8 @@ public sealed class WikiRenderContext
 
 /// <summary>
 /// Draws a page's Markdown as a FlowDocument: headings, paragraphs, lists and tasks, quotes, code, tables, rules,
-/// pictures, and links to pages, items, channels, files and the web. Diagrams go through <see cref="Diagrams"/>; with
-/// none there (until a later version adds Mermaid and draw.io), a diagram shows as its code.
+/// pictures, and links to pages, items, channels, files and the web. Diagrams go through <see cref="Diagrams"/>
+/// (Mermaid, see <see cref="MermaidDiagram"/>); one nothing draws (draw.io, for now) shows as its code.
 /// </summary>
 public static class WikiRenderer
 {
@@ -38,9 +38,11 @@ public static class WikiRenderer
     {
         bool Draws(string language);
         Block? Draw(string language, string source, WikiRenderContext context);
+        /// <summary>Why it shows as code instead (it doesn't draw); null when it isn't known.</summary>
+        string? Problem(string language, string source);
     }
 
-    /// <summary>The diagram renderers; empty for now.</summary>
+    /// <summary>The diagram renderers (MainViewModel adds Mermaid's).</summary>
     public static List<IDiagram> Diagrams { get; } = [];
 
     private static readonly FontFamily TextFont = new("Segoe UI Variable Text, Segoe UI");
@@ -95,9 +97,11 @@ public static class WikiRenderer
                 return paragraph;
             }
             case MdCode code:
-                if (code.IsDiagram && Diagrams.FirstOrDefault(d => d.Draws(code.Language!)) is { } diagram && diagram.Draw(code.Language!, code.Code, context) is { } drawn)
-                    return drawn;
-                return CodeBlock(code);
+            {
+                var diagram = code.IsDiagram ? Diagrams.FirstOrDefault(d => d.Draws(code.Language!)) : null;
+                if (diagram?.Draw(code.Language!, code.Code, context) is { } drawn) return drawn;
+                return CodeBlock(code, diagram?.Problem(code.Language!, code.Code));
+            }
             case MdQuote quote:
             {
                 var section = new Section { BorderThickness = new Thickness(3, 0, 0, 0), Padding = new Thickness(12, 2, 0, 2), Margin = new Thickness(0, 0, 0, 10) };
@@ -152,7 +156,8 @@ public static class WikiRenderer
         }
     }
 
-    private static Block CodeBlock(MdCode code)
+    /// <summary>A code block; a diagram's says above it why it isn't drawn (<paramref name="problem"/>, or that its kind comes later).</summary>
+    private static Block CodeBlock(MdCode code, string? problem = null)
     {
         var paragraph = new Paragraph { FontSize = 12.5, Padding = new Thickness(10, 8, 10, 8), Margin = new Thickness(0, 0, 0, 10), LineHeight = 12.5 * 1.4 };
         paragraph.SetResourceReference(TextElement.FontFamilyProperty, "MonoFont");
@@ -164,11 +169,11 @@ public static class WikiRenderer
             paragraph.Inlines.Add(new Run(lines[i]));
         }
         if (!code.IsDiagram) return paragraph;
-        // Diagrams are drawn in a later version; until then, their code with a word on what it is.
         var section = new Section { Margin = new Thickness(0, 0, 0, 10) };
-        var caption = new Paragraph(new Run($"{(code.Language!.Equals("drawio", StringComparison.OrdinalIgnoreCase) ? "draw.io" : "Mermaid")} diagram (drawn in a later version of ProJict)"))
+        var kind = code.Language!.Equals("drawio", StringComparison.OrdinalIgnoreCase) ? "draw.io" : "Mermaid";
+        var caption = new Paragraph(new Run(problem != null ? $"This {kind} diagram doesn't draw: {problem}" : $"{kind} diagram (drawn in a later version of ProJict)"))
             { FontSize = 11.5, Margin = new Thickness(0, 0, 0, 2) };
-        caption.SetResourceReference(TextElement.ForegroundProperty, "TextFillColorSecondaryBrush");
+        caption.SetResourceReference(TextElement.ForegroundProperty, problem != null ? "SystemFillColorCriticalBrush" : "TextFillColorSecondaryBrush");
         paragraph.Margin = new Thickness(0);
         section.Blocks.Add(caption);
         section.Blocks.Add(paragraph);

@@ -36,10 +36,17 @@
 
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <!-- Draws wiki diagrams (mermaid.js) in Windows' Edge WebView2, off screen -->
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31" />
   </ItemGroup>
 
   <ItemGroup>
     <Resource Include="Assets\ProJict.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The page and mermaid.js (MIT) that draw wiki diagrams; loaded from the app folder -->
+    <Content Include="Assets\Diagrams\**" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
