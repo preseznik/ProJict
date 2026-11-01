@@ -143,6 +143,24 @@ public static class ApiRoutes
                 ["responses"] = Responses(200),
             },
         };
+        if (tools.Any(t => t.Name == "wait_for_messages"))
+            paths["/chat/watch"] = new JsonObject
+            {
+                ["get"] = new JsonObject
+                {
+                    ["operationId"] = "watchChat",
+                    ["summary"] = "Streams a line of text per chat message for you, as they come, for as long as you keep the request open (e.g. curl -sN)",
+                    ["responses"] = new JsonObject
+                    {
+                        ["200"] = new JsonObject
+                        {
+                            ["description"] = "One line per message, starting with a line that says it's watching",
+                            ["content"] = new JsonObject { ["text/plain"] = new JsonObject { ["schema"] = new JsonObject { ["type"] = "string" } } },
+                        },
+                        ["4XX"] = ErrorResponse(),
+                    },
+                },
+            };
         paths["/attachments/{attachmentId}"] = new JsonObject
         {
             ["get"] = new JsonObject

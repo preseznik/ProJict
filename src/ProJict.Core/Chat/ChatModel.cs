@@ -61,6 +61,9 @@ public sealed class ChatChannel
     /// <summary>A private conversation between two (you and an agent, or two agents): no name of its own, no moderation.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool Direct { get; set; }
+    /// <summary>A private conversation the owner stopped: neither can write in it until it's resumed.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Suspended { get; set; }
     public ChannelLink? Link { get; set; }
     public string CreatedBy { get; set; } = "";
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]

@@ -59,6 +59,8 @@ public sealed class AppSettings
     public bool AgentsUseChat { get; set; } = true;
     /// <summary>Read-only API tokens may still use Chat fully: post, start channels, invite (Settings › API).</summary>
     public bool ReadOnlyTokensUseChat { get; set; } = true;
+    /// <summary>Chat lists the agents' private conversations with each other (the toggle in its header).</summary>
+    public bool ShowAgentChats { get; set; }
     /// <summary>How you sign comments and history entries; empty means the Windows user name.</summary>
     public string? UserName { get; set; }
     /// <summary>Ask the GitHub CLI (gh) for its sign-in, so release checks include private repositories.</summary>

@@ -235,19 +235,74 @@
 
     <!--
         The office and the list of all agents stand beside the page when there's room (OfficeSide), else above the cards
-        (OfficeTop); see the code-behind.
+        (OfficeTop); see the code-behind. Side by side, a divider sets how much each gets, and either side folds into a
+        ribbon at the window's edge.
     -->
-    <Grid>
+    <Grid x:Name="Layout">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition x:Name="PageColumn" Width="*" />
+            <ColumnDefinition x:Name="DividerColumn" Width="0" />
             <ColumnDefinition x:Name="OfficeColumn" Width="0" />
+            <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
-        <Border x:Name="OfficeSide" Grid.Column="1" Margin="0,20,28,20" VerticalAlignment="Top">
-            <StackPanel x:Name="OfficePane">
-                <Border x:Name="OfficeCard" Style="{StaticResource Card}" Padding="10" Margin="0,0,0,10" Visibility="{Binding ShowOffice, Converter={StaticResource BoolToVis}}">
+        <!-- The cards and earlier work, folded away: a click brings them back. -->
+        <Border x:Name="PageRibbon" Grid.Column="0" Width="34" Background="{DynamicResource SubtleFillColorSecondaryBrush}" Cursor="Hand" Visibility="Collapsed"
+                ToolTip="Show the cards and earlier work again" AutomationProperties.Name="Show the cards and earlier work">
+            <Border.InputBindings>
+                <MouseBinding MouseAction="LeftClick" Command="{Binding UnfoldCommand}" />
+            </Border.InputBindings>
+            <StackPanel Margin="0,22,0,0" HorizontalAlignment="Center">
+                <TextBlock Style="{StaticResource Icon}" Text="&#xE76C;" FontSize="12" HorizontalAlignment="Center" />
+                <TextBlock Text="Agents and earlier work" Margin="0,10,0,0" HorizontalAlignment="Center">
+                    <TextBlock.LayoutTransform>
+                        <RotateTransform Angle="90" />
+                    </TextBlock.LayoutTransform>
+                </TextBlock>
+            </StackPanel>
+        </Border>
+        <GridSplitter x:Name="Divider" Grid.Column="2" Width="10" HorizontalAlignment="Stretch" ResizeDirection="Columns" ResizeBehavior="PreviousAndNext"
+                      Focusable="False" Visibility="Collapsed" DragCompleted="Divider_DragCompleted" MouseDoubleClick="Divider_MouseDoubleClick"
+                      ToolTip="Drag to give the office more or less room; double-click for the usual split">
+            <GridSplitter.Template>
+                <ControlTemplate TargetType="GridSplitter">
+                    <Border Background="Transparent">
+                        <Border x:Name="Line" Width="2" Margin="0,24" CornerRadius="1" HorizontalAlignment="Center" Background="{DynamicResource DividerStrokeColorDefaultBrush}" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Line" Property="Background" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+                            <Setter TargetName="Line" Property="Width" Value="3" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </GridSplitter.Template>
+        </GridSplitter>
+        <Border x:Name="OfficeSide" Grid.Column="3" Margin="0,20,28,20">
+            <Grid x:Name="OfficePane">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition x:Name="OfficeRow" Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <!-- Side by side: give the office the whole view, or fold it away. -->
+                <DockPanel x:Name="OfficeHeader" Margin="2,0,0,6">
+                    <StackPanel x:Name="FoldButtons" DockPanel.Dock="Right" Orientation="Horizontal">
+                        <Button x:Name="WidenButton" Style="{StaticResource SubtleButton}" Command="{Binding FoldPageCommand}" Padding="7,4"
+                                ToolTip="Give the office the whole view (the cards fold into a ribbon on the left)" AutomationProperties.Name="Office takes the whole view">
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE740;" FontSize="12" />
+                        </Button>
+                        <Button x:Name="FoldButton" Style="{StaticResource SubtleButton}" Command="{Binding FoldOfficeCommand}" Padding="7,4" Margin="2,0,0,0"
+                                ToolTip="Fold the office away into a ribbon on the right" AutomationProperties.Name="Fold the office away">
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE76C;" FontSize="12" />
+                        </Button>
+                    </StackPanel>
+                    <TextBlock Text="Office" FontWeight="SemiBold" VerticalAlignment="Center" />
+                </DockPanel>
+                <Border x:Name="OfficeCard" Grid.Row="1" Style="{StaticResource Card}" Padding="10" Margin="0,0,0,10" Visibility="{Binding ShowOffice, Converter={StaticResource BoolToVis}}">
                     <local:OfficeView x:Name="Office" DataContext="{Binding Office}" />
                 </Border>
-                <Border x:Name="AgentListCard">
+                <Border x:Name="AgentListCard" Grid.Row="2">
                     <Expander x:Name="AgentListExpander" IsExpanded="{Binding IsAgentListOpen}" HorizontalAlignment="Stretch">
                         <Expander.Header>
                             <DockPanel>
@@ -264,9 +319,24 @@
                         </StackPanel>
                     </Expander>
                 </Border>
+            </Grid>
+        </Border>
+        <!-- The office folded away: a click brings it back. -->
+        <Border x:Name="OfficeRibbon" Grid.Column="4" Width="34" Background="{DynamicResource SubtleFillColorSecondaryBrush}" Cursor="Hand" Visibility="Collapsed"
+                ToolTip="Show the office and all agents again" AutomationProperties.Name="Show the office">
+            <Border.InputBindings>
+                <MouseBinding MouseAction="LeftClick" Command="{Binding UnfoldCommand}" />
+            </Border.InputBindings>
+            <StackPanel Margin="0,22,0,0" HorizontalAlignment="Center">
+                <TextBlock Style="{StaticResource Icon}" Text="&#xE76B;" FontSize="12" HorizontalAlignment="Center" />
+                <TextBlock Text="Office and all agents" Margin="0,10,0,0" HorizontalAlignment="Center">
+                    <TextBlock.LayoutTransform>
+                        <RotateTransform Angle="90" />
+                    </TextBlock.LayoutTransform>
+                </TextBlock>
             </StackPanel>
         </Border>
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <ScrollViewer x:Name="PageScroll" Grid.Column="1" VerticalScrollBarVisibility="Auto">
         <!-- As wide as the window allows, up to 980: the stats and their charts get the room. -->
         <Grid Margin="28,20,28,20">
             <Grid.ColumnDefinitions>

@@ -5,6 +5,9 @@ public enum AgentsShown { WorkingNow, ActiveWithin, AllConnected }
 
 public enum AgeUnit { Minutes, Hours, Days }
 
+/// <summary>Which side of the Agents view is folded into a ribbon at the window's edge, if any.</summary>
+public enum AgentsFold { None, Page, Office }
+
 /// <summary>
 /// What the Agents view shows (its Settings panel), kept in the app settings. Each Claude Code session stays connected
 /// until it's closed, so by default only agents that did something in the past hour get a card.
@@ -23,6 +26,11 @@ public sealed class AgentsViewSettings
     public bool ShowOffice { get; set; } = true;
     /// <summary>The list of all agents under the office is open.</summary>
     public bool AgentListOpen { get; set; }
+    /// <summary>How much of the view's width the office side gets beside the page (the divider).</summary>
+    public double OfficeShare { get; set; } = DefaultOfficeShare;
+    public const double DefaultOfficeShare = 0.42;
+    /// <summary>The cards and earlier work, or the office side, folded away into a ribbon.</summary>
+    public AgentsFold Fold { get; set; }
 
     /// <summary>How recently an agent must have done something to get a card; null when every connected one does.</summary>
     public TimeSpan? ActiveSpan => Show switch

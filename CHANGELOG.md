@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.27 (2026-11-01)
+
+- **Agents' private chats.** What your agents write to each other privately has a panel of its own in Chat, opened with the toggle in its header; your own private messages stay apart. You read them; right-click one to **Suspend** it (neither agent can write in it until you **Resume** it, and a line in it says so), delete it, or write to either agent.
+- **Change a token's access, or freeze it.** In **Settings → API**, each token's access (read and write, or read only) can be changed at any time, also while something is connected with it; it applies from its next request. **Freeze** pauses a token: it still connects and can ask who it is, but can't do anything else, not even read, until you **Unfreeze** it with the access it had.
+- **The Agents view's divider.** Drag the divider between the cards and the office to give either more room (double-click it for the usual split); the office grows into the room it gets, height included. The buttons above the office give it the whole view, the cards waiting in a ribbon on the left, or fold the office away into a ribbon on the right. Click a ribbon to bring its side back. ProJict remembers the split and what's folded.
+- **Chat watchers.** Agents now hear Chat while they're idle or busy with other things. ProJict asks agents whose client can watch a command in the background (Claude Code's Monitor tool, for one) to start a chat watcher, and tells each agent how with its first chat news:
+  - `ProJict.exe --watch-chat --as <name>` prints a line for each chat message for that agent as it comes: mentions, private messages, invitations and new messages in its channels, with where to reply.
+  - Over the API, `GET /api/v1/chat/watch` streams the same lines for the token, e.g. with `curl -sN`.
+  - What a watcher prints counts as read, so it isn't repeated in the agent's next tool result. An agent's card in the Agents view says "watching Chat" while one runs.
+
 ## 0.1.26 (2026-11-01)
 
 - **Read-only API tokens may use Chat.** A read-only token still can't change your projects, but its agent can now read, post, start channels and invite in Chat like any other. Turn it off under **Settings → API** to let read-only tokens only read Chat. The token list and the API's `GET /api/v1` say what a token may do in Chat.

@@ -9,6 +9,56 @@
         </ItemsPanelTemplate>
 
         <!-- A channel in the list: bold with a count while messages wait for you, red when one mentions you. -->
+        <!-- A private conversation between two agents: read it; right-click to suspend, resume or delete it, or write to either. -->
+        <DataTemplate x:Key="AgentChatRow" DataType="{x:Type vm:AgentChatRow}">
+            <Border x:Name="Row" Padding="8,5" Margin="0,0,0,1" CornerRadius="4" Background="Transparent" Cursor="Hand" ToolTip="{Binding ToolTip}"
+                    AutomationProperties.Name="{Binding Name}">
+                <Border.InputBindings>
+                    <MouseBinding MouseAction="LeftClick" Command="{Binding OpenCommand}" />
+                </Border.InputBindings>
+                <Border.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="Open" Command="{Binding OpenCommand}" />
+                        <MenuItem Header="Suspend: they can't write to each other" Command="{Binding SuspendCommand}"
+                                  Visibility="{Binding IsSuspended, Converter={StaticResource InvBoolToVis}}" />
+                        <MenuItem Header="Resume: they can write to each other again" Command="{Binding ResumeCommand}"
+                                  Visibility="{Binding IsSuspended, Converter={StaticResource BoolToVis}}" />
+                        <MenuItem Header="Delete conversation…" Command="{Binding DeleteCommand}" />
+                        <Separator />
+                        <MenuItem Command="{Binding WriteToFirstCommand}">
+                            <MenuItem.Header>
+                                <TextBlock><Run Text="Private message " /><Run Text="{Binding First, Mode=OneWay}" /></TextBlock>
+                            </MenuItem.Header>
+                        </MenuItem>
+                        <MenuItem Command="{Binding WriteToSecondCommand}">
+                            <MenuItem.Header>
+                                <TextBlock><Run Text="Private message " /><Run Text="{Binding Second, Mode=OneWay}" /></TextBlock>
+                            </MenuItem.Header>
+                        </MenuItem>
+                    </ContextMenu>
+                </Border.ContextMenu>
+                <DockPanel>
+                    <TextBlock x:Name="Paused" DockPanel.Dock="Right" Style="{StaticResource Icon}" Text="&#xE769;" FontSize="11" Margin="6,2,0,0" VerticalAlignment="Top"
+                               Foreground="{DynamicResource SystemFillColorCautionBrush}" ToolTip="Suspended" Visibility="Collapsed" />
+                    <StackPanel>
+                        <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding Subtitle}" Style="{StaticResource MutedText}" FontSize="11" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                </DockPanel>
+            </Border>
+            <DataTemplate.Triggers>
+                <Trigger SourceName="Row" Property="IsMouseOver" Value="True">
+                    <Setter TargetName="Row" Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}" />
+                </Trigger>
+                <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                    <Setter TargetName="Row" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsSuspended}" Value="True">
+                    <Setter TargetName="Paused" Property="Visibility" Value="Visible" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
         <DataTemplate x:Key="ChannelRow" DataType="{x:Type vm:ChannelRowViewModel}">
             <Border x:Name="Row" Padding="8,5" Margin="0,0,0,1" CornerRadius="4" Background="Transparent" Cursor="Hand"
                     ToolTip="{Binding ToolTip}" AutomationProperties.Name="{Binding Name}">
@@ -227,6 +277,11 @@
                             Command="{Binding NewChannelCommand}" ToolTip="Start a channel" AutomationProperties.Name="Start a channel" />
                     <Button x:Name="BrowseButton" DockPanel.Dock="Right" Style="{StaticResource SubtleIconButton}" Content="&#xE8FD;" VerticalAlignment="Center"
                             Command="{Binding BrowseCommand}" ToolTip="Browse channels: every channel, with what it's for" AutomationProperties.Name="Browse channels" />
+                    <ToggleButton x:Name="AgentChatsToggle" DockPanel.Dock="Right" Style="{StaticResource SubtleToggle}" IsChecked="{Binding ShowAgentChats}" VerticalAlignment="Center"
+                                  Padding="7,5" ToolTip="Agents' private chats: what your AI agents write to each other privately (you read them)"
+                                  AutomationProperties.Name="Agents' private chats">
+                        <TextBlock Style="{StaticResource Icon}" Text="&#xE716;" FontSize="14" />
+                    </ToggleButton>
                     <TextBlock Text="Chat" FontSize="28" FontWeight="SemiBold" />
                 </DockPanel>
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="-4,12,-4,0">
@@ -240,6 +295,14 @@
                         <TextBlock Text="Private messages" Style="{StaticResource MutedText}" FontSize="12" Margin="8,14,0,4"
                                    Visibility="{Binding HasPrivateChats, Converter={StaticResource BoolToVis}}" ToolTip="One on one: right-click someone › Private message" />
                         <ItemsControl x:Name="PrivateList" ItemsSource="{Binding PrivateChats}" ItemTemplate="{StaticResource ChannelRow}" Focusable="False" />
+                        <!-- The agents' private conversations with each other, while the toggle above is on. -->
+                        <StackPanel x:Name="AgentChatsPanel" Visibility="{Binding ShowAgentChats, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="{Binding AgentChatsTitle}" Style="{StaticResource MutedText}" FontSize="12" Margin="8,14,0,4"
+                                       ToolTip="What your AI agents write to each other privately. You read them; right-click one to suspend or delete it." />
+                            <TextBlock Text="No agent has written privately to another yet." Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap" Margin="8,0,0,0"
+                                       Visibility="{Binding HasAgentChats, Converter={StaticResource InvBoolToVis}}" />
+                            <ItemsControl x:Name="AgentChatList" ItemsSource="{Binding AgentChats}" ItemTemplate="{StaticResource AgentChatRow}" Focusable="False" />
+                        </StackPanel>
                         <!-- The channels of the ProJicts you're connected to, under their owners' names. -->
                         <ItemsControl x:Name="HostList" ItemsSource="{Binding HostChats}" Focusable="False">
                             <ItemsControl.ItemTemplate>

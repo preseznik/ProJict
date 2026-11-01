@@ -220,6 +220,9 @@ public sealed partial class ApiViewModel : ObservableObject
         Server.RevokeToken(row.Token);
         if (_secretFor == row.Token.Name) Secret = null;
     }
+
+    internal void SetAccess(TokenRow row, ApiAccess access) => Server.SetTokenAccess(row.Token, access);
+    internal void SetFrozen(TokenRow row, bool frozen) => Server.SetTokenFrozen(row.Token, frozen);
 }
 
 public sealed record AccessChoice(ApiAccess Access, string Label);
@@ -240,7 +243,28 @@ public sealed partial class TokenRow(ApiToken token, ApiViewModel owner, string 
     public ApiToken Token { get; } = token;
     public string Name => Token.Name;
     public string Masked => Token.Masked;
-    public string Details => $"{(Token.ReadOnly ? owner.ReadOnlyLabel : "Read and write")} · {projects}";
+    public string Details => Token.Frozen
+        ? $"Frozen: it connects, but can't do anything until you unfreeze it · {projects}"
+        : $"{(Token.ReadOnly ? owner.ReadOnlyLabel : "Read and write")} · {projects}";
+
+    /// <summary>Its access, changeable at any time; it applies from the token's next request.</summary>
+    public IReadOnlyList<AccessChoice> AccessChoices => owner.AccessChoices;
+    public AccessChoice SelectedAccess
+    {
+        get => AccessChoices.First(c => c.Access == Token.Access);
+        set
+        {
+            if (value != null && value.Access != Token.Access) owner.SetAccess(this, value.Access);
+        }
+    }
+
+    /// <summary>Freezing pauses the token without losing it: whatever it asks is refused until it's unfrozen.</summary>
+    public bool IsFrozen => Token.Frozen;
+    public string FreezeLabel => Token.Frozen ? "Unfreeze" : "Freeze";
+    public string FreezeToolTip => Token.Frozen
+        ? "Let it work again, with the access it has"
+        : "Pause it: it still connects, but can't do anything, not even read, until you unfreeze it";
+    [RelayCommand] private void ToggleFreeze() => owner.SetFrozen(this, !Token.Frozen);
 
     public string ExpiresText
     {

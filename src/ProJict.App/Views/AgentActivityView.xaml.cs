@@ -1,9 +1,11 @@
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Threading;
 using ProJict.App.ViewModels;
+using ProJict.Core.Agents;
 
 namespace ProJict.App.Views;
 
@@ -52,28 +54,60 @@ public partial class AgentActivityView : UserControl
 
     private void OnViewModelChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(AgentActivityViewModel.ShowOffice)) PlaceOffice();
+        if (e.PropertyName is nameof(AgentActivityViewModel.ShowOffice) or nameof(AgentActivityViewModel.Fold) or nameof(AgentActivityViewModel.OfficeShare))
+            PlaceOffice();
     }
 
+    /// <summary>The narrowest the page or the office side gets while the divider is dragged.</summary>
+    private const double MinPage = 420, MinOffice = 320;
+
     /// <summary>
-    /// The office and the list of all agents: beside the page when there's room (about two fifths of the width, less
-    /// with the office hidden), else above the cards.
+    /// The office and the list of all agents: beside the page when there's room (the divider's share of the width, a
+    /// narrow column with the office hidden), else above the cards. Side by side, either side can be folded into a
+    /// ribbon; the office then fills the whole view, or the page does.
     /// </summary>
     private void PlaceOffice()
     {
         var office = _vm?.ShowOffice ?? false;
         var beside = ActualWidth >= SideBySideFrom;
+        var fold = beside ? _vm?.Fold ?? AgentsFold.None : AgentsFold.None;
         var host = beside ? OfficeSide : OfficeTop;
         if (OfficePane.Parent != host)
         {
             (OfficePane.Parent as Border)!.Child = null;
             host.Child = OfficePane;
         }
-        OfficeColumn.Width = new GridLength(!beside ? 0 : office ? Math.Clamp(ActualWidth * 0.42, 440, 820) : 360);
-        OfficeCard.MaxHeight = beside ? double.PositiveInfinity : 420;
-        OfficeSide.Visibility = beside ? Visibility.Visible : Visibility.Collapsed;
+        var share = _vm?.OfficeShare ?? AgentsViewSettings.DefaultOfficeShare;
+        PageColumn.MinWidth = fold == AgentsFold.None && beside ? MinPage : 0;
+        OfficeColumn.MinWidth = fold == AgentsFold.None && beside ? MinOffice : 0;
+        PageColumn.Width = fold == AgentsFold.Page ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
+        OfficeColumn.Width = !beside || fold == AgentsFold.Office ? new GridLength(0)
+            : fold == AgentsFold.Page ? new GridLength(1, GridUnitType.Star)
+            : new GridLength(office ? Math.Clamp(ActualWidth * share, MinOffice, Math.Max(MinOffice, ActualWidth - MinPage)) : 360);
+        DividerColumn.Width = new GridLength(beside && fold == AgentsFold.None && office ? 10 : 0);
+        Divider.Visibility = beside && fold == AgentsFold.None && office ? Visibility.Visible : Visibility.Collapsed;
+        PageScroll.Visibility = fold == AgentsFold.Page ? Visibility.Collapsed : Visibility.Visible;
+        PageRibbon.Visibility = fold == AgentsFold.Page ? Visibility.Visible : Visibility.Collapsed;
+        OfficeRibbon.Visibility = fold == AgentsFold.Office ? Visibility.Visible : Visibility.Collapsed;
+        OfficeSide.Visibility = beside && fold != AgentsFold.Office ? Visibility.Visible : Visibility.Collapsed;
         OfficeTop.Visibility = beside ? Visibility.Collapsed : Visibility.Visible;
+        // Beside the page the office fills the height it gets; above the cards it keeps to a sensible height.
+        OfficeRow.Height = office && beside ? new GridLength(1, GridUnitType.Star) : GridLength.Auto;
+        OfficeCard.MaxHeight = beside ? double.PositiveInfinity : 420;
+        FoldButtons.Visibility = beside ? Visibility.Visible : Visibility.Collapsed;
+        WidenButton.Visibility = fold == AgentsFold.Page || !office ? Visibility.Collapsed : Visibility.Visible;
+        OfficeHeader.Visibility = beside ? Visibility.Visible : Visibility.Collapsed;
     }
+
+    /// <summary>The divider was dragged: the office's new share of the width is kept.</summary>
+    private void Divider_DragCompleted(object sender, DragCompletedEventArgs e)
+    {
+        if (_vm == null || ActualWidth <= 0) return;
+        _vm.OfficeShare = OfficeColumn.ActualWidth / ActualWidth;
+        PlaceOffice();
+    }
+
+    private void Divider_MouseDoubleClick(object sender, MouseButtonEventArgs e) => _vm?.ResetDividerCommand.Execute(null);
 
     private void OnRevealRequested(AgentCardViewModel card)
     {

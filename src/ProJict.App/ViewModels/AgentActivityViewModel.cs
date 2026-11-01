@@ -79,6 +79,43 @@ public sealed partial class AgentActivityViewModel : ObservableObject
         }
     }
 
+    // ───────────── Divider and folding ─────────────
+
+    /// <summary>Which side is folded into a ribbon (only while they stand side by side).</summary>
+    public AgentsFold Fold
+    {
+        get => View.Fold;
+        set
+        {
+            if (View.Fold == value) return;
+            View.Fold = value;
+            _state.SaveAppSettings();
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>The office side's share of the width, as the divider left it.</summary>
+    public double OfficeShare
+    {
+        get => View.OfficeShare;
+        set
+        {
+            value = Math.Clamp(value, 0.15, 0.85);
+            if (Math.Abs(View.OfficeShare - value) < 0.001) return;
+            View.OfficeShare = value;
+            _state.SaveAppSettings();
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>The office takes the whole view; the cards and earlier work wait in a ribbon on the left.</summary>
+    [RelayCommand] private void FoldPage() => Fold = AgentsFold.Page;
+    /// <summary>The cards take the whole view; the office waits in a ribbon on the right.</summary>
+    [RelayCommand] private void FoldOffice() => Fold = AgentsFold.Office;
+    [RelayCommand] private void Unfold() => Fold = AgentsFold.None;
+    /// <summary>Double-click the divider: the usual split again.</summary>
+    [RelayCommand] private void ResetDivider() => OfficeShare = AgentsViewSettings.DefaultOfficeShare;
+
     // ───────────── All agents ─────────────
 
     /// <summary>Every agent: the ones connected now, then the ones seen here before, most recent first.</summary>
@@ -545,6 +582,9 @@ public sealed partial class AgentActivityViewModel : ObservableObject
 
     internal void MessagePrivately(McpSession session) => MessagePrivately(session.AgentName);
 
+    /// <summary>A chat watcher runs for the agent (ProJict.exe --watch-chat, or /chat/watch).</summary>
+    internal bool IsWatching(McpSession session) => _main.AgentTools.IsWatched(session.AgentName);
+
     internal void MessagePrivately(string agent)
     {
         _main.ShowChannel(null);
@@ -645,7 +685,7 @@ public sealed partial class AgentCardViewModel : ObservableObject
         var names = _owner.ProjectNames(Session);
         var since = Session.ConnectedAt.ToString(Session.ConnectedAt.Date == DateTime.Today ? "HH:mm" : "d MMM HH:mm", CultureInfo.CurrentCulture);
         // "Claude Code · login fix · In GRID2VR · since 22:41": what it runs in (when it has a name of its own) and what it works on.
-        var about = new[] { Session.Name != null ? Session.Client : null, Session.Label }.Where(s => s != null);
+        var about = new[] { Session.Name != null ? Session.Client : null, Session.Label, _owner.IsWatching(Session) ? "watching Chat" : null }.Where(s => s != null);
         Where = string.Join(" · ", about.Append((names.Count == 0 ? "Connected" : "In " + string.Join(", ", names)) + " · since " + since));
         var actions = Session.Recent.Where(a => _only == null || a.ProjectId == null || a.ProjectId == _only.Id).ToList();
         Recent = actions.AsEnumerable().Reverse().Take(6).Select((a, i) => new AgentActionRow(a, i == 0, _owner)).ToList();

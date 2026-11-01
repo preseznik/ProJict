@@ -206,6 +206,23 @@ public sealed class ApiServer
         RaiseChanged();
     }
 
+    /// <summary>Read and write, or read only, from the next request on; its connections stay.</summary>
+    public void SetTokenAccess(ApiToken token, ApiAccess access)
+    {
+        lock (_store.Sync) token.Access = access;
+        _store.Save();
+        RaiseChanged();
+    }
+
+    /// <summary>Freezes the token (it still connects, but can't do anything) or thaws it; a chat watch it runs ends.</summary>
+    public void SetTokenFrozen(ApiToken token, bool frozen)
+    {
+        lock (_store.Sync) token.Frozen = frozen;
+        if (frozen) EndWatches(token);
+        _store.Save();
+        RaiseChanged();
+    }
+
     // ───────────── Requests ─────────────
 
     private async Task HandleAsync(HttpContext context)
@@ -314,10 +331,22 @@ public sealed class ApiServer
             else await Reply(context, 200, (await WhoAmIAsync(token, baseUrl)).ToJsonString(ReadableJson));
             return;
         }
+        // A frozen token only learns who it is (and that it's frozen).
+        if (token.Frozen)
+        {
+            await Problem(context, 403, AgentTools.FrozenMessage);
+            return;
+        }
         if (path.Equals("/openapi.json", StringComparison.OrdinalIgnoreCase))
         {
             if (method != "GET") await NotAllowed(context, "GET");
             else await Reply(context, 200, ApiRoutes.OpenApi(host.Tools, baseUrl, _version).ToJsonString(ReadableJson));
+            return;
+        }
+        if (path.Equals("/chat/watch", StringComparison.OrdinalIgnoreCase))
+        {
+            if (method != "GET") await NotAllowed(context, "GET");
+            else await WatchAsync(context, token);
             return;
         }
         if (path.StartsWith("/attachments/", StringComparison.OrdinalIgnoreCase))
@@ -398,12 +427,59 @@ public sealed class ApiServer
             ["name"] = token.Name,
             ["access"] = token.ReadOnly ? "read only" : "read and write",
             ["chat"] = _tools.ChatAccess(token.ReadOnly),
+            ["frozen"] = token.Frozen ? true : null,
+            ["note"] = token.Frozen ? AgentTools.FrozenMessage : null,
             ["projects"] = names == null ? "all" : new JsonArray(names.Select(n => (JsonNode)n).ToArray()),
             ["expires"] = token.ExpiresAt.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture),
             ["projict"] = _version,
             ["openApi"] = $"{baseUrl}{ApiRoutes.Base}/openapi.json",
             ["mcp"] = baseUrl + McpPath,
         };
+    }
+
+    /// <summary>
+    /// GET /chat/watch: a line of text per chat message for the token, as they come, for as long as the client keeps
+    /// the request open (curl -sN under a client that tells its agent about each line).
+    /// </summary>
+    private async Task WatchAsync(HttpContext context, ApiToken token)
+    {
+        var response = context.Response;
+        response.StatusCode = 200;
+        response.ContentType = "text/plain; charset=utf-8";
+        response.Headers.CacheControl = "no-store";
+        // Ends when the client goes away, or the token is frozen, renewed or revoked.
+        using var watch = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted);
+        var stop = watch.Token;
+        lock (_lock) _watches.Add((token, watch));
+        try
+        {
+            await _tools.WatchChatAsync(NewSession(token), async line =>
+            {
+                await response.WriteAsync(line + "\n", stop);
+                await response.Body.FlushAsync(stop);
+            }, stop);
+        }
+        catch (Exception ex) when (ex is OperationCanceledException or IOException or ObjectDisposedException)
+        {
+            // The client went away, or the token can't watch any more.
+        }
+        finally
+        {
+            lock (_lock) _watches.Remove((token, watch));
+        }
+    }
+
+    private readonly List<(ApiToken Token, CancellationTokenSource Stop)> _watches = [];
+
+    private void EndWatches(ApiToken token)
+    {
+        List<CancellationTokenSource> ending;
+        lock (_lock) ending = _watches.Where(w => w.Token == token).Select(w => w.Stop).ToList();
+        foreach (var stop in ending)
+        {
+            try { stop.Cancel(); }
+            catch (ObjectDisposedException) { }
+        }
     }
 
     private async Task DownloadAsync(HttpContext context, McpSession session, string id)
@@ -436,9 +512,17 @@ public sealed class ApiServer
             }
             client.LastSeen = DateTime.Now;
             client.Session.BaseUrl = baseUrl;
+            Follow(client.Session, token);
         }
         if (started) _tools.SessionStarted(client.Session);
         return client.Session;
+    }
+
+    /// <summary>The token's access may have changed since its session started: each request goes by what it is now.</summary>
+    private static void Follow(McpSession session, ApiToken token)
+    {
+        session.ReadOnly = token.ReadOnly;
+        session.Frozen = token.Frozen;
     }
 
     private static McpSession NewSession(ApiToken token) => new()
@@ -446,6 +530,7 @@ public sealed class ApiServer
         SignAs = token.Name,
         Remote = true,
         ReadOnly = token.ReadOnly,
+        Frozen = token.Frozen,
         Projects = token.Projects?.ToHashSet(),
     };
 
@@ -499,6 +584,7 @@ public sealed class ApiServer
             {
                 client.LastSeen = DateTime.Now;
                 client.Session.BaseUrl = baseUrl;
+                Follow(client.Session, token);
             }
         }
         if (client == null)
@@ -529,7 +615,7 @@ public sealed class ApiServer
 
         public IReadOnlyList<McpTool> Tools => readOnly ? _all.Where(t => tools.Allows(ReadOnlySession, t.Name, NoArguments)).ToList() : _all;
 
-        public string Instructions => tools.Instructions +
+        public string Instructions => tools.InstructionsFor(remote: true) +
             " You're connected over ProJict's API, signing with the token's name: say which project with \"project\" (there's no working " +
             "directory), send files as objects with \"name\" and \"data\" (base64), and download attachments from their url with the same " +
             "Authorization header." + (!readOnly ? ""
@@ -586,6 +672,7 @@ public sealed class ApiServer
             foreach (var key in _mcp.Where(kv => ended.Contains(kv.Value)).Select(kv => kv.Key).ToList()) _mcp.Remove(key);
         }
         foreach (var client in ended) _tools.SessionEnded(client.Session);
+        foreach (var token in ended.Select(c => c.Token).Distinct()) EndWatches(token);
     }
 
     // ───────────── Replies ─────────────

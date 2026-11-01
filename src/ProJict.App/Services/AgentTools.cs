@@ -175,7 +175,10 @@ public sealed partial class AgentTools : IMcpToolHost
     private List<Project> LocalProjects =>
         _state.Projects.Where(p => p.Remote == null && (_caller?.Projects is not { } only || only.Contains(p.Id))).ToList();
 
-    public string Instructions =>
+    public string Instructions => InstructionsFor(remote: false);
+
+    /// <summary>What agents are told when they connect; over the API (remote) they watch Chat over HTTP, not with ProJict.exe.</summary>
+    public string InstructionsFor(bool remote) =>
         "ProJict is the user's to-do list app: projects contain categories, categories contain items (with sub-items, tags such as BUG or ADD, " +
         "attachments, discussions, and a state: todo, in_progress or done). To work on items: current_project (or list_projects) to find the project, " +
         "list_items to see what is open, claim_item to check an item out before you start (other agents then can't change it), then complete_item " +
@@ -198,6 +201,12 @@ public sealed partial class AgentTools : IMcpToolHost
         "messages, private ones included (read them with read_channel and reply with post_message: say hello when invited, and answer what you're asked, or say you " +
         "can't now), the user's comments on items you worked on (answer with add_comment), work the user sent back (get_item for why, then " +
         "claim_item to work on it again), and ship requests in your project. Deal with them before going on, or say why not. " +
+        "Between tool calls nothing reaches you, so if your client can run a command in the background and tell you about each line it prints " +
+        "(Claude Code's Monitor tool, for one), start a chat watcher once you've picked your name and keep it running: " +
+        (remote
+            ? $"GET {ProJict.Core.Api.ApiRoutes.Base}/chat/watch on this server with your Authorization header (e.g. curl -sN) "
+            : $"{WatchCommand("<your name>")} ") +
+        "prints a line for each chat message for you, as it comes, so you can answer while you're idle or busy with other things. " +
         "Ids (items, comments and messages) may be shortened to their first 8 characters.";
 
     public void SessionStarted(McpSession session)
@@ -225,8 +234,12 @@ public sealed partial class AgentTools : IMcpToolHost
         if (!_dispatcher.HasShutdownStarted) _dispatcher.InvokeAsync(() => _main.Agents.Disconnected(session));
     }
 
+    /// <summary>What a frozen API token is told whatever it asks.</summary>
+    public const string FrozenMessage = "The user froze this API token in ProJict (Settings › API): it still connects, but can't do anything, not even read, until they unfreeze it.";
+
     public async Task<string> CallAsync(McpSession session, string name, JsonElement arguments)
     {
+        if (session.Frozen) throw new McpToolException(FrozenMessage, ToolProblem.Forbidden);
         if (name == "wait_for_messages") return await WaitForMessagesAsync(session, arguments);
         var (run, filesArgument) = _handlers[name];
         var args = new Args(arguments);

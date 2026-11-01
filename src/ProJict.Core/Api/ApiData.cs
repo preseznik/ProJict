@@ -16,6 +16,8 @@ public sealed class ApiToken
     /// <summary>Signs everything done with the token, e.g. "n8n".</summary>
     public string Name { get; set; } = "";
     public ApiAccess Access { get; set; }
+    /// <summary>Paused by the user: it still connects (and can ask who it is) but can't do anything, not even read, until unfrozen.</summary>
+    public bool Frozen { get; set; }
     /// <summary>The projects the token reaches; null for all of yours.</summary>
     public List<Guid>? Projects { get; set; }
     /// <summary>How long it lasts, in days; renewing it starts that again.</summary>

@@ -235,6 +235,45 @@ public sealed partial class ChatViewModel : ObservableObject
         if (place.Room.MarkRead(Channel, place.Me.Name)) Refresh();
     }
 
+    // ───────────── Agents' private chats ─────────────
+
+    /// <summary>Private conversations between agents (you read them; they're not yours to write in).</summary>
+    public List<AgentChatRow> AgentChats { get; private set; } = [];
+    public bool HasAgentChats => AgentChats.Count > 0;
+    public string AgentChatsTitle => $"Agents' private chats ({AgentChats.Count})";
+
+    /// <summary>The panel with them shows (the toggle in Chat's header).</summary>
+    public bool ShowAgentChats
+    {
+        get => _state.AppSettings.ShowAgentChats;
+        set
+        {
+            if (_state.AppSettings.ShowAgentChats == value) return;
+            _state.AppSettings.ShowAgentChats = value;
+            _state.SaveAppSettings();
+            OnPropertyChanged();
+        }
+    }
+
+    internal void Suspend(ChatChannel channel, bool suspended)
+    {
+        if (!Try(() => Room.SetSuspended(channel, Me, suspended))) return;
+        var both = string.Join(" and ", channel.Members.Select(m => m.Name));
+        _state.StatusText = suspended ? $"{both} can't write to each other until you resume their conversation." : $"{both} can write to each other again.";
+        Refresh();
+        if (Channel == channel) OpenChannel(channel);
+    }
+
+    internal void DeleteAgentChat(ChatChannel channel)
+    {
+        var both = string.Join(" and ", channel.Members.Select(m => m.Name));
+        if (!Confirm($"Delete the private conversation between {both}, with its {Count(channel.Messages.Count(m => !m.Notice), "message")}? Its file is kept in backups\\deleted.")) return;
+        if (!Try(() => Room.Delete(channel, Me))) return;
+        _state.StatusText = $"Deleted the conversation between {both}.";
+        if (Channel == channel) Channel = null;
+        Refresh();
+    }
+
     /// <summary>Rebuilds the channel lists and tells the sidebar.</summary>
     public void Refresh()
     {
@@ -244,17 +283,21 @@ public sealed partial class ChatViewModel : ObservableObject
             (ChatRoom.Member(channel, MyName) != null ? mine : others).Add(new ChannelRowViewModel(channel, this));
         YourChannels = mine;
         OtherChannels = others;
-        // Yours first, then the ones between agents; the newest conversation first.
-        PrivateChats = Room.Channels.Where(c => c.Direct)
-            .OrderByDescending(c => ChatRoom.Member(c, MyName) != null).ThenByDescending(c => c.Messages.LastOrDefault()?.At ?? c.CreatedAt)
+        // Yours; the agents' conversations with each other have a panel of their own. The newest first.
+        PrivateChats = Room.Channels.Where(c => c.Direct && ChatRoom.Member(c, MyName) != null)
+            .OrderByDescending(c => c.Messages.LastOrDefault()?.At ?? c.CreatedAt)
             .Select(c => new ChannelRowViewModel(c, this)).ToList();
+        AgentChats = Room.Channels.Where(c => c.Direct && ChatRoom.Member(c, MyName) == null)
+            .OrderByDescending(c => c.Messages.LastOrDefault()?.At ?? c.CreatedAt)
+            .Select(c => new AgentChatRow(c, this)).ToList();
         BrowseRows = Room.Channels.Where(c => !c.Direct).OrderBy(c => c.Name, StringComparer.Ordinal).Select(c => new BrowseRowViewModel(c, this)).ToList();
         // Each host's: channels you're in, the others you could join, then private conversations.
         HostChats = _main.Guest.Connections.Where(c => c.Chat is { Channels.Count: > 0 }).Select(c => new HostChatSection($"{c.HostName}'s ProJict",
             c.Chat!.Channels.OrderBy(ch => ch.Direct).ThenByDescending(ch => ChatRoom.Member(ch, c.MyName ?? "") != null).ThenBy(ch => ch.Name, StringComparer.Ordinal)
                 .Select(ch => new ChannelRowViewModel(ch, this)).ToList())).ToList();
         foreach (var name in new[] { nameof(YourChannels), nameof(OtherChannels), nameof(HasOtherChannels), nameof(HasNoChannels), nameof(UnreadCount), nameof(HasMention),
-                     nameof(UnreadToolTip), nameof(BrowseRows), nameof(PrivateChats), nameof(HasPrivateChats), nameof(HostChats), nameof(HasHostChats) })
+                     nameof(UnreadToolTip), nameof(BrowseRows), nameof(PrivateChats), nameof(HasPrivateChats), nameof(HostChats), nameof(HasHostChats),
+                     nameof(AgentChats), nameof(HasAgentChats), nameof(AgentChatsTitle) })
             OnPropertyChanged(name);
         CountsChanged?.Invoke();
     }
@@ -533,7 +576,9 @@ public sealed partial class ChatViewModel : ObservableObject
     /// <summary>Why you can't write here, if you can't: not a member of an invite-only channel, or muted.</summary>
     public string? ComposerNote => Channel == null ? null
         : Here.Host is { } host && !MayWrite(Channel) ? $"You're a viewer in {host.HostName}'s ProJict: you can read here, not write."
-        : !CanWrite ? IsDirect ? $"A private conversation between {string.Join(" and ", Channel.Members.Select(m => m.Name))}." : "Only members write here."
+        : !CanWrite ? IsDirect ? $"A private conversation between {string.Join(" and ", Channel.Members.Select(m => m.Name))}." +
+                                 (Channel.Suspended ? " Suspended: neither can write here until you resume it (right-click it under Agents' private chats)." : "")
+            : "Only members write here."
         : Here.Room.MutedUntil(Channel, Here.Me.Name) is { } until && !Here.Me.Owner ? $"You're muted until {until:HH:mm}."
         : null;
 
@@ -937,6 +982,40 @@ public sealed partial class ChannelRowViewModel(ChatChannel model, ChatViewModel
         model.Direct ? null : IsInviteOnly ? "Invite only" : "Open",
         Unread > 0 ? ChatViewModel.Count(Unread, "new message") : null,
     }.Where(s => s != null));
+}
+
+/// <summary>
+/// A private conversation between two agents, in Agents' private chats: you read it (a click opens it); right-click to
+/// suspend or resume it, delete it, or write to either of them.
+/// </summary>
+public sealed partial class AgentChatRow(ChatChannel model, ChatViewModel owner)
+{
+    public ChatChannel Model => model;
+    public string Name => string.Join(" & ", model.Members.Select(m => m.Name));
+    public string First => model.Members.ElementAtOrDefault(0)?.Name ?? "";
+    public string Second => model.Members.ElementAtOrDefault(1)?.Name ?? "";
+    public bool IsSuspended => model.Suspended;
+    public bool IsSelected => owner.Channel == model;
+    public string Subtitle
+    {
+        get
+        {
+            var messages = model.Messages.Where(m => !m.Notice && !m.Deleted).ToList();
+            var last = messages.LastOrDefault()?.At;
+            var when = last is not { } at ? "nothing said yet"
+                : "last " + (at.Date == DateTime.Today ? at.ToString("HH:mm", CultureInfo.CurrentCulture) : at.ToString("d MMM", CultureInfo.CurrentCulture));
+            return (model.Suspended ? "Suspended · " : "") + $"{ChatViewModel.Count(messages.Count, "message")} · {when}";
+        }
+    }
+    public string ToolTip => $"Between {First} and {Second}: you read it, it isn't yours to write in." + (model.Suspended ? "\nSuspended: neither can write in it." : "") +
+                             "\nRight-click to suspend, resume or delete it, or to write to either of them.";
+
+    [RelayCommand] private void Open() => owner.OpenChannel(model);
+    [RelayCommand] private void Suspend() => owner.Suspend(model, true);
+    [RelayCommand] private void Resume() => owner.Suspend(model, false);
+    [RelayCommand] private void Delete() => owner.DeleteAgentChat(model);
+    [RelayCommand] private void WriteToFirst() => owner.OpenDirect(First, agent: model.Members.ElementAtOrDefault(0)?.Agent ?? true);
+    [RelayCommand] private void WriteToSecond() => owner.OpenDirect(Second, agent: model.Members.ElementAtOrDefault(1)?.Agent ?? true);
 }
 
 /// <summary>A channel in Browse channels: its topic, what it's about, members and last message; Open, or Join if you're not in it.</summary>

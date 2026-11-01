@@ -78,7 +78,7 @@
                                                 <Run Text="{Binding Name, Mode=OneWay}" FontWeight="SemiBold" />
                                                 <Run Text="{Binding Masked, Mode=OneWay}" FontFamily="{StaticResource MonoFont}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                                             </TextBlock>
-                                            <TextBlock Text="{Binding Details}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                            <TextBlock x:Name="DetailsText" Text="{Binding Details}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,2,0,0" />
                                             <TextBlock TextWrapping="Wrap" Margin="0,2,0,0" FontSize="12">
                                                 <TextBlock.Style>
                                                     <Style TargetType="TextBlock" BasedOn="{StaticResource MutedText}">
@@ -93,6 +93,12 @@
                                                 <Run Text=" · " />
                                                 <Run Text="{Binding LastUsedText, Mode=OneWay}" />
                                             </TextBlock>
+                                            <!-- Its access can change at any time, and it can be frozen for a while. -->
+                                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                                <ComboBox x:Name="TokenAccess" Width="210" ItemsSource="{Binding AccessChoices}" SelectedItem="{Binding SelectedAccess}" DisplayMemberPath="Label"
+                                                          AutomationProperties.Name="Access" ToolTip="What it may do, from its next request on" />
+                                                <Button x:Name="FreezeButton" Content="{Binding FreezeLabel}" Command="{Binding ToggleFreezeCommand}" ToolTip="{Binding FreezeToolTip}" Margin="8,0,0,0" />
+                                            </StackPanel>
                                         </StackPanel>
                                     </DockPanel>
                                     <DockPanel Margin="0,8,0,0" Visibility="{Binding IsConfirming, Converter={StaticResource BoolToVis}}">
@@ -104,6 +110,12 @@
                                     </DockPanel>
                                 </StackPanel>
                             </Border>
+                            <DataTemplate.Triggers>
+                                <DataTrigger Binding="{Binding IsFrozen}" Value="True">
+                                    <Setter TargetName="DetailsText" Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                                    <Setter TargetName="TokenAccess" Property="IsEnabled" Value="False" />
+                                </DataTrigger>
+                            </DataTemplate.Triggers>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>

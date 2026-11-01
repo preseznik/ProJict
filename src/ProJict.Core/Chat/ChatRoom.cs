@@ -249,6 +249,18 @@ public sealed class ChatRoom
     }
 
     /// <summary>Only you delete channels; they go to backups/deleted.</summary>
+    /// <summary>The owner stops the two in a private conversation writing to each other, or lets them again; a line says so.</summary>
+    public void SetSuspended(ChatChannel channel, ChatActor by, bool suspended)
+    {
+        if (!channel.Direct) throw new ChatException("Only private conversations can be suspended; mute people in a channel instead.");
+        if (!by.Owner) throw new ChatException("Only the owner of the workspace can suspend a private conversation.");
+        if (channel.Suspended == suspended) return;
+        channel.Suspended = suspended;
+        var both = string.Join(" and ", channel.Members.Select(m => m.Name));
+        AddNotice(channel, by, suspended ? $"{by.Name} suspended this conversation: {both} can't write in it until it's resumed" : $"{by.Name} resumed this conversation");
+        Changed?.Invoke(channel);
+    }
+
     public void Delete(ChatChannel channel, ChatActor by)
     {
         if (!by.Owner) throw new ChatException("Only the owner of the workspace can delete a channel.");
@@ -394,6 +406,8 @@ public sealed class ChatRoom
         if (text.Length == 0 && files is not { Count: > 0 }) throw new ChatException("The message is empty.");
         if (text.Length > MaxText) throw new ChatException($"Messages can be up to {MaxText} characters.");
         if (!CanSee(channel, actor)) throw new ChatException($"You can't post in #{channel.Name}.");
+        if (channel.Suspended && !actor.Owner)
+            throw new ChatException("The owner of the workspace suspended this private conversation: you can't write in it until they resume it.");
         if (MutedUntil(channel, actor.Name) is { } until && !actor.Owner)
             throw new ChatException(until == DateTime.MaxValue ? $"You're muted in #{channel.Name} until a moderator unmutes you."
                 : $"You're muted in #{channel.Name} until {until.ToString("HH:mm", CultureInfo.CurrentCulture)}.");

@@ -395,8 +395,10 @@ public sealed partial class AgentTools
             parts.Add($"{Count(messages.Count, "new message")} in #{group.Key.Name}" +
                       (mentions > 0 ? $" ({(mentions == 1 ? "one mentions" : $"{mentions} mention")} you)" : ""));
         }
-        return ["Chat: " + string.Join("; ", parts) + ". Read them with read_channel" +
+        List<string> lines = ["Chat: " + string.Join("; ", parts) + ". Read them with read_channel" +
                 (asked ? ", and reply with post_message: say hello when invited, and answer what you're asked (or say you can't now)." : ".")];
+        if (WatchTip(session) is { } tip) lines.Add(tip);
+        return lines;
     }
 
     // ───────────── JSON ─────────────

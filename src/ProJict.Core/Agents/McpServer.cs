@@ -34,8 +34,10 @@ public sealed class McpSession
     public string? SignAs { get; init; }
     /// <summary>Connected over the API rather than the local pipe: files come as uploads, never as paths on this computer.</summary>
     public bool Remote { get; init; }
-    /// <summary>A read-only API token: reading only.</summary>
-    public bool ReadOnly { get; init; }
+    /// <summary>A read-only API token: reading only (it can change while connected).</summary>
+    public bool ReadOnly { get; set; }
+    /// <summary>A frozen API token: nothing works until the user unfreezes it.</summary>
+    public bool Frozen { get; set; }
     /// <summary>The projects an API token reaches; null for all.</summary>
     public IReadOnlySet<Guid>? Projects { get; init; }
     /// <summary>Where the API answers ("http://127.0.0.1:47614"), for links to attachments; set per request.</summary>
@@ -110,16 +112,43 @@ public static class McpServer
     /// <summary>First line the bridge sends (not JSON-RPC): <c>{"projictBridge":1,"cwd":"…"}</c>.</summary>
     public const string BridgeHelloKey = "projictBridge";
 
+    /// <summary>
+    /// First line a chat watcher (<c>ProJict.exe --watch-chat --as Ada</c>) sends instead: <c>{"projictWatch":1,"as":"Ada"}</c>.
+    /// No MCP follows; ProJict writes a line per chat message for that agent.
+    /// </summary>
+    public const string WatchHelloKey = "projictWatch";
+
+    /// <summary>The agent a chat watcher's first line asks for, or null when the line is something else.</summary>
+    public static string? WatchRequest(string line)
+    {
+        if (!line.Contains(WatchHelloKey, StringComparison.Ordinal)) return null;
+        try
+        {
+            return JsonNode.Parse(line.TrimStart('\uFEFF')) is JsonObject hello && hello.ContainsKey(WatchHelloKey) && Text(hello["as"]) is { } name &&
+                   name.Trim().Length > 0 ? name.Trim() : null;
+        }
+        catch (JsonException) { return null; }
+    }
+
     public static async Task RunAsync(Stream input, Stream output, IMcpToolHost host, McpSession session, string serverVersion,
         CancellationToken cancellation = default)
     {
         using var reader = new StreamReader(input, new UTF8Encoding(false), false, 4096, leaveOpen: true);
+        await RunAsync(reader, null, output, host, session, serverVersion, cancellation);
+    }
+
+    /// <summary>The same, starting with a line already read (the pipe looks at the first line to tell agents from watchers).</summary>
+    public static async Task RunAsync(TextReader reader, string? firstLine, Stream output, IMcpToolHost host, McpSession session, string serverVersion,
+        CancellationToken cancellation = default)
+    {
         try
         {
-            while (await reader.ReadLineAsync(cancellation) is { } read)
+            var pending = firstLine;
+            while ((pending ?? await reader.ReadLineAsync(cancellation)) is { } read)
             {
+                pending = null;
                 // Some clients start their stream with a byte order mark.
-                var line = read.TrimStart('﻿');
+                var line = read.TrimStart('\uFEFF');
                 if (string.IsNullOrWhiteSpace(line)) continue;
                 var response = await HandleAsync(line, host, session, serverVersion);
                 if (response == null) continue;

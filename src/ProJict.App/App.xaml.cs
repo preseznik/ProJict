@@ -27,7 +27,7 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
-        if (HasFlag(e.Args, "--mcp"))
+        if (HasFlag(e.Args, "--mcp") || HasFlag(e.Args, "--watch-chat"))
         {
             RunBridge(e.Args);
             return;
@@ -90,7 +90,7 @@ public partial class App : Application
             }),
             () => MainWindow is { IsVisible: true, IsActive: true } window && window.WindowState != WindowState.Minimized);
 
-        _agents = new AgentPipeServer(AgentPipeServer.PipeName(dataRoot), MainVm.AgentTools, UpdateService.CurrentVersionText);
+        _agents = new AgentPipeServer(AgentPipeServer.PipeName(dataRoot), MainVm.AgentTools, UpdateService.CurrentVersionText, MainVm.AgentTools.WatchOverPipeAsync);
         if (appSettings.AllowAgents) _agents.Start();
 
         // Started for an AI agent (by the --mcp bridge): stay in the tray until the user opens the window.
@@ -124,10 +124,16 @@ public partial class App : Application
         var dataArg = ArgValue(args, "--data");
         var dataRoot = Path.GetFullPath(dataArg ?? AppSettings.Load().DataRoot ?? AppSettings.DefaultDataRoot());
         var launch = !HasFlag(args, "--no-launch");
+        var watch = HasFlag(args, "--watch-chat");
         Task.Run(async () =>
         {
             int code;
-            try { code = await McpBridge.RunAsync(dataRoot, launch, dataArg != null ? dataRoot : null); }
+            try
+            {
+                code = watch
+                    ? await McpBridge.WatchAsync(dataRoot, launch, dataArg != null ? dataRoot : null, ArgValue(args, "--as"))
+                    : await McpBridge.RunAsync(dataRoot, launch, dataArg != null ? dataRoot : null);
+            }
             catch (Exception) { code = 1; }
             await Dispatcher.InvokeAsync(() => Shutdown(code));
         });

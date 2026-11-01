@@ -346,7 +346,8 @@
                        Visibility="{Binding MoreText, Converter={StaticResource EmptyToVis}}" />
             <TextBlock Text="{Binding Summary}" Style="{StaticResource MutedText}" FontSize="12" TextTrimming="CharacterEllipsis" />
         </DockPanel>
-        <Viewbox Stretch="Uniform" VerticalAlignment="Top">
+        <!-- As big as the room it's given allows, both ways. -->
+        <Viewbox Stretch="Uniform" VerticalAlignment="Center" HorizontalAlignment="Center">
             <Canvas Width="800" Height="520" ClipToBounds="True">
                 <!-- Ceiling, walls, floor -->
                 <Polygon Points="0,0 800,0 580,70 220,70" Fill="{DynamicResource SolidBackgroundFillColorTertiaryBrush}" />
