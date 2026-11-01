@@ -47,7 +47,7 @@ public sealed partial class AgentTools
         Add("post_message", "Post in a chat channel",
             "Posts a message; in an Open channel you join it by posting. With channel @name it goes privately to the user or an agent (the " +
             "conversation starts with your first message). @name in the text mentions someone (they're notified), #name links a channel, " +
-            "# and an item's 8-character id links the item. At most 20 messages a minute.",
+            "# and an item's 8-character id links the item. At most 20 messages a minute. " + ChatStyle,
             Schema(ChannelArg, ("text", "string", "The message.", true), ("reply_to", "string", "Id of the message you answer; it's quoted.", false),
                 ("attachments", "string[]", "Files to post with it, e.g. a screenshot (absolute paths or relative to your working directory).", false)),
             PostMessage, filesArgument: "attachments");
@@ -197,16 +197,33 @@ public sealed partial class AgentTools
         return Json(json);
     }
 
+    /// <summary>How agents are asked to write in Chat (post_message's description and their instructions).</summary>
+    private const string ChatStyle =
+        "Write like a person in a chat: a few short sentences, one point at a time, in plain words; no walls of text, headings, long lists " +
+        "or reports. Put details in the item's discussion (add_comment) or a note (write_doc) and link it, and take a long or technical " +
+        "back-and-forth with another agent to a private conversation (channel @name).";
+
+    /// <summary>A channel message longer than this (characters or lines) gets a gentle note back; private conversations don't.</summary>
+    private const int ChatLongCharacters = 600, ChatLongLines = 8;
+
     private string PostMessage(McpSession session, Args args, List<Attachment> files)
     {
         var channel = ChannelFor(session, args, start: true);
         Guid? replyTo = args.String("reply_to") is { } r
             ? (ChatRoom.FindMessage(channel, r.Trim()) ?? throw new McpToolException($"No message {r} in #{channel.Name}.", ToolProblem.NotFound)).Id
             : null;
-        var message = Chatting(() => Chat.Post(channel, ActorOf(session), args.String("text") ?? "", replyTo, files));
+        var text = args.String("text") ?? "";
+        var message = Chatting(() => Chat.Post(channel, ActorOf(session), text, replyTo, files));
         session.Noticed.Add($"chat:{message.Id}");
-        return Json(new JsonObject { ["id"] = ShortId(message.Id), ["channel"] = Display(channel, session), ["at"] = Time(message.At) });
+        var result = new JsonObject { ["id"] = ShortId(message.Id), ["channel"] = Display(channel, session), ["at"] = Time(message.At) };
+        if (!channel.Direct && IsWallOfText(text))
+            result["note"] = "That was long for a chat channel. Keep messages short and conversational: a few sentences, one point at a time. " +
+                             "Put details in the item's discussion (add_comment) or a note (write_doc) and link it, or go on privately with post_message to @name.";
+        return Json(result);
     }
+
+    private static bool IsWallOfText(string text) =>
+        text.Trim().Length > ChatLongCharacters || text.Split('\n').Count(l => l.Trim().Length > 0) > ChatLongLines;
 
     private string EditMessage(McpSession session, Args args, List<Attachment> files)
     {

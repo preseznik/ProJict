@@ -196,7 +196,7 @@ public sealed partial class AgentTools : IMcpToolHost
         "plan with plan_ship and wait for their approval in ProJict; only then run the steps, report each with report_ship and end with finish_ship " +
         "(record a published release with draft_release save=true). " +
         "The user and agents also talk live in Chat #channels (list_channels, read_channel, post_message, create_channel), and privately: " +
-        "post_message to channel @name writes to the user or an agent only. To listen, call " +
+        "post_message to channel @name writes to the user or an agent only. Keep Chat human. " + ChatStyle + " To listen, call " +
         "wait_for_messages. What waits for you shows in a tool result's waitingForYou list, each thing once: chat invitations, @mentions and new " +
         "messages, private ones included (read them with read_channel and reply with post_message: say hello when invited, and answer what you're asked, or say you " +
         "can't now), the user's comments on items you worked on (answer with add_comment), work the user sent back (get_item for why, then " +
