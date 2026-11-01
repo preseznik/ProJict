@@ -1,0 +1,2 @@
+# Bundled third-party files stay byte for byte as downloaded.
+src/ProJict.App/Assets/Diagrams/mermaid.min.js -text
