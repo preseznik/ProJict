@@ -397,6 +397,7 @@ public sealed class ApiServer
         {
             ["name"] = token.Name,
             ["access"] = token.ReadOnly ? "read only" : "read and write",
+            ["chat"] = _tools.ChatAccess(token.ReadOnly),
             ["projects"] = names == null ? "all" : new JsonArray(names.Select(n => (JsonNode)n).ToArray()),
             ["expires"] = token.ExpiresAt.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture),
             ["projict"] = _version,
@@ -513,20 +514,27 @@ public sealed class ApiServer
         else await Reply(context, 200, reply.ToJsonString());
     }
 
-    /// <summary>The agent tools as an API token sees them: files as uploads, no folders, and only reading for a read-only token.</summary>
+    /// <summary>
+    /// The agent tools as an API token sees them: files as uploads, no folders, and only reading for a read-only token
+    /// (apart from Chat while Settings › API lets read-only tokens use it).
+    /// </summary>
     private sealed class ApiToolHost(AgentTools tools, bool readOnly) : IMcpToolHost
     {
         private static readonly JsonElement NoArguments = JsonSerializer.SerializeToElement(new JsonObject());
+        private static readonly McpSession ReadOnlySession = new() { ReadOnly = true };
 
-        public IReadOnlyList<McpTool> Tools { get; } = tools.Tools
-            .Where(t => !readOnly || !tools.Changes(t.Name, NoArguments))
+        private readonly List<McpTool> _all = tools.Tools
             .Select(t => t with { InputSchema = Schema(t, tools.FilesArgument(t.Name)) })
             .ToList();
+
+        public IReadOnlyList<McpTool> Tools => readOnly ? _all.Where(t => tools.Allows(ReadOnlySession, t.Name, NoArguments)).ToList() : _all;
 
         public string Instructions => tools.Instructions +
             " You're connected over ProJict's API, signing with the token's name: say which project with \"project\" (there's no working " +
             "directory), send files as objects with \"name\" and \"data\" (base64), and download attachments from their url with the same " +
-            "Authorization header." + (readOnly ? " This token is read only." : "");
+            "Authorization header." + (!readOnly ? ""
+                : tools.ChatAccess(readOnly) == "read and write" ? " This token is read only, apart from Chat: there you read, post, start channels and invite like any agent."
+                : " This token is read only.");
 
         public void SessionStarted(McpSession session) => tools.SessionStarted(session);
         public void SessionEnded(McpSession session) => tools.SessionEnded(session);

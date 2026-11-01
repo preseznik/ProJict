@@ -109,7 +109,7 @@ The API is a second way in, for tools that can't start ProJict.exe: scripts, aut
 Every request needs a token: `Authorization: Bearer pjt_…`. Make one in the same window:
 
 - **Name:** what will use it. Everything done with the token is signed with this name.
-- **Access:** read and write, or read only.
+- **Access:** read and write, or read only. A read-only token can't change your projects, but it may still use [Chat](#chat) fully (read, post, start channels and invite) unless you turn that off under **Settings → API**.
 - **Projects:** all of yours, or only some.
 - **Expiry:** 7, 30 or 90 days, or 1 year.
 

@@ -18,6 +18,7 @@ public sealed partial class ApiViewModel : ObservableObject
         _main = main;
         ProjectChoices = main.State.Projects.Where(p => p.Remote == null)
             .Select(p => new ProjectChoice(p)).ToList();
+        AccessChoices = [new(ApiAccess.ReadWrite, "Read and write"), new(ApiAccess.ReadOnly, ReadOnlyLabel)];
         _newAccess = AccessChoices[0];
         _newExpiry = ExpiryChoices.First(e => e.Days == ApiData.DefaultExpiryDays);
         Server.Changed += Refresh;
@@ -117,8 +118,10 @@ public sealed partial class ApiViewModel : ObservableObject
     // ───────────── Making a token ─────────────
 
     public List<ProjectChoice> ProjectChoices { get; }
-    public IReadOnlyList<AccessChoice> AccessChoices { get; } =
-        [new(ApiAccess.ReadWrite, "Read and write"), new(ApiAccess.ReadOnly, "Read only")];
+    public IReadOnlyList<AccessChoice> AccessChoices { get; }
+
+    /// <summary>"Read only", or "Read only, Chat allowed" while Settings › API lets read-only tokens use Chat.</summary>
+    internal string ReadOnlyLabel => _main.State.AppSettings is { AgentsUseChat: true, ReadOnlyTokensUseChat: true } ? "Read only, Chat allowed" : "Read only";
     public IReadOnlyList<ExpiryChoice> ExpiryChoices { get; } =
         ApiData.ExpiryChoices.Select(d => new ExpiryChoice(d, ApiData.ExpiryText(d))).ToList();
 
@@ -237,7 +240,7 @@ public sealed partial class TokenRow(ApiToken token, ApiViewModel owner, string 
     public ApiToken Token { get; } = token;
     public string Name => Token.Name;
     public string Masked => Token.Masked;
-    public string Details => $"{(Token.ReadOnly ? "Read only" : "Read and write")} · {projects}";
+    public string Details => $"{(Token.ReadOnly ? owner.ReadOnlyLabel : "Read and write")} · {projects}";
 
     public string ExpiresText
     {

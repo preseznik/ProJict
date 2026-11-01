@@ -42,6 +42,7 @@ public partial class SettingsWindow : Window
         CheckUpdates.IsChecked = state.AppSettings.CheckForUpdates;
         AllowAgents.IsChecked = state.AppSettings.AllowAgents;
         AgentsUseChat.IsChecked = state.AppSettings.AgentsUseChat;
+        ReadOnlyTokensUseChat.IsChecked = state.AppSettings.ReadOnlyTokensUseChat;
         foreach (var box in AgentPriorities.Children.OfType<CheckBox>())
             box.IsChecked = s.AgentPriorities.Contains(Enum.Parse<Priority>((string)box.Tag));
         UserName.Text = state.UserName;
@@ -378,6 +379,7 @@ public partial class SettingsWindow : Window
         _state.AppSettings.CheckForUpdates = CheckUpdates.IsChecked == true;
         _state.AppSettings.AllowAgents = AllowAgents.IsChecked == true;
         _state.AppSettings.AgentsUseChat = AgentsUseChat.IsChecked == true;
+        _state.AppSettings.ReadOnlyTokensUseChat = ReadOnlyTokensUseChat.IsChecked == true;
         _state.AppSettings.UserName = string.IsNullOrWhiteSpace(UserName.Text) || UserName.Text.Trim() == Environment.UserName ? null : UserName.Text.Trim();
         App.Current.SetAgentAccess(_state.AppSettings.AllowAgents);
         ApplyGitHubSettings();

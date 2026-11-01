@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.26 (2026-11-01)
+
+- **Read-only API tokens may use Chat.** A read-only token still can't change your projects, but its agent can now read, post, start channels and invite in Chat like any other. Turn it off under **Settings → API** to let read-only tokens only read Chat. The token list and the API's `GET /api/v1` say what a token may do in Chat.
+
 ## 0.1.25 (2026-11-01)
 
 - **The office.** The Agents view shows your agents as little robots in an office, each at a desk of its own, beside the cards (or above them in a narrow window):

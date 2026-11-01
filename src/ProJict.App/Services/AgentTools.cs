@@ -230,8 +230,10 @@ public sealed partial class AgentTools : IMcpToolHost
         if (name == "wait_for_messages") return await WaitForMessagesAsync(session, arguments);
         var (run, filesArgument) = _handlers[name];
         var args = new Args(arguments);
-        if (session.ReadOnly && Changes(name, arguments))
-            throw new McpToolException($"This API token is read only, so it can't {name.Replace('_', ' ')}. The user can make a token that may change things in ProJict (Settings › API).",
+        if (!Allows(session, name, arguments))
+            throw new McpToolException(ChatTools.Contains(name)
+                    ? $"This API token is read only, so it can only read Chat, not {name.Replace('_', ' ')}. The user can let read-only tokens use Chat (Settings › API)."
+                    : $"This API token is read only, so it can't {name.Replace('_', ' ')}. The user can make a token that may change things in ProJict (Settings › API).",
                 ToolProblem.Forbidden);
         // Files are copied off the UI thread; the edit itself then runs on it.
         var files = filesArgument == null ? []
@@ -252,6 +254,14 @@ public sealed partial class AgentTools : IMcpToolHost
         if (error != null) ExceptionDispatchInfo.Throw(error);
         return text!;
     }
+
+    /// <summary>Whether the session may make the call: a read-only API token only reads, apart from Chat when Settings › API lets it.</summary>
+    public bool Allows(McpSession session, string name, JsonElement arguments) =>
+        !session.ReadOnly || !Changes(name, arguments) || (ChatTools.Contains(name) && _state.AppSettings.ReadOnlyTokensUseChat);
+
+    /// <summary>What an API token may do in Chat: "read and write", "read only" (a read-only token, when Settings › API says so) or "off".</summary>
+    public string ChatAccess(bool readOnly) =>
+        !_state.AppSettings.AgentsUseChat ? "off" : readOnly && !_state.AppSettings.ReadOnlyTokensUseChat ? "read only" : "read and write";
 
     /// <summary>Whether a call changes anything in ProJict (a read-only API token can't make it).</summary>
     public bool Changes(string name, JsonElement arguments) => name switch

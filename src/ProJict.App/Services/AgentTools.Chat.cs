@@ -367,7 +367,8 @@ public sealed partial class AgentTools
     /// </summary>
     private List<string> ChatLines(McpSession session)
     {
-        if (!_state.AppSettings.AgentsUseChat || Chat.Channels.Count == 0) return [];
+        // A read-only token that may only read Chat isn't asked to answer.
+        if (!_state.AppSettings.AgentsUseChat || Chat.Channels.Count == 0 || (session.ReadOnly && !_state.AppSettings.ReadOnlyTokensUseChat)) return [];
         var fresh = Waiting(session).Where(w => !session.Noticed.Contains($"chat:{w.Message.Id}")).ToList();
         if (fresh.Count == 0) return [];
         foreach (var (_, message) in fresh) session.Noticed.Add($"chat:{message.Id}");
