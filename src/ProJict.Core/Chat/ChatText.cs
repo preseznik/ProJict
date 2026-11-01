@@ -115,7 +115,7 @@ public static class ChatSearch
         if (terms.Length == 0) return [];
         return channels
             .SelectMany(c => c.Messages.Where(m => !m.Notice && !m.Deleted).Select(m => (Channel: c, Message: m)))
-            .Where(x => terms.All(t => $"#{x.Channel.Name} {x.Message.By} {x.Message.Text}".Contains(t, StringComparison.OrdinalIgnoreCase)))
+            .Where(x => terms.All(t => $"{(x.Channel.Direct ? "" : "#" + x.Channel.Name)} {x.Message.By} {x.Message.Text}".Contains(t, StringComparison.OrdinalIgnoreCase)))
             .OrderByDescending(x => x.Message.At)
             .Take(max)
             .Select(x => new ChatHit(x.Channel, x.Message, Snippet(x.Message.Text, terms)))

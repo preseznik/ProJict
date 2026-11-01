@@ -35,6 +35,51 @@ public sealed class ChatRoom
 
     /// <summary>A channel changed (members, settings or messages): save it and update what shows it.</summary>
     public event Action<ChatChannel>? Changed;
+
+    // ───────────── Mirrors ─────────────
+
+    /// <summary>
+    /// For a copy of another ProJict's channels (sharing): takes the host's version of a channel, into the same object
+    /// when there is one so what shows it keeps it, and says it changed.
+    /// </summary>
+    public ChatChannel Upsert(ChatChannel incoming)
+    {
+        var existing = Channels.FirstOrDefault(c => c.Id == incoming.Id);
+        if (existing == null) Channels.Add(existing = incoming);
+        else
+        {
+            existing.Name = incoming.Name;
+            existing.Topic = incoming.Topic;
+            existing.Access = incoming.Access;
+            existing.Direct = incoming.Direct;
+            existing.Link = incoming.Link;
+            existing.CreatedBy = incoming.CreatedBy;
+            existing.CreatedByAgent = incoming.CreatedByAgent;
+            existing.CreatedAt = incoming.CreatedAt;
+            existing.Members = incoming.Members;
+            existing.Messages = incoming.Messages;
+        }
+        Changed?.Invoke(existing);
+        return existing;
+    }
+
+    /// <summary>For a copy: the host took the channel away (deleted, or no longer visible).</summary>
+    public void Drop(Guid id)
+    {
+        if (Channels.FirstOrDefault(c => c.Id == id) is { } channel)
+        {
+            Channels.Remove(channel);
+            Removed?.Invoke(channel);
+        }
+    }
+
+    /// <summary>What a guest gets of a channel: its newest messages, without who was kicked or what agents were given.</summary>
+    public static ChatChannel ForGuest(ChatChannel channel, int messages = 300) => new()
+    {
+        Id = channel.Id, Name = channel.Name, Topic = channel.Topic, Access = channel.Access, Direct = channel.Direct, Link = channel.Link,
+        CreatedBy = channel.CreatedBy, CreatedByAgent = channel.CreatedByAgent, CreatedAt = channel.CreatedAt,
+        Members = channel.Members, Messages = channel.Messages.Skip(Math.Max(0, channel.Messages.Count - messages)).ToList(),
+    };
     /// <summary>A new message (not a notice) was posted.</summary>
     public event Action<ChatChannel, ChatMessage>? Posted;
     public event Action<ChatChannel>? Removed;
@@ -58,14 +103,62 @@ public sealed class ChatRoom
 
     /// <summary>You see every channel; others see the ones they're in, and Open ones in projects they reach unless they were kicked.</summary>
     public static bool CanSee(ChatChannel channel, ChatActor actor) =>
-        actor.Owner || (!IsKicked(channel, actor.Name) && Reaches(channel, actor) &&
-                        (channel.Access == ChannelAccess.Open || Member(channel, actor.Name) != null));
+        actor.Owner || (!IsKicked(channel, actor.Name) &&
+                        (Member(channel, actor.Name) != null ||
+                         (channel.Access == ChannelAccess.Open && Reaches(channel, actor) && !(actor.Guest && channel.Link == null))));
 
     /// <summary>Until when the member can't post; null when they can.</summary>
     public DateTime? MutedUntil(ChatChannel channel, string name) =>
         Member(channel, name)?.MutedUntil is { } until && until > Now ? until : null;
 
     public IEnumerable<ChatChannel> Visible(ChatActor actor) => Channels.Where(c => CanSee(c, actor));
+
+    // ───────────── Private conversations ─────────────
+
+    /// <summary>The private conversation between the two, if they have one.</summary>
+    public ChatChannel? FindDirect(string a, string b) =>
+        Channels.FirstOrDefault(c => c.Direct && c.Members.Count == 2 && Member(c, a) != null && Member(c, b) != null);
+
+    /// <summary>The private conversation with someone, started when there's none yet (with yourself there's none).</summary>
+    public ChatChannel OpenDirect(ChatActor by, string other, bool otherIsAgent)
+    {
+        other = other.Trim().TrimStart('@');
+        if (other.Length == 0 || string.Equals(other, by.Name, StringComparison.OrdinalIgnoreCase))
+            throw new ChatException("Say whom to write to, other than yourself.");
+        if (FindDirect(by.Name, other) is { } existing) return existing;
+        var now = Now;
+        string name;
+        do name = "dm-" + Guid.NewGuid().ToString("N")[..8];
+        while (Find(name) != null);
+        var channel = new ChatChannel
+        {
+            Name = name, Direct = true, Access = ChannelAccess.InviteOnly, CreatedBy = by.Name, CreatedByAgent = by.Agent, CreatedAt = now,
+            Members =
+            [
+                new ChatMember { Name = by.Name, Agent = by.Agent, JoinedAt = now, LastRead = now },
+                new ChatMember { Name = other, Agent = otherIsAgent, JoinedAt = now },
+            ],
+        };
+        Channels.Add(channel);
+        Changed?.Invoke(channel);
+        return channel;
+    }
+
+    /// <summary>
+    /// What to call a channel for someone: "#hud", or for a private conversation the other person's name ("Ada"), or
+    /// both names when they're not in it ("Ada & Quill").
+    /// </summary>
+    public static string Title(ChatChannel channel, string viewer)
+    {
+        if (!channel.Direct) return "#" + channel.Name;
+        var others = channel.Members.Where(m => !string.Equals(m.Name, viewer, StringComparison.OrdinalIgnoreCase)).Select(m => m.Name).ToList();
+        return others.Count == 1 ? others[0] : string.Join(" & ", channel.Members.Select(m => m.Name));
+    }
+
+    private static void NotDirect(ChatChannel channel)
+    {
+        if (channel.Direct) throw new ChatException("A private conversation is just between its two people.");
+    }
 
     public ChatChannel? Find(string nameOrId)
     {
@@ -138,6 +231,7 @@ public sealed class ChatRoom
 
     public void SetTopic(ChatChannel channel, ChatActor by, string? topic)
     {
+        NotDirect(channel);
         RequireModerator(channel, by);
         channel.Topic = Clean(topic);
         AddNotice(channel, by, channel.Topic == null ? $"{by.Name} cleared the topic" : $"{by.Name} set the topic: {channel.Topic}");
@@ -146,6 +240,7 @@ public sealed class ChatRoom
 
     public void SetAccess(ChatChannel channel, ChatActor by, ChannelAccess access)
     {
+        NotDirect(channel);
         RequireModerator(channel, by);
         if (channel.Access == access) return;
         channel.Access = access;
@@ -166,6 +261,7 @@ public sealed class ChatRoom
     public void Join(ChatChannel channel, ChatActor actor)
     {
         if (Member(channel, actor.Name) != null) return;
+        NotDirect(channel);
         if (!CanSee(channel, actor) || (channel.Access == ChannelAccess.InviteOnly && !actor.Owner))
             throw new ChatException(IsKicked(channel, actor.Name) ? $"You were removed from #{channel.Name}; a moderator can invite you back."
                 : $"#{channel.Name} is invite only; ask a moderator to invite you.");
@@ -177,6 +273,7 @@ public sealed class ChatRoom
     public void Leave(ChatChannel channel, ChatActor actor)
     {
         if (Member(channel, actor.Name) is not { } member) return;
+        NotDirect(channel);
         channel.Members.Remove(member);
         AddNotice(channel, actor, $"{actor.Name} left");
         Changed?.Invoke(channel);
@@ -187,6 +284,7 @@ public sealed class ChatRoom
     {
         name = name.Trim().TrimStart('@');
         if (name.Length == 0) throw new ChatException("Say whom to invite.");
+        NotDirect(channel);
         if (!IsModerator(channel, by) && !(channel.Access == ChannelAccess.Open && Member(channel, by.Name) != null))
             throw new ChatException($"Only moderators of #{channel.Name} can invite.");
         channel.Kicked.RemoveAll(k => string.Equals(k, name, StringComparison.OrdinalIgnoreCase));
@@ -248,6 +346,7 @@ public sealed class ChatRoom
 
     public void Unmute(ChatChannel channel, ChatActor by, string name)
     {
+        NotDirect(channel);
         RequireModerator(channel, by);
         if (Member(channel, name) is not { MutedUntil: not null } member) return;
         member.MutedUntil = null;
@@ -257,6 +356,7 @@ public sealed class ChatRoom
 
     public void SetModerator(ChatChannel channel, ChatActor by, string name, bool moderator)
     {
+        NotDirect(channel);
         RequireModerator(channel, by);
         var member = Member(channel, name) ?? throw new ChatException($"{name} isn't in #{channel.Name}.");
         if (member.Moderator == moderator) return;
@@ -271,6 +371,7 @@ public sealed class ChatRoom
 
     private ChatMember Target(ChatChannel channel, ChatActor by, string name, string what)
     {
+        NotDirect(channel);
         RequireModerator(channel, by);
         var member = Member(channel, name.Trim().TrimStart('@')) ?? throw new ChatException($"{name} isn't in #{channel.Name}.");
         if (IsOwner(member.Name) && !member.Agent) throw new ChatException($"You can't {what} the owner of the workspace.");

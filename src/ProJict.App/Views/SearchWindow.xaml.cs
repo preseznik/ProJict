@@ -16,7 +16,9 @@ public partial class SearchWindow : Window
     public sealed record ResultRow(SearchHit? Hit, ProJict.Core.Chat.ChatHit? Chat = null)
     {
         public string Snippet => Hit?.Snippet ?? Chat!.Snippet;
-        public string Location => Hit?.Location ?? $"Chat › #{Chat!.Channel.Name} › {Chat.Message.By}, {Chat.Message.At:d MMM HH:mm}";
+        public string Location => Hit?.Location ?? (Chat!.Channel.Direct
+            ? $"Chat › private: {string.Join(" & ", Chat.Channel.Members.Select(m => m.Name))} › {Chat.Message.By}, {Chat.Message.At:d MMM HH:mm}"
+            : $"Chat › #{Chat.Channel.Name} › {Chat.Message.By}, {Chat.Message.At:d MMM HH:mm}");
         public string StateText => Hit?.Item switch
         {
             null => "",

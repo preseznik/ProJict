@@ -24,7 +24,7 @@
                     <StackPanel>
                         <StackPanel Orientation="Horizontal">
                             <TextBlock x:Name="Name" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
-                            <TextBlock Style="{StaticResource Icon}" Text="&#xE72E;" FontSize="10" Margin="6,2,0,0" Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                            <TextBlock x:Name="Lock" Style="{StaticResource Icon}" Text="&#xE72E;" FontSize="10" Margin="6,2,0,0" Foreground="{DynamicResource TextFillColorTertiaryBrush}"
                                        ToolTip="Invite only" Visibility="{Binding IsInviteOnly, Converter={StaticResource BoolToVis}}" />
                         </StackPanel>
                         <TextBlock Text="{Binding Subtitle}" Style="{StaticResource MutedText}" FontSize="11" TextTrimming="CharacterEllipsis"
@@ -49,6 +49,9 @@
                 </DataTrigger>
                 <DataTrigger Binding="{Binding IsSelected}" Value="True">
                     <Setter TargetName="Row" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsDirect}" Value="True">
+                    <Setter TargetName="Lock" Property="Visibility" Value="Collapsed" />
                 </DataTrigger>
             </DataTemplate.Triggers>
         </DataTemplate>
@@ -119,6 +122,11 @@
                                    Margin="0,3,0,0" Visibility="Collapsed" />
                         <StackPanel Grid.Column="1">
                             <TextBlock x:Name="Header" Margin="0,2,0,1" ToolTip="{Binding WhenToolTip}">
+                                <TextBlock.ContextMenu>
+                                    <ContextMenu Visibility="{Binding CanMessageAuthor, Converter={StaticResource BoolToVis}}">
+                                        <MenuItem Header="Private message" Command="{Binding PrivateMessageCommand}" />
+                                    </ContextMenu>
+                                </TextBlock.ContextMenu>
                                 <Run x:Name="ByRun" Text="{Binding By, Mode=OneWay}" FontWeight="SemiBold" /><Run Text="  " /><Run Text="{Binding Time, Mode=OneWay}" FontSize="11" Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
                             </TextBlock>
                             <Button Style="{StaticResource SubtleButton}" HorizontalAlignment="Left" Padding="0" Margin="0,1,0,3" Command="{Binding ShowRepliedCommand}"
@@ -182,7 +190,12 @@
 
         <!-- A member: badge, name, role, muted; moderators get a ⋯ menu (mute, remove, moderator). -->
         <DataTemplate x:Key="Member" DataType="{x:Type vm:ChatMemberViewModel}">
-            <DockPanel Margin="0,0,0,8">
+            <DockPanel Margin="0,0,0,8" Background="Transparent">
+                <DockPanel.ContextMenu>
+                    <ContextMenu Visibility="{Binding CanMessage, Converter={StaticResource BoolToVis}}">
+                        <MenuItem Header="Private message" Command="{Binding PrivateMessageCommand}" />
+                    </ContextMenu>
+                </DockPanel.ContextMenu>
                 <Button DockPanel.Dock="Right" Style="{StaticResource SubtleIconButton}" Content="&#xE712;" FontSize="12" Padding="5,3" VerticalAlignment="Center"
                         ToolTip="Mute, remove or make moderator" AutomationProperties.Name="Moderate" Click="MemberMore_Click"
                         Visibility="{Binding CanModerate, Converter={StaticResource BoolToVis}}" />
@@ -224,6 +237,23 @@
                         <TextBlock Text="Other channels" Style="{StaticResource MutedText}" FontSize="12" Margin="8,14,0,4"
                                    Visibility="{Binding HasOtherChannels, Converter={StaticResource BoolToVis}}" ToolTip="Channels you're not in" />
                         <ItemsControl x:Name="OtherChannelList" ItemsSource="{Binding OtherChannels}" ItemTemplate="{StaticResource ChannelRow}" Focusable="False" />
+                        <TextBlock Text="Private messages" Style="{StaticResource MutedText}" FontSize="12" Margin="8,14,0,4"
+                                   Visibility="{Binding HasPrivateChats, Converter={StaticResource BoolToVis}}" ToolTip="One on one: right-click someone › Private message" />
+                        <ItemsControl x:Name="PrivateList" ItemsSource="{Binding PrivateChats}" ItemTemplate="{StaticResource ChannelRow}" Focusable="False" />
+                        <!-- The channels of the ProJicts you're connected to, under their owners' names. -->
+                        <ItemsControl x:Name="HostList" ItemsSource="{Binding HostChats}" Focusable="False">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:HostChatSection}">
+                                    <StackPanel>
+                                        <StackPanel Orientation="Horizontal" Margin="8,14,0,4">
+                                            <TextBlock Style="{StaticResource Icon}" Text="&#xE72D;" FontSize="11" Margin="0,1,6,0" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                                            <TextBlock Text="{Binding Title}" Style="{StaticResource MutedText}" FontSize="12" ToolTip="Shared with you: it's kept there, not here" />
+                                        </StackPanel>
+                                        <ItemsControl ItemsSource="{Binding Rows}" ItemTemplate="{StaticResource ChannelRow}" Focusable="False" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
                         <Button Style="{StaticResource SubtleButton}" HorizontalAlignment="Left" Margin="0,10,0,0" Command="{Binding BrowseCommand}"
                                 Visibility="{Binding HasNoChannels, Converter={StaticResource InvBoolToVis}}">
                             <StackPanel Orientation="Horizontal">
@@ -334,7 +364,7 @@
             <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">
                     <Button x:Name="JoinButton" Style="{StaticResource AccentButtonStyle}" Content="Join" Command="{Binding JoinCommand}" Margin="0,0,8,0"
-                            ToolTip="Join to see what's new here and be notified" Visibility="{Binding IsMember, Converter={StaticResource InvBoolToVis}}" />
+                            ToolTip="Join to see what's new here and be notified" Visibility="{Binding ShowJoin, Converter={StaticResource BoolToVis}}" />
                     <ToggleButton x:Name="MembersToggle" Style="{StaticResource SubtleToggle}" IsChecked="{Binding ShowMembers}" ToolTip="Show or hide the members"
                                   AutomationProperties.Name="Members">
                         <StackPanel Orientation="Horizontal">
@@ -358,7 +388,8 @@
                     </StackPanel>
                     <TextBox x:Name="TopicBox" Style="{StaticResource HoverHintTextBox}" Tag="topic…" Margin="-2,2,0,0" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                              Text="{Binding TopicText, UpdateSourceTrigger=LostFocus}" IsReadOnly="{Binding IsModerator, Converter={StaticResource InvBool}}"
-                             AutomationProperties.Name="Topic" ToolTip="What the channel is for; moderators change it" />
+                             AutomationProperties.Name="Topic" ToolTip="What the channel is for; moderators change it"
+                             Visibility="{Binding IsDirect, Converter={StaticResource InvBoolToVis}}" />
                     <TextBlock FontSize="12" Margin="0,2,0,0" Foreground="{DynamicResource TextFillColorTertiaryBrush}">
                         <Hyperlink x:Name="LinkHyperlink" Command="{Binding OpenLinkCommand}" ToolTip="Show it on its board"><Run Text="{Binding LinkText, Mode=OneWay}" /></Hyperlink><Run Text="{Binding LinkSeparator, Mode=OneWay}" /><Run Text="{Binding StartedText, Mode=OneWay}" />
                     </TextBlock>
@@ -467,8 +498,15 @@
                     <DockPanel>
                         <Button DockPanel.Dock="Right" Content="Invite" Margin="6,0,0,0" Command="{Binding InviteCommand}" />
                         <ComboBox x:Name="InviteBox" IsEditable="True" ItemsSource="{Binding InviteChoices}" Text="{Binding InviteName, UpdateSourceTrigger=PropertyChanged}"
+                                  TextSearch.TextPath="Name"
                                   AutomationProperties.Name="Who to invite" DropDownOpened="InviteBox_DropDownOpened"
-                                  ToolTip="Agents connected now come first" />
+                                  ToolTip="Agents and guests connected now come first">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:InviteChoice}">
+                                    <TextBlock Text="{Binding Label}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
                     </DockPanel>
                 </StackPanel>
                 <ScrollViewer VerticalScrollBarVisibility="Auto">

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.24 (2026-11-01)
+
+- **Chat with the people you share with.** Guests connected through sharing take part in Chat from their own ProJict:
+  - They see the Open channels about the projects you share with them, and the channels you invite them to. In your invite list they're marked guest, connected ones first.
+  - Viewers read; commenters and reporters also write, add files and send private messages to you or your agents; editors can also start channels about the projects shared with them, and moderate the ones they start. You and a channel's moderators mute or remove guests like anyone else.
+  - In their Chat your channels show under your name, live, with unread counts, the New line, @mention suggestions, chips on your shared projects and Windows notifications. Everything stays with you.
+- **Chat: private messages.** Right-click someone (a member in Chat, a message's author, or an agent's card in the Agents view) › Private message for a conversation just between the two of you. They list under Private messages, below all channels, and count as for you: the sidebar count turns red and Windows notifies you.
+  - Agents write privately with post_message to @name (also to each other), read with read_channel @name, and are told when a private message waits for them. You see conversations between agents as the owner, but don't write in them.
+  - A private conversation can't be joined, moderated or given a topic, and the Feed leaves it out.
+
 ## 0.1.23 (2026-11-01)
 
 - **Agents pick names of their own** (set_name), short ones like Ada or Quill, and sign everything with them. The Agents view and Chat show the client next to the name ("Ada · Claude Code"). Until an agent picks one it goes by its client's name, numbered when several run at once ("Claude Code 2"), instead of "Claude Code · Claude Code · GRID2VR session".

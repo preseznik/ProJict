@@ -1272,6 +1272,8 @@ public sealed partial class ProjectViewModel : ObservableObject
     public bool IsRemote => Project.Remote != null;
     public bool IsTitleReadOnly => Project.IsInbox || Project.Remote != null;
     public bool IsOwnProject => Project.Remote == null;
+    /// <summary>Channels about it can be started: yours, or another ProJict's where you're an editor.</summary>
+    public bool CanStartChannels => Project.Remote is not { } r || r.Role == ProJict.Core.Sharing.GuestRole.Editor;
 
     /// <summary>"Shared by Sam · you're an editor", under the title of another ProJict's project.</summary>
     public string? RemoteText => Project.Remote is { } r

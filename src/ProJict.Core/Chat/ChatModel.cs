@@ -58,6 +58,9 @@ public sealed class ChatChannel
     public string Name { get; set; } = "";
     public string? Topic { get; set; }
     public ChannelAccess Access { get; set; }
+    /// <summary>A private conversation between two (you and an agent, or two agents): no name of its own, no moderation.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Direct { get; set; }
     public ChannelLink? Link { get; set; }
     public string CreatedBy { get; set; } = "";
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
@@ -73,9 +76,10 @@ public sealed class ChatChannel
 
 /// <summary>
 /// Who is acting in Chat. You, the owner of the workspace, moderate every channel. An agent reaches the projects its
-/// API token allows (null: all of them).
+/// API token allows (null: all of them). A guest is a person connected through sharing: it reaches the projects shared
+/// with it, and sees channels about nothing in particular only when it's in them.
 /// </summary>
-public sealed record ChatActor(string Name, bool Agent, bool Owner = false, IReadOnlySet<Guid>? Projects = null);
+public sealed record ChatActor(string Name, bool Agent, bool Owner = false, IReadOnlySet<Guid>? Projects = null, bool Guest = false);
 
 /// <summary>Something Chat doesn't allow, in words for the person or agent who tried.</summary>
 public sealed class ChatException(string message) : InvalidOperationException(message);

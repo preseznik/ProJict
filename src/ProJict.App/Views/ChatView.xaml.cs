@@ -164,9 +164,10 @@ public partial class ChatView : UserControl
         if (_vm?.Channel == null || sender is not FrameworkElement button) return;
         var menu = new ContextMenu { FontFamily = FontFamily, PlacementTarget = button, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom };
         if (_vm.LinkText != null) menu.Items.Add(new MenuItem { Header = "Show what it's about", Command = _vm.OpenLinkCommand });
-        if (_vm.IsMember) menu.Items.Add(new MenuItem { Header = "Leave the channel", Command = _vm.LeaveCommand });
+        if (_vm.IsDirect) { }
+        else if (_vm.IsMember) menu.Items.Add(new MenuItem { Header = "Leave the channel", Command = _vm.LeaveCommand });
         else menu.Items.Add(new MenuItem { Header = "Join the channel", Command = _vm.JoinCommand });
-        if (_vm.IsModerator)
+        if (_vm.IsModerator && !_vm.IsDirect)
         {
             menu.Items.Add(new Separator());
             menu.Items.Add(new MenuItem { Header = _vm.IsInviteOnly ? "Open it to everyone who can see its project" : "Make it invite only", Command = _vm.ToggleAccessCommand });
@@ -184,6 +185,8 @@ public partial class ChatView : UserControl
     {
         if (sender is not FrameworkElement { DataContext: ChatMemberViewModel member } button) return;
         var menu = new ContextMenu { FontFamily = FontFamily, PlacementTarget = button, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom };
+        menu.Items.Add(new MenuItem { Header = "Private message", Command = member.PrivateMessageCommand });
+        menu.Items.Add(new Separator());
         if (member.IsMuted) menu.Items.Add(new MenuItem { Header = "Unmute", Command = member.UnmuteCommand });
         menu.Items.Add(new MenuItem { Header = "Mute for 15 minutes", Command = member.MuteCommand, CommandParameter = "15" });
         menu.Items.Add(new MenuItem { Header = "Mute for 1 hour", Command = member.MuteCommand, CommandParameter = "60" });

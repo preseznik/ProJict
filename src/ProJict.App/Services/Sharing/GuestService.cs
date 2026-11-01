@@ -82,7 +82,7 @@ internal sealed class RemoteCopy(Project project)
 /// sidebar and update live; your changes go to the host after a moment (merged there with what changed meanwhile),
 /// within what your role allows. Nothing of theirs is saved here except fetched pictures and files.
 /// </summary>
-public sealed class GuestService
+public sealed partial class GuestService
 {
     private static readonly TimeSpan SaveDelay = TimeSpan.FromMilliseconds(400);
     private static readonly TimeSpan PingEvery = TimeSpan.FromSeconds(30);
@@ -148,6 +148,7 @@ public sealed class GuestService
         connection.Send(Wire.Message("bye"));
         connection.Cts?.Cancel();
         DropProjects(connection);
+        DropChat(connection);
         connection.State = ConnectionState.Disconnected;
         if (forget)
         {
@@ -295,6 +296,7 @@ public sealed class GuestService
 
     private void SetConnected(HostConnection connection, bool connected)
     {
+        if (!connected) DropChat(connection);
         foreach (var copy in connection.Copies.Values)
         {
             if (copy.Project.Remote is { } remote) remote.Connected = connected;
@@ -346,6 +348,9 @@ public sealed class GuestService
             case "file":
                 StoreFile(connection, message);
                 break;
+            case "chat" or "chatChannel" or "chatGone" or "chatError":
+                HandleChat(connection, (string)message["type"]!, message);
+                break;
         }
     }
 
@@ -354,6 +359,7 @@ public sealed class GuestService
         var host = connection.Host;
         connection.HostName = (string?)message["host"] ?? connection.HostName;
         connection.Role = Enum.TryParse<GuestRole>((string?)message["role"], out var role) ? role : GuestRole.Viewer;
+        connection.MyName = (string?)message["name"] ?? connection.MyName;
         host.HostName = connection.HostName;
         if (Guid.TryParse((string?)message["guestId"], out var guestId)) host.GuestId = guestId;
         if ((string?)message["token"] is { } token) _store.SetToken(host, token);
@@ -500,6 +506,12 @@ public sealed class GuestService
     {
         if (!Guid.TryParse((string?)message["id"], out var id)) return;
         var copy = connection.Copies.Values.FirstOrDefault(c => c.Project.Attachments().Any(a => a.Id == id));
+        if (copy == null)
+        {
+            try { StoreChatFile(connection, id, Convert.FromBase64String((string?)message["data"] ?? "")); }
+            catch (Exception ex) when (ex is IOException or FormatException or UnauthorizedAccessException) { connection.Requested.Remove(id); }
+            return;
+        }
         var attachment = copy?.Project.Attachments().First(a => a.Id == id);
         if (copy == null || attachment == null) return;
         try

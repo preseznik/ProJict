@@ -345,6 +345,12 @@ public sealed partial class AgentActivityViewModel : ObservableObject
                         string.Equals(x.Item.ClaimedBy, session.AgentName, StringComparison.OrdinalIgnoreCase))
             .ToList();
 
+    internal void MessagePrivately(McpSession session)
+    {
+        _main.ShowChannel(null);
+        _main.Chat.OpenDirect(session.AgentName, agent: true);
+    }
+
     internal void Reveal(Project project, Guid itemId)
     {
         var board = _main.OpenProject(project);
@@ -420,6 +426,9 @@ public sealed partial class AgentCardViewModel : ObservableObject
     public List<AgentActionRow> Recent { get; private set; } = [];
     public List<CheckoutRow> CheckedOut { get; private set; } = [];
     public bool HasCheckedOut => CheckedOut.Count > 0;
+
+    /// <summary>Right-click the card › Private message: your conversation with it in Chat.</summary>
+    [RelayCommand] private void PrivateMessage() => _owner.MessagePrivately(Session);
     public bool HasRecent => Recent.Count > 0;
 
     /// <summary>Called or set its status in the last half minute: the dots move.</summary>

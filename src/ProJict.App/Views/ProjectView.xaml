@@ -376,7 +376,7 @@
                 <Button Style="{StaticResource SubtleButton}" AutomationProperties.Name="GitHub" Command="{Binding OpenGitHubCommand}" ToolTip="Open the GitHub page" Visibility="{Binding IsNotInbox, Converter={StaticResource BoolToVis}}">
                     <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource Icon}" Text="&#xE774;" /><TextBlock Text="GitHub" Margin="6,0,0,0" /></StackPanel>
                 </Button>
-                <Button Style="{StaticResource SubtleButton}" AutomationProperties.Name="Chat" Command="{Binding OpenChatCommand}" ToolTip="Live chat about this project with AI agents: its #channel, or start one" Visibility="{Binding IsOwnProject, Converter={StaticResource BoolToVis}}">
+                <Button Style="{StaticResource SubtleButton}" AutomationProperties.Name="Chat" Command="{Binding OpenChatCommand}" ToolTip="Live chat about this project: its #channel, or start one" Visibility="{Binding CanStartChannels, Converter={StaticResource BoolToVis}}">
                     <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource Icon}" Text="&#xE8F2;" /><TextBlock Text="Chat" Margin="6,0,0,0" /></StackPanel>
                 </Button>
                 <Button Style="{StaticResource SubtleButton}" AutomationProperties.Name="Copy prompt" Command="{Binding CopyPromptCommand}"

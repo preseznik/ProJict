@@ -362,10 +362,10 @@ public partial class ProjectView : UserControl
         if (row.ClaimedBy != null) menu.Items.Add(Item($"Release {row.ClaimedBy}'s check-out", row.ReleaseClaimCommand));
         if (row.NeedsReview || row.ClaimedBy != null) menu.Items.Add(new Separator());
         menu.Items.Add(Item(row.CommentCount > 0 ? $"Discussion ({row.CommentCount})…" : "Discussion…", row.OpenDiscussionCommand));
-        if (row.Owner.IsOwnProject)
+        if (row.Owner.CanStartChannels || row.Channels.Count > 0)
         {
             foreach (var chip in row.Channels) menu.Items.Add(Item($"Open {chip.Text}", chip.OpenCommand));
-            menu.Items.Add(Item("Start a chat channel…", row.StartChannelCommand));
+            if (row.Owner.CanStartChannels) menu.Items.Add(Item("Start a chat channel…", row.StartChannelCommand));
         }
         if (row.Contributors.Count > 0)
         {
@@ -497,11 +497,11 @@ public partial class ProjectView : UserControl
         menu.Items.Add(new MenuItem { Header = "Move down", Command = category.MoveDownCommand, IsEnabled = !last });
         menu.Items.Add(new MenuItem { Header = "Move to bottom", Command = category.MoveToBottomCommand, IsEnabled = !last });
         menu.Items.Add(new MenuItem { Header = category.IsDoneExpanded ? "Hide done" : "Show done", Command = new CommunityToolkit.Mvvm.Input.RelayCommand(() => category.IsDoneExpanded = !category.IsDoneExpanded) });
-        if (category.Owner.IsOwnProject)
+        if (category.Owner.CanStartChannels || category.Channels.Count > 0)
         {
             menu.Items.Add(new Separator());
             foreach (var chip in category.Channels) menu.Items.Add(new MenuItem { Header = $"Open {chip.Text}", Command = chip.OpenCommand });
-            menu.Items.Add(new MenuItem { Header = "Start a chat channel…", Command = category.StartChannelCommand });
+            if (category.Owner.CanStartChannels) menu.Items.Add(new MenuItem { Header = "Start a chat channel…", Command = category.StartChannelCommand });
         }
         menu.Items.Add(new Separator());
         menu.Items.Add(new MenuItem { Header = "Delete category…", Command = category.DeleteCommand });

@@ -107,7 +107,7 @@ public static class ActivityFeed
     public static IEnumerable<FeedEvent> Channels(IEnumerable<ProJict.Core.Chat.ChatChannel> channels, IEnumerable<Project> projects)
     {
         var byId = projects.ToDictionary(p => p.Id);
-        foreach (var channel in channels)
+        foreach (var channel in channels.Where(c => !c.Direct))
         {
             var project = channel.Link != null ? byId.GetValueOrDefault(channel.Link.ProjectId) : null;
             var item = channel.Link?.ItemId is { } i ? project?.Find(i)?.Item : null;

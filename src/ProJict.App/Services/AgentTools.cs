@@ -7,6 +7,7 @@ using System.Windows.Threading;
 using ProJict.App.ViewModels;
 using ProJict.Core.Agents;
 using ProJict.Core.Api;
+using ProJict.Core.Chat;
 using ProJict.Core.Features;
 using ProJict.Core.Import;
 using ProJict.Core.Model;
@@ -191,9 +192,10 @@ public sealed partial class AgentTools : IMcpToolHost
         "When a project shows a shipRequest, the user wants it committed, built, packaged, pushed or released: read it with ship_request, post your " +
         "plan with plan_ship and wait for their approval in ProJict; only then run the steps, report each with report_ship and end with finish_ship " +
         "(record a published release with draft_release save=true). " +
-        "The user and agents also talk live in Chat #channels (list_channels, read_channel, post_message, create_channel); to listen, call " +
+        "The user and agents also talk live in Chat #channels (list_channels, read_channel, post_message, create_channel), and privately: " +
+        "post_message to channel @name writes to the user or an agent only. To listen, call " +
         "wait_for_messages. What waits for you shows in a tool result's waitingForYou list, each thing once: chat invitations, @mentions and new " +
-        "messages (read them with read_channel and reply with post_message: say hello when invited, and answer what you're asked, or say you " +
+        "messages, private ones included (read them with read_channel and reply with post_message: say hello when invited, and answer what you're asked, or say you " +
         "can't now), the user's comments on items you worked on (answer with add_comment), work the user sent back (get_item for why, then " +
         "claim_item to work on it again), and ship requests in your project. Deal with them before going on, or say why not. " +
         "Ids (items, comments and messages) may be shortened to their first 8 characters.";
@@ -286,9 +288,11 @@ public sealed partial class AgentTools : IMcpToolHost
     {
         if (ChatTools.Contains(tool))
         {
-            var channel = args.String("channel") is { } key ? Chat.Find(key)
+            var key = args.String("channel")?.Trim();
+            var channel = key is { } k ? k.StartsWith('@') ? Chat.FindDirect(session.AgentName, k[1..].Trim()) : Chat.Find(k)
                 : tool == "create_channel" ? Chat.Channels.LastOrDefault(c => string.Equals(c.CreatedBy, session.AgentName, StringComparison.OrdinalIgnoreCase)) : null;
-            var name = "#" + (channel?.Name ?? args.String("channel")?.Trim().TrimStart('#') ?? "a channel");
+            var name = channel is { Direct: true } ? "a private conversation with " + ChatRoom.Title(channel, session.AgentName)
+                : "#" + (channel?.Name ?? key?.TrimStart('#') ?? "a channel");
             RecordText(session, tool switch
             {
                 "list_channels" => "Looked at the chat channels",

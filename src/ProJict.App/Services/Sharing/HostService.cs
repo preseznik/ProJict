@@ -39,6 +39,8 @@ public sealed class GuestSession(GuestAccount account, Wire wire, string address
     internal CancellationTokenSource Cts { get; } = cts;
     /// <summary>Projects the guest has, so it hears when one stops being shared with it.</summary>
     internal HashSet<Guid> Sent { get; } = [];
+    /// <summary>Chat channels the guest has, likewise.</summary>
+    internal HashSet<Guid> ChatSent { get; } = [];
 
     internal void Send(JsonObject message) => _ = SendAsync(message);
 
@@ -59,7 +61,7 @@ public sealed class GuestSession(GuestAccount account, Wire wire, string address
 /// approve, and live editing. Every guest change is checked against the guest's role, merged with what changed
 /// meanwhile and applied as an undo step; every change goes out to the connected guests that see the project.
 /// </summary>
-public sealed class HostService
+public sealed partial class HostService
 {
     private const int KeptRevisions = 50;
     private static readonly TimeSpan BroadcastDelay = TimeSpan.FromMilliseconds(300);
@@ -94,6 +96,8 @@ public sealed class HostService
         _dispatcher = Dispatcher.CurrentDispatcher;
         state.ProjectChanged += OnProjectChanged;
         state.ProjectListChanged += OnProjectListChanged;
+        state.Chat.Changed += OnChatChanged;
+        state.Chat.Removed += channel => SendChannel(channel);
     }
 
     public SharingData Data => _store.Data;
@@ -420,7 +424,7 @@ public sealed class HostService
     {
         var projects = Visible(session.Account).ToList();
         var welcome = Wire.Message("welcome",
-            ("guestId", session.Account.Id.ToString()), ("role", session.Account.Role.ToString()), ("host", _state.UserName),
+            ("guestId", session.Account.Id.ToString()), ("role", session.Account.Role.ToString()), ("host", _state.UserName), ("name", session.Account.Name),
             ("projectIds", new JsonArray(projects.Select(p => (JsonNode)p.Id.ToString()).ToArray())));
         if (token != null) welcome["token"] = token;
         var messages = new List<JsonObject> { welcome };
@@ -430,6 +434,7 @@ public sealed class HostService
             session.Sent.Add(project.Id);
             messages.Add(Wire.Message("project", ("revision", revision), ("project", ForGuest(json))));
         }
+        messages.Add(ChatSnapshot(session));
         return messages;
     }
 
@@ -446,6 +451,8 @@ public sealed class HostService
             case "getFile":
                 SendFile(session, message);
                 return null;
+            case "chatOp":
+                return ChatOp(session, message);
             case "viewing":
                 var id = Guid.TryParse((string?)message["projectId"], out var g) ? g : (Guid?)null;
                 _main.Agents.PersonViewing(session, id is { } v && Visible(session.Account).Any(p => p.Id == v) ? v : null);
@@ -492,7 +499,8 @@ public sealed class HostService
     /// <summary>A file for an attachment a guest added (stored before its save arrives, which then refers to it).</summary>
     private JsonObject? StoreFile(GuestSession session, JsonObject message)
     {
-        if (!GuestAccess.CanAddItems(session.Account.Role)) return null;
+        // Commenters send files with comments and chat messages; what refers to them is checked when it arrives.
+        if (!GuestAccess.CanComment(session.Account.Role)) return null;
         if (!Guid.TryParse((string?)message["id"], out var id)) return null;
         var data = Convert.FromBase64String((string?)message["data"] ?? "");
         if (data.Length > MaxFileBytes) return null;
@@ -507,7 +515,7 @@ public sealed class HostService
     private void SendFile(GuestSession session, JsonObject message)
     {
         if (!Guid.TryParse((string?)message["id"], out var id)) return;
-        var attachment = Visible(session.Account).SelectMany(p => p.Attachments()).FirstOrDefault(a => a.Id == id);
+        var attachment = Visible(session.Account).SelectMany(p => p.Attachments()).FirstOrDefault(a => a.Id == id) ?? ChatAttachment(session, id);
         if (attachment == null) return;
         var path = _state.Store.AttachmentPath(attachment);
         _ = Task.Run(async () =>
@@ -596,6 +604,7 @@ public sealed class HostService
     /// <summary>Projects added, deleted or moved to another group: guests get the ones they may now see and lose the others.</summary>
     private void OnProjectListChanged()
     {
+        SyncChat();
         foreach (var session in _sessions)
         {
             var visible = Visible(session.Account).ToList();

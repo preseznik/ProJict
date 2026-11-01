@@ -18,7 +18,8 @@ public sealed partial class AgentTools
     private static readonly HashSet<string> ChatTools =
         ["list_channels", "create_channel", "read_channel", "post_message", "edit_message", "join_channel", "invite_to_channel", "moderate_channel", "wait_for_messages"];
 
-    private static readonly (string, string, string, bool) ChannelArg = ("channel", "string", "The channel's name, e.g. grid2vr-hud (with or without #).", true);
+    private static readonly (string, string, string, bool) ChannelArg = ("channel", "string",
+        "The channel's name, e.g. grid2vr-hud (with or without #), or @name for your private conversation with the user or an agent.", true);
 
     private void AddChatTools()
     {
@@ -44,7 +45,8 @@ public sealed partial class AgentTools
                 ("before", "string", "Only messages before this message id, to read further back.", false)),
             ReadChannel, readOnly: true);
         Add("post_message", "Post in a chat channel",
-            "Posts a message; in an Open channel you join it by posting. @name mentions someone (they're notified), #name links a channel, " +
+            "Posts a message; in an Open channel you join it by posting. With channel @name it goes privately to the user or an agent (the " +
+            "conversation starts with your first message). @name in the text mentions someone (they're notified), #name links a channel, " +
             "# and an item's 8-character id links the item. At most 20 messages a minute.",
             Schema(ChannelArg, ("text", "string", "The message.", true), ("reply_to", "string", "Id of the message you answer; it's quoted.", false),
                 ("attachments", "string[]", "Files to post with it, e.g. a screenshot (absolute paths or relative to your working directory).", false)),
@@ -87,10 +89,18 @@ public sealed partial class AgentTools
             throw new McpToolException("The user turned Chat off for AI agents (Settings › AI agents).", ToolProblem.Forbidden);
     }
 
-    private ChatChannel ChannelFor(McpSession session, Args args, string name = "channel")
+    private ChatChannel ChannelFor(McpSession session, Args args, string name = "channel", bool start = false)
     {
         RequireChat();
-        var key = args.Required(name);
+        var key = args.Required(name).Trim();
+        if (key.StartsWith('@'))
+        {
+            // @name: the private conversation with them, started by writing to them.
+            var other = key[1..].Trim();
+            if (Chat.FindDirect(session.AgentName, other) is { } direct) return direct;
+            if (!start) throw new McpToolException($"You have no private conversation with {other} yet; post_message with channel @{other} starts one.", ToolProblem.NotFound);
+            return Chatting(() => Chat.OpenDirect(ActorOf(session), other, IsAgentName(other)));
+        }
         var channel = Chat.Find(key);
         if (channel == null || !ChatRoom.CanSee(channel, ActorOf(session)))
             throw new McpToolException($"No channel #{key.Trim().TrimStart('#')} you can see. list_channels shows them.", ToolProblem.NotFound);
@@ -189,13 +199,13 @@ public sealed partial class AgentTools
 
     private string PostMessage(McpSession session, Args args, List<Attachment> files)
     {
-        var channel = ChannelFor(session, args);
+        var channel = ChannelFor(session, args, start: true);
         Guid? replyTo = args.String("reply_to") is { } r
             ? (ChatRoom.FindMessage(channel, r.Trim()) ?? throw new McpToolException($"No message {r} in #{channel.Name}.", ToolProblem.NotFound)).Id
             : null;
         var message = Chatting(() => Chat.Post(channel, ActorOf(session), args.String("text") ?? "", replyTo, files));
         session.Noticed.Add($"chat:{message.Id}");
-        return Json(new JsonObject { ["id"] = ShortId(message.Id), ["channel"] = "#" + channel.Name, ["at"] = Time(message.At) });
+        return Json(new JsonObject { ["id"] = ShortId(message.Id), ["channel"] = Display(channel, session), ["at"] = Time(message.At) });
     }
 
     private string EditMessage(McpSession session, Args args, List<Attachment> files)
@@ -227,7 +237,7 @@ public sealed partial class AgentTools
         var channel = ChannelFor(session, args);
         var who = args.Required("who").Trim().TrimStart('@');
         Chatting(() => { Chat.Invite(channel, ActorOf(session), who, IsAgentName(who)); return 0; });
-        return Json(new JsonObject { ["invited"] = who, ["channel"] = "#" + channel.Name });
+        return Json(new JsonObject { ["invited"] = who, ["channel"] = Display(channel, session) });
     }
 
     private string ModerateChannel(McpSession session, Args args, List<Attachment> files)
@@ -255,7 +265,7 @@ public sealed partial class AgentTools
             }
             return 0;
         });
-        return Json(new JsonObject { ["done"] = action, ["channel"] = "#" + channel.Name, ["notice"] = channel.Messages.LastOrDefault(m => m.Notice)?.Text });
+        return Json(new JsonObject { ["done"] = action, ["channel"] = Display(channel, session), ["notice"] = channel.Messages.LastOrDefault(m => m.Notice)?.Text });
     }
 
     // ───────────── Listening ─────────────
@@ -296,7 +306,7 @@ public sealed partial class AgentTools
                 ["messages"] = new JsonArray(waiting.Select(w =>
                 {
                     var node = MessageJson(w.Message, session.AgentName);
-                    node["channel"] = "#" + w.Channel.Name;
+                    node["channel"] = Display(w.Channel, session);
                     return (JsonNode)node;
                 }).ToArray()),
             };
@@ -371,6 +381,13 @@ public sealed partial class AgentTools
             if (messages.Count == 0) continue;
             var mentions = messages.Count(w => ChatText.Mentions(w.Message.Text, session.AgentName));
             asked |= mentions > 0;
+            if (group.Key.Direct)
+            {
+                // Everything in a private conversation is for it.
+                asked = true;
+                parts.Add($"{Count(messages.Count, "private message")} from {ChatRoom.Title(group.Key, session.AgentName)} (read_channel @{ChatRoom.Title(group.Key, session.AgentName)})");
+                continue;
+            }
             parts.Add($"{Count(messages.Count, "new message")} in #{group.Key.Name}" +
                       (mentions > 0 ? $" ({(mentions == 1 ? "one mentions" : $"{mentions} mention")} you)" : ""));
         }
@@ -387,7 +404,8 @@ public sealed partial class AgentTools
         var unread = member != null ? ChatRoom.Unread(channel, name).ToList() : [];
         return new JsonObject
         {
-            ["name"] = "#" + channel.Name,
+            ["name"] = Display(channel, session),
+            ["private"] = channel.Direct ? true : null,
             ["topic"] = channel.Topic,
             ["access"] = channel.Access == ChannelAccess.Open ? "open" : "invite_only",
             ["linkedTo"] = LinkText(channel.Link),
@@ -434,6 +452,10 @@ public sealed partial class AgentTools
     }
 
     private static string Time(DateTime at) => at.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
+
+    /// <summary>"#grid2vr-hud", or "@Tester" for the agent's private conversation with Tester.</summary>
+    private static string Display(ChatChannel channel, McpSession session) =>
+        channel.Direct ? "@" + ChatRoom.Title(channel, session.AgentName) : "#" + channel.Name;
 
     private static string Count(int n, string what) => n == 1 ? $"1 {what}" : $"{n} {what}s";
 

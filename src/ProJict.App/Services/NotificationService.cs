@@ -57,6 +57,7 @@ public sealed class NotificationService
         };
         state.GroupCommentsChanged += _ => CheckOthers();
         state.Chat.Changed += _ => CheckOthers();
+        main.Guest.ChatChanged += _ => CheckOthers();
         main.Host.Requests.CollectionChanged += (_, _) => CheckOthers();
         main.Updates.PropertyChanged += (_, e) =>
         {
@@ -157,14 +158,18 @@ public sealed class NotificationService
     {
         var events = new List<Event>();
         // Chat: what you haven't read in your channels; an @mention is its own kind.
-        foreach (var channel in _state.Chat.Channels)
-            foreach (var message in ProJict.Core.Chat.ChatRoom.Unread(channel, _state.UserName).Where(m => !m.Notice))
+        // Yours, and the ones of the ProJicts you're connected to (under the name they know you by).
+        var places = _state.Chat.Channels.Select(c => (Channel: c, Me: _state.UserName, Host: (string?)null))
+            .Concat(_main.Guest.Connections.Where(c => c.Chat != null && c.MyName != null)
+                .SelectMany(c => c.Chat!.Channels.Select(ch => (Channel: ch, Me: c.MyName!, Host: (string?)c.HostName))));
+        foreach (var (channel, me, host) in places)
+            foreach (var message in ProJict.Core.Chat.ChatRoom.Unread(channel, me).Where(m => !m.Notice))
             {
-                var mention = ProJict.Core.Chat.ChatText.Mentions(message.Text, _state.UserName);
-                var where = "#" + channel.Name;
+                var mention = channel.Direct || ProJict.Core.Chat.ChatText.Mentions(message.Text, me);
+                var where = ProJict.Core.Chat.ChatRoom.Title(channel, me) + (host != null ? $" ({host}'s ProJict)" : "");
                 var open = () => _main.ShowChannel(channel, message.Id);
                 events.Add(new Event(mention ? NotificationKind.ChatMention : NotificationKind.ChatMessage, $"chat:{message.Id}", channel.Link?.ProjectId, where,
-                    mention ? $"{message.By} mentioned you in {where}" : $"{message.By} in {where}",
+                    channel.Direct ? $"{message.By} (private message)" : mention ? $"{message.By} mentioned you in {where}" : $"{message.By} in {where}",
                     message.Text.Length > 0 ? Short(message.Text, 120) : "Posted a file.", open));
             }
         foreach (var group in _state.Settings.Groups)

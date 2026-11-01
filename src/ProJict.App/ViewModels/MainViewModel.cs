@@ -112,6 +112,7 @@ public sealed partial class MainViewModel : ObservableObject
         Feed = new FeedViewModel(state, this);
         AgentActivity = new AgentActivityViewModel(state, this);
         Chat = new ChatViewModel(state, this);
+        Guest.ChatChanged += connection => Chat.OnRemoteChanged(connection);
         Chat.CountsChanged += () =>
         {
             foreach (var name in new[] { nameof(ChatUnread), nameof(HasChatUnread), nameof(ChatHasMention), nameof(ChatToolTip) })
@@ -527,27 +528,41 @@ public sealed partial class MainViewModel : ObservableObject
     {
         var link = new ProJict.Core.Chat.ChannelLink { ProjectId = project.Id, CategoryId = category?.Id, ItemId = item?.Id };
         if (item != null && link.CategoryId == null) link.CategoryId = project.Find(item.Id)?.Category.Id;
-        var name = State.Chat.SuggestName(project.Name, item == null ? category?.Name : null, item?.DisplayText());
+        // About another ProJict's project: started there, if you're an editor and connected.
+        var room = State.Chat;
+        if (project.Remote != null)
+        {
+            if (Chat.HostOfProject(project.Id) is not { Chat: { } remote, Role: ProJict.Core.Sharing.GuestRole.Editor })
+            {
+                State.StatusText = $"Only editors connected to {project.Remote.HostName}'s ProJict start channels about its projects.";
+                return;
+            }
+            room = remote;
+        }
+        var name = room.SuggestName(project.Name, item == null ? category?.Name : null, item?.DisplayText());
         ShowChannel(null);
         Chat.BeginNewChannel(link, name);
     }
 
     /// <summary>Channels linked to exactly this project, category or item.</summary>
+    /// <summary>Your channels and those of the ProJicts you're connected to (their projects' chips show theirs).</summary>
+    private IEnumerable<ProJict.Core.Chat.ChatChannel> AllChannels => State.Chat.Channels.Concat(Guest.Connections.SelectMany(c => c.Chat?.Channels ?? []));
+
     public List<ProJict.Core.Chat.ChatChannel> ChannelsFor(Guid projectId, Guid? categoryId = null, Guid? itemId = null) =>
-        State.Chat.Channels.Where(c => c.Link is { } l && l.ProjectId == projectId &&
+        AllChannels.Where(c => !c.Direct && c.Link is { } l && l.ProjectId == projectId &&
                                        (itemId != null ? l.ItemId == itemId : l.ItemId == null && l.CategoryId == categoryId))
             .OrderBy(c => c.Name, StringComparer.Ordinal).ToList();
 
     public List<ChannelChip> ChannelChips(Guid projectId, Guid? categoryId = null, Guid? itemId = null) =>
-        ChannelsFor(projectId, categoryId, itemId).Select(c => new ChannelChip(c, this, ProJict.Core.Chat.ChatRoom.Unread(c, State.UserName).Any())).ToList();
+        ChannelsFor(projectId, categoryId, itemId).Select(c => new ChannelChip(c, this, ProJict.Core.Chat.ChatRoom.Unread(c, Chat.NameIn(c)).Any())).ToList();
 
     private string _chipSignature = "";
 
     /// <summary>The #channel chips on the boards follow channels being started, renamed, deleted or read.</summary>
     public void RefreshChannelChips()
     {
-        var signature = string.Join("|", State.Chat.Channels.Where(c => c.Link != null)
-            .Select(c => $"{c.Id}:{c.Name}:{c.Link!.ProjectId}:{c.Link.CategoryId}:{c.Link.ItemId}:{ProJict.Core.Chat.ChatRoom.Unread(c, State.UserName).Any()}"));
+        var signature = string.Join("|", AllChannels.Where(c => c.Link != null)
+            .Select(c => $"{c.Id}:{c.Name}:{c.Link!.ProjectId}:{c.Link.CategoryId}:{c.Link.ItemId}:{ProJict.Core.Chat.ChatRoom.Unread(c, Chat.NameIn(c)).Any()}"));
         if (signature == _chipSignature) return;
         _chipSignature = signature;
         foreach (var vm in _projectViewModels.Values) vm.RefreshChannels();
