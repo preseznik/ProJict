@@ -270,6 +270,12 @@ public sealed class Project
     /// <summary>Prefix of the exported open-items file: TODO or WORK.</summary>
     public string FilePrefix { get; set; } = "TODO";
     public string Group { get; set; } = "Personal";
+    /// <summary>
+    /// Kept on this computer: people connected through sharing (and their agents) never see it, even when its group is
+    /// shared with them. Only you change it, and undo doesn't, so undoing never shares it again.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Private { get; set; }
     public ProjectStatus Status { get; set; } = ProjectStatus.Active;
     public bool IsInbox { get; set; }
     public string? RepoPath { get; set; }

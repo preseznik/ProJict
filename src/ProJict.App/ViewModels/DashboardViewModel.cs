@@ -27,6 +27,7 @@ public sealed partial class ProjectCardViewModel(Project project, ProjectStats s
     public string ReviewText => $"{Stats.ToReview} to review";
     /// <summary>A ship request in progress: "Ship: waiting for your approval".</summary>
     public bool HasShip => Project.OpenShip != null;
+    public bool IsPrivate => Project.Private;
     public string? ShipText => Project.OpenShip is { } s ? "Ship: " + Core.Features.ShipFlow.StateName(s.State) : null;
     public string? ShipToolTip => Project.OpenShip is { } s ? $"Ship request: {Core.Features.ShipFlow.Describe(s.Steps)}" : null;
     public bool IsStale => Project.Status is ProjectStatus.Active && Stats.IsStale(staleDays, DateTime.Now);

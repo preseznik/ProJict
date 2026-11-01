@@ -124,7 +124,7 @@ public sealed partial class AgentTools
         var place = channel.Direct ? "private" : where;
         if (message.Notice)
             return $"[{place}] {OneLine(string.Equals(message.About, you.AgentName, StringComparison.OrdinalIgnoreCase) ? message.AboutText ?? message.Text : message.Text)}";
-        var mention = !channel.Direct && ChatText.Mentions(message.Text, you.AgentName) ? " (mentions you)" : "";
+        var mention = !channel.Direct && ChatRoom.Mentions(channel, message, you.AgentName) ? " (mentions you)" : "";
         var text = OneLine(message.Text);
         if (text.Length > WatchTextLength) text = text[..WatchTextLength].TrimEnd() + $"… (read_channel {where} for the rest)";
         var files = message.Attachments is { Count: > 0 } attached ? $" [{Count(attached.Count, "file")}]" : "";

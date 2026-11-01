@@ -85,7 +85,11 @@
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
                                         <TextBlock Text="{Binding Age}" ToolTip="{Binding Time}" Style="{StaticResource MutedText}" FontSize="12" />
-                                        <TextBlock Grid.Column="1" Text="{Binding Text}" TextTrimming="CharacterEllipsis" FontSize="13" />
+                                        <DockPanel Grid.Column="1" HorizontalAlignment="Left" ToolTip="{Binding Time}">
+                                            <TextBlock DockPanel.Dock="Right" Text="{Binding TimesText}" Style="{StaticResource MutedText}" FontSize="12" Margin="6,0,0,0"
+                                                       Visibility="{Binding TimesText, Converter={StaticResource EmptyToVis}}" />
+                                            <TextBlock Text="{Binding Text}" TextTrimming="CharacterEllipsis" FontSize="13" />
+                                        </DockPanel>
                                         <TextBlock Grid.Column="2" Text="{Binding Project}" Style="{StaticResource MutedText}" FontSize="12" Margin="10,0,0,0" />
                                     </Grid>
                                     <DataTemplate.Triggers>

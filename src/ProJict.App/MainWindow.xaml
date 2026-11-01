@@ -266,6 +266,9 @@
                                                   Visibility="{Binding HasWorkers, Converter={StaticResource BoolToVis}}" />
                                     <TextBlock Grid.Column="1" Text="{Binding Name}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
                                     <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="6,0,0,0">
+                                        <TextBlock Style="{StaticResource Icon}" Text="&#xE72E;" FontSize="11" Margin="0,0,6,0" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                   ToolTip="{x:Static vm:ProjectListItemViewModel.PrivateToolTip}" Visibility="{Binding IsPrivate, Converter={StaticResource BoolToVis}}"
+                                                   AutomationProperties.Name="Private" />
                                         <TextBlock Style="{StaticResource Icon}" Text="&#xE724;" FontSize="11" Margin="0,0,6,0" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
                                                    ToolTip="{Binding ShipToolTip}" Visibility="{Binding HasShip, Converter={StaticResource BoolToVis}}" />
                                         <Ellipse Style="{StaticResource UnreadDot}" Margin="0,0,6,0" ToolTip="{Binding AttentionToolTip}"
@@ -282,6 +285,9 @@
                                             <MenuItem Header="Ship…" Command="{Binding PlacementTarget.Tag.ShipProjectCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"
                                                       ToolTip="Ask an AI agent to commit, build, package, push or release it; you approve its plan first" />
                                             <MenuItem Header="Hide" Command="{Binding PlacementTarget.Tag.HideProjectCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" />
+                                            <MenuItem Header="Private" IsChecked="{Binding IsPrivate, Mode=OneWay}" Visibility="{Binding CanBePrivate, Converter={StaticResource BoolToVis}}"
+                                                      Command="{Binding PlacementTarget.Tag.TogglePrivateCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"
+                                                      ToolTip="{x:Static vm:ProjectListItemViewModel.PrivateToolTip}" />
                                             <MenuItem Header="{Binding MuteHeader}" Command="{Binding PlacementTarget.Tag.ToggleMuteCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"
                                                       ToolTip="Windows notifications from this project (Settings › Notifications)" />
                                             <MenuItem Header="Move to group" ItemsSource="{Binding GroupChoices}" Click="MoveToGroupMenu_Click">

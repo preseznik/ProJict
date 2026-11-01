@@ -726,6 +726,7 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
                         <Grid.Resources>
                             <Style TargetType="TextBlock" BasedOn="{StaticResource MutedText}">
@@ -808,6 +809,13 @@
                             </Border>
                             <TextBlock Margin="0,4,0,0" FontSize="12" TextWrapping="Wrap"
                                        Text="How to ship it: what an AI agent does when you ask (Ship button), e.g. bump the version in …, run build.ps1, test, commit, push, publish the GitHub release. Untick the steps this project doesn't have." />
+                        </StackPanel>
+
+                        <TextBlock Grid.Row="7" Text="Sharing" Visibility="{Binding CanBePrivate, Converter={StaticResource BoolToVis}}" />
+                        <StackPanel Grid.Row="7" Grid.Column="1" Margin="0,8,0,4" Visibility="{Binding CanBePrivate, Converter={StaticResource BoolToVis}}">
+                            <CheckBox Content="Private" IsChecked="{Binding IsPrivate}" AutomationProperties.Name="Private project" />
+                            <TextBlock Margin="0,4,0,0" FontSize="12" TextWrapping="Wrap"
+                                       Text="Only on this computer: people you share with, and their agents, don't see it or its channels, even when its group is shared with them. You and your own agents still do." />
                         </StackPanel>
                     </Grid>
                 </ScrollViewer>

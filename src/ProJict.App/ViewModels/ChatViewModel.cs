@@ -533,7 +533,9 @@ public sealed partial class ChatViewModel : ObservableObject
                 var liveAgents = _main.Agents.Sessions.Select(s => s.AgentName).ToHashSet(StringComparer.OrdinalIgnoreCase);
                 var connected = _main.Host.Sessions.Select(s => s.Account.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
                 var agents = _main.AgentTools.KnownAgentNames().Where(Out).ToList();
-                var guests = _main.Host.Data.Guests.Where(g => !g.Blocked).Select(g => g.Name).Distinct(StringComparer.OrdinalIgnoreCase).Where(Out)
+                // A private project's channels stay on this computer: nobody you share with is offered.
+                var isPrivate = channel.Link is { } link && _state.Projects.Any(p => p.Id == link.ProjectId && p.Private);
+                var guests = isPrivate ? [] : _main.Host.Data.Guests.Where(g => !g.Blocked).Select(g => g.Name).Distinct(StringComparer.OrdinalIgnoreCase).Where(Out)
                     .Order(StringComparer.CurrentCultureIgnoreCase).ToList();
                 choices =
                 [
@@ -841,8 +843,10 @@ public sealed partial class ChatViewModel : ObservableObject
         if (Channel != null && MentionAt(text, caret) is { } found)
         {
             var query = found.Query;
+            // @everyone last, for a channel with others in it.
             var candidates = Channel.Members.Select(m => m.Name).Where(n => !string.Equals(n, NameIn(Channel), StringComparison.OrdinalIgnoreCase))
                 .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            if (!Channel.Direct && candidates.Count > 1) candidates.Add(ChatText.Everyone);
             // A whole name already typed, followed by a space: done.
             if (!(query.EndsWith(' ') && candidates.Any(n => string.Equals(n, query.TrimEnd(), StringComparison.OrdinalIgnoreCase))))
                 names = candidates.Where(n => query.Length == 0 || n.StartsWith(query, StringComparison.OrdinalIgnoreCase) ||
@@ -1164,7 +1168,7 @@ public sealed partial class ChatMessageViewModel : ObservableObject
                                        Model.ReplyTo != null);
         IsDeleted = Model.Deleted;
         EditedText = Model.EditedAt != null && !Model.Deleted ? "(edited)" : null;
-        MentionsMe = !IsMine && ChatText.Mentions(Model.Text, _owner.NameIn(_owner.Channel));
+        MentionsMe = !IsMine && _owner.Channel is { } here && ChatRoom.Mentions(here, Model, _owner.NameIn(here));
         Segments = Model.Deleted ? [new ChatSegmentViewModel(new ChatSegment(ChatSegmentKind.Text, "(deleted)"), _owner)]
             : ChatText.Parse(Model.Text, _owner.MentionNames, _owner.IsChannelName, _owner.FindItem).Select(s => new ChatSegmentViewModel(s, _owner)).ToList();
         var owner = _owner.AttachmentOwner;

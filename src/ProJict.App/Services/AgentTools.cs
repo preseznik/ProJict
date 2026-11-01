@@ -259,7 +259,7 @@ public sealed partial class AgentTools : IMcpToolHost
         "When a project shows a shipRequest, the user wants it committed, built, packaged, pushed or released: read it with ship_request, post your " +
         "plan with plan_ship and wait for their approval in ProJict; only then run the steps, report each with report_ship and end with finish_ship " +
         "(record a published release with draft_release save=true). " +
-        "The user and agents also talk live in Chat #channels (list_channels, read_channel, post_message, create_channel), and privately: " +
+        "The user and agents also talk live in Chat #channels (list_channels, join_channel to read one, read_channel, post_message, create_channel), and privately: " +
         "post_message to channel @name writes to the user or an agent only. Keep Chat human. " + ChatStyle + " To listen, call " +
         "wait_for_messages. What waits for you shows in a tool result's waitingForYou list, each thing once: chat invitations, @mentions and new " +
         "messages, private ones included (read them with read_channel and reply with post_message: say hello when invited, and answer what you're asked, or say you " +
@@ -452,9 +452,7 @@ public sealed partial class AgentTools : IMcpToolHost
     private void Remember(McpSession session, AgentAction action)
     {
         session.LastActive = action.At;
-        session.Recent.Add(action);
-        if (session.Recent.Count > McpSession.KeptActions) session.Recent.RemoveRange(0, session.Recent.Count - McpSession.KeptActions);
-        Recorded?.Invoke(session, action);
+        Recorded?.Invoke(session, session.Remember(action));
     }
 
     private string SetStatus(McpSession session, Args args, List<Attachment> files)
@@ -586,8 +584,6 @@ public sealed partial class AgentTools : IMcpToolHost
 
     private string SetName(McpSession session, Args args, List<Attachment> files)
     {
-        if (!string.IsNullOrWhiteSpace(session.SignAs))
-            throw new McpToolException($"An API token signs with the name the user gave it ({session.SignAs.Trim()}); it can't pick another.", ToolProblem.Forbidden);
         var name = args.Required("name").Trim().TrimStart('@');
         if (AgentNaming.Problem(name) is { } problem) throw new McpToolException(problem);
         if (string.Equals(name, _state.UserName, StringComparison.OrdinalIgnoreCase) || string.Equals(name, session.Client, StringComparison.OrdinalIgnoreCase))
@@ -612,7 +608,6 @@ public sealed partial class AgentTools : IMcpToolHost
     /// </summary>
     public string? RenameAgent(McpSession session, string name)
     {
-        if (!string.IsNullOrWhiteSpace(session.SignAs)) return $"An API token signs with the name you gave it ({session.SignAs.Trim()}): rename it under Settings › API.";
         name = name.Trim().TrimStart('@');
         if (string.Equals(name, session.AgentName, StringComparison.Ordinal)) return null;
         if (AgentNaming.Problem(name) is { } problem) return problem;
@@ -626,15 +621,25 @@ public sealed partial class AgentTools : IMcpToolHost
         return null;
     }
 
-    /// <summary>Gives the session the name; what it has checked out and the channels it's in go with it. True when the name was known here before.</summary>
+    /// <summary>
+    /// Gives the session the name; what it has checked out and the channels it's in go with it, and an API token remembers
+    /// it for the next time. True when the name was known here before.
+    /// </summary>
     private bool TakeName(McpSession session, string name)
     {
         var known = _state.Settings.AgentNames ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var before = known.Keys.FirstOrDefault(k => string.Equals(k, name, StringComparison.OrdinalIgnoreCase));
         var old = session.AgentName;
         var held = LocalProjects.SelectMany(p => p.Walk().Select(l => (Project: p, l.Item))).Where(x => Holds(session, x.Item)).ToList();
-        if (session.Name is { } former && !string.Equals(former, before ?? name, StringComparison.OrdinalIgnoreCase)) session.FormerNames.Add(former);
+        // A name it picked before, or its token's.
+        var former = session.Name ?? (string.IsNullOrWhiteSpace(session.SignAs) ? null : session.SignAs.Trim());
+        if (former != null && !string.Equals(former, before ?? name, StringComparison.OrdinalIgnoreCase)) session.FormerNames.Add(former);
         session.Name = before ?? name;
+        if (session.TokenId is { } tokenId && _main.ApiStore.Data.Tokens.FirstOrDefault(t => t.Id == tokenId) is { } token)
+        {
+            token.AgentName = session.Name;
+            _main.ApiStore.Save();
+        }
         foreach (var (project, item) in held) Edit(project, item.Id, i => i.ClaimedBy = session.AgentName);
         Chat.RenameMember(old, session.AgentName);
         known[session.AgentName] = session.Client;
@@ -1296,6 +1301,8 @@ public sealed partial class AgentTools : IMcpToolHost
             json["status"] = p.Status.ToString();
         }
         if (p.Remote != null) json["sharedBy"] = SharedText(p);
+        // Only the user changes it (Details › Private); update_project has no say.
+        if (p.Private) json["private"] = "only on this computer: people this ProJict shares with, and their agents, don't see it or its channels";
         if (!string.IsNullOrWhiteSpace(p.RepoPath)) json["repoPath"] = p.RepoPath;
         if (!string.IsNullOrWhiteSpace(p.GitHubUrl)) json["gitHub"] = p.GitHubUrl;
         json["open"] = stats.Open;

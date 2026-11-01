@@ -218,6 +218,17 @@ public sealed partial class ProjectViewModel : ObservableObject
         RefreshIssueSync();
     }
 
+    /// <summary>Details › Private: only you change it (agents and guests can't).</summary>
+    public bool IsPrivate
+    {
+        get => Project.Private;
+        set => Main.SetPrivate(Project, value);
+    }
+
+    public bool CanBePrivate => Project.Remote == null && !Project.IsInbox;
+
+    public void RefreshPrivate() => OnPropertyChanged(nameof(IsPrivate));
+
     /// <summary>After groups were added, renamed or deleted elsewhere.</summary>
     public void RefreshGroups()
     {
@@ -935,6 +946,8 @@ public sealed partial class ProjectViewModel : ObservableObject
 
         var project = Core.Model.Project.Create(name, Project.IsInbox ? "Personal" : Project.Group);
         project.Status = ProjectStatus.Idea;
+        // Made from a private project's item, it stays private.
+        project.Private = Project.Private;
         project.Description = lines.Length > 1 ? string.Join("\n", lines.Skip(1)).Trim() : null;
         project.Categories.Add(new Category { Name = "GENERAL", Items = row.Item.Children.ToList() });
         Mutate(() => SiblingsOf(row).Remove(row.Item), [row.Category]);
@@ -951,6 +964,24 @@ public sealed partial class ProjectViewModel : ObservableObject
     {
         var selected = AllRows.Where(r => r.IsSelected).Select(r => r.Item).Distinct().ToList();
         CopyPromptFor(selected.Count > 0 ? selected : Project.Categories.SelectMany(c => c.Items).Where(i => !i.IsDone));
+    }
+
+    /// <summary>The item's short id as Chat and agents write it (#4e84570c), for pasting into a message or a prompt.</summary>
+    public static string ShortIdOf(TodoItem item) => "#" + item.Id.ToString()[..8];
+
+    public void CopyIdOf(TodoItem item)
+    {
+        var text = ShortIdOf(item);
+        try
+        {
+            Clipboard.SetText(text);
+        }
+        catch (System.Runtime.InteropServices.ExternalException)
+        {
+            _state.StatusText = "Clipboard is busy, try again.";
+            return;
+        }
+        _state.StatusText = $"Copied {text} to the clipboard.";
     }
 
     public void CopyPromptFor(IEnumerable<TodoItem> items)

@@ -25,7 +25,7 @@ public sealed partial class AgentTools
     {
         Add("list_channels", "List chat channels",
             "The chat channels you can see: the ones you're in and Open ones in projects you reach, with what each is linked to, " +
-            "how many messages wait for you and whether one @mentions you.",
+            "how many messages wait for you and whether one @mentions you. To read an Open channel's messages, join it first (join_channel).",
             Schema(("project", "string", "Only channels linked to this project (name or key).", false)), ListChannels, readOnly: true);
         Add("create_channel", "Start a chat channel",
             "Starts a #channel for live chat with the user and other agents; you moderate it. Link it to a project, category or item " +
@@ -39,14 +39,15 @@ public sealed partial class AgentTools
                 ("invite", "string[]", "Names to invite, e.g. Codex.", false)),
             CreateChannel);
         Add("read_channel", "Read a chat channel",
-            "A channel's latest messages (oldest first), its members and moderators. Marks what you read as read. " +
+            "A channel's latest messages (oldest first), its members and moderators, in a channel you're in (join an Open one first " +
+            "with join_channel). Marks what you read as read. " +
             "Items are linked as # and the first 8 characters of their id (#4e84570c), channels as #name, people and agents as @name.",
             Schema(ChannelArg, ("limit", "integer", "Most messages (default 30, at most 200).", false),
                 ("before", "string", "Only messages before this message id, to read further back.", false)),
             ReadChannel, readOnly: true);
         Add("post_message", "Post in a chat channel",
             "Posts a message; in an Open channel you join it by posting. With channel @name it goes privately to the user or an agent (the " +
-            "conversation starts with your first message). @name in the text mentions someone (they're notified), #name links a channel, " +
+            "conversation starts with your first message). @name in the text mentions someone (they're notified), @everyone everyone in the channel, #name links a channel, " +
             "# and an item's 8-character id links the item. At most 20 messages a minute. " + ChatStyle,
             Schema(ChannelArg, ("text", "string", "The message.", true), ("reply_to", "string", "Id of the message you answer; it's quoted.", false),
                 ("attachments", "string[]", "Files to post with it, e.g. a screenshot (absolute paths or relative to your working directory).", false)),
@@ -57,7 +58,7 @@ public sealed partial class AgentTools
                 ("delete", "boolean", "Delete the message instead.", false)),
             EditMessage);
         Add("join_channel", "Join or leave a chat channel",
-            "Joins an Open channel, so new messages there wait for you, or leaves one (leave=true).",
+            "Joins an Open channel, so you can read it (read_channel) and new messages there wait for you, or leaves one (leave=true).",
             Schema(ChannelArg, ("leave", "boolean", "Leave the channel instead.", false)), JoinChannel);
         Add("invite_to_channel", "Invite to a chat channel",
             "Invites the user or another agent (by the name they sign with). Moderators can invite to any channel, members to Open ones.",
@@ -103,7 +104,7 @@ public sealed partial class AgentTools
         }
         var channel = Chat.Find(key);
         if (channel == null && SharedChannelFor(session, args, name) is { } shared)
-            throw new McpToolException($"In {SharedName(shared.Host, shared.Channel)} you read and post (read_channel, post_message); the rest is for the people there.", ToolProblem.Forbidden);
+            throw new McpToolException($"In {SharedName(shared.Host, shared.Channel)} you join, read and post (join_channel, read_channel, post_message); the rest is for the people there.", ToolProblem.Forbidden);
         if (channel == null || !ChatRoom.CanSee(channel, ActorOf(session)))
             throw new McpToolException($"No channel #{key.Trim().TrimStart('#')} you can see. list_channels shows them.", ToolProblem.NotFound);
         return channel;
@@ -181,6 +182,10 @@ public sealed partial class AgentTools
         RequireChat();
         if (SharedChannelFor(session, args) is { } shared) return SharedRead(session, shared.Host, shared.Channel, args);
         var channel = ChannelFor(session, args);
+        // Its messages are for those in it: an agent joins an Open channel first, which the channel sees.
+        if (ChatRoom.Member(channel, session.AgentName) == null)
+            throw new McpToolException($"You're not in #{channel.Name}: join it first with join_channel (anyone may, and the channel sees you joined), " +
+                                       "then read_channel shows its messages. list_channels has its name and topic.", ToolProblem.Forbidden);
         var limit = Math.Clamp(args.Int("limit") ?? 30, 1, 200);
         IEnumerable<ChatMessage> messages = channel.Messages;
         if (args.String("before") is { } before)
@@ -197,7 +202,7 @@ public sealed partial class AgentTools
             ["moderator"] = m.Moderator || (!m.Agent && Chat.IsOwner(m.Name)) ? true : null,
             ["mutedUntil"] = Chat.MutedUntil(channel, m.Name) is { } until ? (until == DateTime.MaxValue ? "until unmuted" : Time(until)) : null,
         }).ToArray());
-        json["messages"] = new JsonArray(shown.Select(m => (JsonNode)MessageJson(m, session.AgentName)).ToArray());
+        json["messages"] = new JsonArray(shown.Select(m => (JsonNode)MessageJson(channel, m, session.AgentName)).ToArray());
         if (shown.Count > 0 && shown[0] != channel.Messages[0]) json["more"] = $"Earlier messages: read_channel with before={ShortId(shown[0].Id)}.";
         Delivered(session, channel, shown);
         return Json(json);
@@ -250,6 +255,7 @@ public sealed partial class AgentTools
 
     private string JoinChannel(McpSession session, Args args, List<Attachment> files)
     {
+        if (SharedChannelFor(session, args) is { } shared) return SharedJoin(session, shared.Host, shared.Channel, args.Bool("leave") == true);
         var channel = ChannelFor(session, args);
         var actor = ActorOf(session);
         if (args.Bool("leave") == true) Chatting(() => { Chat.Leave(channel, actor); return 0; });
@@ -333,7 +339,7 @@ public sealed partial class AgentTools
             {
                 ["messages"] = new JsonArray(waiting.Select(w =>
                 {
-                    var node = MessageJson(w.Message, session.AgentName);
+                    var node = MessageJson(w.Channel, w.Message, session.AgentName);
                     node["channel"] = Display(w.Channel, session);
                     return (JsonNode)node;
                 }).ToArray()),
@@ -417,7 +423,7 @@ public sealed partial class AgentTools
             }
             var messages = group.Where(w => !w.Message.Notice).ToList();
             if (messages.Count == 0) continue;
-            var mentions = messages.Count(w => ChatText.Mentions(w.Message.Text, session.AgentName));
+            var mentions = messages.Count(w => ChatRoom.Mentions(w.Channel, w.Message, session.AgentName));
             asked |= mentions > 0;
             if (group.Key.Direct)
             {
@@ -426,8 +432,11 @@ public sealed partial class AgentTools
                 parts.Add($"{Count(messages.Count, "private message")} from {ChatRoom.Title(group.Key, session.AgentName)} (read_channel @{ChatRoom.Title(group.Key, session.AgentName)})");
                 continue;
             }
-            parts.Add($"{Count(messages.Count, "new message")} in #{group.Key.Name}" +
-                      (mentions > 0 ? $" ({(mentions == 1 ? "one mentions" : $"{mentions} mention")} you)" : ""));
+            parts.Add(ChatRoom.Member(group.Key, session.AgentName) == null
+                // @mentioned in a channel it isn't in: it joins to read it.
+                ? $"{Count(messages.Count, "message")} mentioning you in #{group.Key.Name}, which you're not in (join_channel #{group.Key.Name}, then read_channel)"
+                : $"{Count(messages.Count, "new message")} in #{group.Key.Name}" +
+                  (mentions > 0 ? $" ({(mentions == 1 ? "one mentions" : $"{mentions} mention")} you)" : ""));
         }
         return ["Chat: " + string.Join("; ", parts) + ". Read them with read_channel" +
                 (asked ? ", and reply with post_message: say hello when invited, and answer what you're asked (or say you can't now)." : ".")];
@@ -452,13 +461,13 @@ public sealed partial class AgentTools
             ["mutedUntil"] = Chat.MutedUntil(channel, name) is { } until ? (until == DateTime.MaxValue ? "until unmuted" : Time(until)) : null,
             ["members"] = channel.Members.Count,
             ["unread"] = unread.Count > 0 ? unread.Count : null,
-            ["mentionsYou"] = unread.Any(m => ChatText.Mentions(m.Text, name)) ? true : null,
+            ["mentionsYou"] = unread.Any(m => ChatRoom.Mentions(channel, m, name)) ? true : null,
             ["lastMessage"] = channel.Messages.LastOrDefault(m => !m.Notice) is { } last ? Time(last.At) : null,
             ["startedBy"] = channel.CreatedBy,
         };
     }
 
-    private JsonObject MessageJson(ChatMessage m, string you)
+    private JsonObject MessageJson(ChatChannel channel, ChatMessage m, string you)
     {
         if (m.Notice)
             return string.Equals(m.About, you, StringComparison.OrdinalIgnoreCase)
@@ -474,7 +483,7 @@ public sealed partial class AgentTools
             ["deleted"] = m.Deleted ? true : null,
             ["replyTo"] = m.ReplyTo is { } r ? ShortId(r) : null,
             ["edited"] = m.EditedAt != null && !m.Deleted ? true : null,
-            ["mentionsYou"] = ChatText.Mentions(m.Text, you) ? true : null,
+            ["mentionsYou"] = ChatRoom.Mentions(channel, m, you) ? true : null,
             ["attachments"] = m.Attachments is { Count: > 0 } files ? Paths(files) : null,
         };
     }

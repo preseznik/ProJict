@@ -62,11 +62,13 @@ public static partial class AgentNaming
     }
 
     /// <summary>
-    /// Whether something signed <paramref name="by"/> is this session's own work: by its name; a session that hasn't
-    /// picked a name shares its client's work (any number, older labels included).
+    /// Whether something signed <paramref name="by"/> is this session's own work: by its name, or its API token's name
+    /// (what it signed before it picked one); a session that hasn't picked a name shares its client's work (any number,
+    /// older labels included).
     /// </summary>
     public static bool IsOwnWork(McpSession session, string by) =>
         session.Name != null || !string.IsNullOrWhiteSpace(session.SignAs)
-            ? string.Equals(Identity(by), session.AgentName, StringComparison.OrdinalIgnoreCase)
+            ? string.Equals(Identity(by), session.AgentName, StringComparison.OrdinalIgnoreCase) ||
+              (!string.IsNullOrWhiteSpace(session.SignAs) && string.Equals(Identity(by), session.SignAs.Trim(), StringComparison.OrdinalIgnoreCase))
             : string.Equals(Unnumbered(by, session.Client), session.Client, StringComparison.OrdinalIgnoreCase);
 }

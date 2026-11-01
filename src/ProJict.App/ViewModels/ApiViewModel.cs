@@ -243,9 +243,10 @@ public sealed partial class TokenRow(ApiToken token, ApiViewModel owner, string 
     public ApiToken Token { get; } = token;
     public string Name => Token.Name;
     public string Masked => Token.Masked;
-    public string Details => Token.Frozen
+    public string Details => (Token.Frozen
         ? $"Frozen: it connects, but can't do anything until you unfreeze it · {projects}"
-        : $"{(Token.ReadOnly ? owner.ReadOnlyLabel : "Read and write")} · {projects}";
+        : $"{(Token.ReadOnly ? owner.ReadOnlyLabel : "Read and write")} · {projects}") +
+        (Token.AgentName is { } agent ? $" · its agent goes by {agent}" : "");
 
     /// <summary>Its access, changeable at any time; it applies from the token's next request.</summary>
     public IReadOnlyList<AccessChoice> AccessChoices => owner.AccessChoices;

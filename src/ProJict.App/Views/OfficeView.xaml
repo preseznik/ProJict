@@ -14,9 +14,12 @@
         <SolidColorBrush x:Key="Metal" Color="#4B5563" />
         <SolidColorBrush x:Key="Ink" Color="#1F2937" />
 
-        <!-- A desk against the wall (drawn for the left wall; mirrored on the right), its monitor and its chair. -->
+        <!--
+            A desk against the wall (drawn for the left wall; mirrored on the right), its monitor and its chair. Clicks go
+            through it, to a robot behind it or the room.
+        -->
         <DataTemplate DataType="{x:Type vm:OfficeDeskViewModel}">
-            <Canvas>
+            <Canvas IsHitTestVisible="False">
                 <Canvas.RenderTransform>
                     <TransformGroup>
                         <ScaleTransform ScaleX="{Binding ScaleX}" ScaleY="{Binding Scale}" />
@@ -342,95 +345,112 @@
 
     <DockPanel>
         <DockPanel DockPanel.Dock="Bottom" Margin="4,6,4,0">
+            <!-- Zoomed in: how far, and back to the whole room. -->
+            <Button x:Name="FitButton" DockPanel.Dock="Right" Style="{StaticResource SubtleButton}" Padding="6,1" Margin="12,0,0,0" Visibility="Collapsed"
+                    Click="Fit_Click" ToolTip="Show the whole room again (or double-click the room)" AutomationProperties.Name="Show the whole room">
+                <TextBlock x:Name="FitText" FontSize="12" />
+            </Button>
             <TextBlock DockPanel.Dock="Right" Text="{Binding MoreText}" Style="{StaticResource MutedText}" FontSize="12" Margin="12,0,0,0"
                        Visibility="{Binding MoreText, Converter={StaticResource EmptyToVis}}" />
             <TextBlock Text="{Binding Summary}" Style="{StaticResource MutedText}" FontSize="12" TextTrimming="CharacterEllipsis" />
         </DockPanel>
-        <!-- As big as the room it's given allows, both ways. -->
+        <!--
+            As big as the room it's given allows, both ways. The wheel zooms in on the room where it points, dragging it
+            (or the middle button anywhere) pans, and a double-click shows the whole room again.
+        -->
         <Viewbox Stretch="Uniform" VerticalAlignment="Center" HorizontalAlignment="Center">
-            <Canvas Width="800" Height="520" ClipToBounds="True">
-                <!-- Ceiling, walls, floor -->
-                <Polygon Points="0,0 800,0 580,70 220,70" Fill="{DynamicResource SolidBackgroundFillColorTertiaryBrush}" />
-                <Polygon Points="0,0 220,70 220,300 0,520" Fill="{DynamicResource SolidBackgroundFillColorSecondaryBrush}" />
-                <Polygon Points="0,0 220,70 220,300 0,520" Fill="#8E6A45" Opacity="0.08" />
-                <Polygon Points="800,0 580,70 580,300 800,520" Fill="{DynamicResource SolidBackgroundFillColorSecondaryBrush}" />
-                <Polygon Points="800,0 580,70 580,300 800,520" Fill="#8E6A45" Opacity="0.08" />
-                <Rectangle Canvas.Left="220" Canvas.Top="70" Width="360" Height="230" Fill="{DynamicResource SolidBackgroundFillColorBaseBrush}" />
-                <Rectangle Canvas.Left="220" Canvas.Top="70" Width="360" Height="230" Fill="#8E6A45" Opacity="0.05" />
-                <Polygon Points="0,520 800,520 580,300 220,300" Fill="{DynamicResource SolidBackgroundFillColorBaseBrush}" />
-                <Polygon Points="0,520 800,520 580,300 220,300" Fill="#C49A6C" Opacity="0.42" />
-                <!-- Floor boards running to the back -->
-                <Path Stroke="#8E6A45" StrokeThickness="1" Opacity="0.25"
-                      Data="M 400,300 L 400,520 M 310,300 L 200,520 M 490,300 L 600,520 M 265,300 L 100,520 M 535,300 L 700,520" />
-                <!-- A rug in the middle -->
-                <Ellipse Canvas.Left="300" Canvas.Top="380" Width="200" Height="70" Fill="{DynamicResource AccentFillColorDefaultBrush}" Opacity="0.13" />
-                <!-- Edges -->
-                <Path Stroke="{DynamicResource DividerStrokeColorDefaultBrush}" StrokeThickness="1.5"
-                      Data="M 0,0 L 220,70 L 580,70 L 800,0 M 220,70 L 220,300 L 580,300 L 580,70 M 220,300 L 0,520 M 580,300 L 800,520" />
-                <!-- Ceiling light -->
-                <Polygon Points="330,28 470,28 455,40 345,40" Fill="#FFF7D6" Opacity="0.75" />
-                <!-- Window, its sky by the time of day -->
-                <Rectangle Canvas.Left="326" Canvas.Top="102" Width="148" Height="106" Fill="#E5E7EB" />
-                <Rectangle Canvas.Left="332" Canvas.Top="108" Width="136" Height="94" Fill="{Binding Sky}" />
-                <Ellipse Canvas.Left="430" Canvas.Top="120" Width="18" Height="18" Fill="#FDE68A" Visibility="{Binding IsDay, Converter={StaticResource BoolToVis}}" />
-                <Canvas Visibility="{Binding IsNight, Converter={StaticResource BoolToVis}}">
-                    <Ellipse Canvas.Left="436" Canvas.Top="118" Width="14" Height="14" Fill="#F1F5F9" />
-                    <Ellipse Canvas.Left="441" Canvas.Top="116" Width="13" Height="13" Fill="#22386A" />
-                    <Ellipse Canvas.Left="350" Canvas.Top="120" Width="2" Height="2" Fill="White" />
-                    <Ellipse Canvas.Left="372" Canvas.Top="140" Width="2" Height="2" Fill="White" />
-                    <Ellipse Canvas.Left="385" Canvas.Top="116" Width="2" Height="2" Fill="White" />
-                    <Ellipse Canvas.Left="420" Canvas.Top="170" Width="2" Height="2" Fill="White" />
-                    <Ellipse Canvas.Left="360" Canvas.Top="178" Width="2" Height="2" Fill="White" />
+            <Canvas x:Name="Room" Width="800" Height="520" ClipToBounds="True" Background="Transparent"
+                    MouseWheel="Room_MouseWheel" MouseDown="Room_MouseDown" MouseMove="Room_MouseMove" MouseUp="Room_MouseUp" LostMouseCapture="Room_LostMouseCapture">
+                <Canvas x:Name="World" Width="800" Height="520">
+                    <Canvas.RenderTransform>
+                        <TransformGroup>
+                            <ScaleTransform x:Name="ZoomScale" />
+                            <TranslateTransform x:Name="PanMove" />
+                        </TransformGroup>
+                    </Canvas.RenderTransform>
+                    <!-- Ceiling, walls, floor -->
+                    <Polygon Points="0,0 800,0 580,70 220,70" Fill="{DynamicResource SolidBackgroundFillColorTertiaryBrush}" />
+                    <Polygon Points="0,0 220,70 220,300 0,520" Fill="{DynamicResource SolidBackgroundFillColorSecondaryBrush}" />
+                    <Polygon Points="0,0 220,70 220,300 0,520" Fill="#8E6A45" Opacity="0.08" />
+                    <Polygon Points="800,0 580,70 580,300 800,520" Fill="{DynamicResource SolidBackgroundFillColorSecondaryBrush}" />
+                    <Polygon Points="800,0 580,70 580,300 800,520" Fill="#8E6A45" Opacity="0.08" />
+                    <Rectangle Canvas.Left="220" Canvas.Top="70" Width="360" Height="230" Fill="{DynamicResource SolidBackgroundFillColorBaseBrush}" />
+                    <Rectangle Canvas.Left="220" Canvas.Top="70" Width="360" Height="230" Fill="#8E6A45" Opacity="0.05" />
+                    <Polygon Points="0,520 800,520 580,300 220,300" Fill="{DynamicResource SolidBackgroundFillColorBaseBrush}" />
+                    <Polygon Points="0,520 800,520 580,300 220,300" Fill="#C49A6C" Opacity="0.42" />
+                    <!-- Floor boards running to the back -->
+                    <Path Stroke="#8E6A45" StrokeThickness="1" Opacity="0.25"
+                          Data="M 400,300 L 400,520 M 310,300 L 200,520 M 490,300 L 600,520 M 265,300 L 100,520 M 535,300 L 700,520" />
+                    <!-- A rug in the middle -->
+                    <Ellipse Canvas.Left="300" Canvas.Top="380" Width="200" Height="70" Fill="{DynamicResource AccentFillColorDefaultBrush}" Opacity="0.13" />
+                    <!-- Edges -->
+                    <Path Stroke="{DynamicResource DividerStrokeColorDefaultBrush}" StrokeThickness="1.5"
+                          Data="M 0,0 L 220,70 L 580,70 L 800,0 M 220,70 L 220,300 L 580,300 L 580,70 M 220,300 L 0,520 M 580,300 L 800,520" />
+                    <!-- Ceiling light -->
+                    <Polygon Points="330,28 470,28 455,40 345,40" Fill="#FFF7D6" Opacity="0.75" />
+                    <!-- Window, its sky by the time of day -->
+                    <Rectangle Canvas.Left="326" Canvas.Top="102" Width="148" Height="106" Fill="#E5E7EB" />
+                    <Rectangle Canvas.Left="332" Canvas.Top="108" Width="136" Height="94" Fill="{Binding Sky}" />
+                    <Ellipse Canvas.Left="430" Canvas.Top="120" Width="18" Height="18" Fill="#FDE68A" Visibility="{Binding IsDay, Converter={StaticResource BoolToVis}}" />
+                    <Canvas Visibility="{Binding IsNight, Converter={StaticResource BoolToVis}}">
+                        <Ellipse Canvas.Left="436" Canvas.Top="118" Width="14" Height="14" Fill="#F1F5F9" />
+                        <Ellipse Canvas.Left="441" Canvas.Top="116" Width="13" Height="13" Fill="#22386A" />
+                        <Ellipse Canvas.Left="350" Canvas.Top="120" Width="2" Height="2" Fill="White" />
+                        <Ellipse Canvas.Left="372" Canvas.Top="140" Width="2" Height="2" Fill="White" />
+                        <Ellipse Canvas.Left="385" Canvas.Top="116" Width="2" Height="2" Fill="White" />
+                        <Ellipse Canvas.Left="420" Canvas.Top="170" Width="2" Height="2" Fill="White" />
+                        <Ellipse Canvas.Left="360" Canvas.Top="178" Width="2" Height="2" Fill="White" />
+                    </Canvas>
+                    <Rectangle Canvas.Left="398" Canvas.Top="108" Width="4" Height="94" Fill="#E5E7EB" />
+                    <Rectangle Canvas.Left="332" Canvas.Top="153" Width="136" Height="4" Fill="#E5E7EB" />
+                    <Rectangle Canvas.Left="320" Canvas.Top="206" Width="160" Height="5" Fill="#D1D5DB" />
+                    <!-- A clock that keeps time, and a board of sticky notes -->
+                    <Ellipse Canvas.Left="259" Canvas.Top="116" Width="32" Height="32" Fill="White" Stroke="#6B7280" StrokeThickness="2" />
+                    <Line X1="275" Y1="132" X2="275" Y2="124" Stroke="{StaticResource Ink}" StrokeThickness="2.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round">
+                        <Line.RenderTransform>
+                            <RotateTransform CenterX="275" CenterY="132" Angle="{Binding HourAngle}" />
+                        </Line.RenderTransform>
+                    </Line>
+                    <Line X1="275" Y1="132" X2="275" Y2="120" Stroke="{StaticResource Ink}" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round">
+                        <Line.RenderTransform>
+                            <RotateTransform CenterX="275" CenterY="132" Angle="{Binding MinuteAngle}" />
+                        </Line.RenderTransform>
+                    </Line>
+                    <Rectangle Canvas.Left="494" Canvas.Top="116" Width="72" Height="54" Fill="White" Stroke="#9CA3AF" StrokeThickness="1.5" />
+                    <Path Stroke="#CBD5E1" StrokeThickness="1" Data="M 518,120 L 518,166 M 542,120 L 542,166" />
+                    <Rectangle Canvas.Left="499" Canvas.Top="121" Width="14" Height="10" Fill="#FDE68A" />
+                    <Rectangle Canvas.Left="499" Canvas.Top="134" Width="14" Height="10" Fill="#FBCFE8" />
+                    <Rectangle Canvas.Left="499" Canvas.Top="147" Width="14" Height="10" Fill="#FDE68A" />
+                    <Rectangle Canvas.Left="523" Canvas.Top="121" Width="14" Height="10" Fill="#BFDBFE" />
+                    <Rectangle Canvas.Left="523" Canvas.Top="134" Width="14" Height="10" Fill="#FDE68A" />
+                    <Rectangle Canvas.Left="547" Canvas.Top="121" Width="14" Height="10" Fill="#BBF7D0" />
+                    <Rectangle Canvas.Left="547" Canvas.Top="134" Width="14" Height="10" Fill="#BBF7D0" />
+                    <Rectangle Canvas.Left="547" Canvas.Top="147" Width="14" Height="10" Fill="#BBF7D0" />
+                    <Rectangle Canvas.Left="490" Canvas.Top="170" Width="80" Height="3" Fill="#9CA3AF" />
+                    <!-- A plant in the left corner -->
+                    <Rectangle Canvas.Left="244" Canvas.Top="276" Width="22" Height="24" Fill="#B45309" Opacity="0.85" />
+                    <Ellipse Canvas.Left="236" Canvas.Top="236" Width="22" Height="40" Fill="#16A34A" Opacity="0.9" />
+                    <Ellipse Canvas.Left="252" Canvas.Top="232" Width="20" Height="44" Fill="#22C55E" Opacity="0.9" />
+                    <!-- The water cooler, under the window -->
+                    <Rectangle Canvas.Left="388" Canvas.Top="258" Width="24" Height="42" RadiusX="2" RadiusY="2" Fill="#E5E7EB" Stroke="#9CA3AF" StrokeThickness="1" />
+                    <Rectangle Canvas.Left="392" Canvas.Top="224" Width="16" Height="34" RadiusX="7" RadiusY="7" Fill="#7DD3FC" Opacity="0.85" />
+                    <Rectangle Canvas.Left="396" Canvas.Top="274" Width="8" Height="3" Fill="#60A5FA" />
+                    <!-- Desks and agents, back to front -->
+                    <ItemsControl ItemsSource="{Binding Scene}" Focusable="False">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <Canvas Width="800" Height="520" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemContainerStyle>
+                            <Style TargetType="ContentPresenter">
+                                <Setter Property="Panel.ZIndex" Value="{Binding ZIndex}" />
+                            </Style>
+                        </ItemsControl.ItemContainerStyle>
+                    </ItemsControl>
+                    <TextBlock Canvas.Left="0" Canvas.Top="440" Width="800" TextAlignment="Center" Text="Nobody's in yet: agents take a desk when they connect."
+                               Style="{StaticResource MutedText}" FontSize="16" Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVis}}" />
                 </Canvas>
-                <Rectangle Canvas.Left="398" Canvas.Top="108" Width="4" Height="94" Fill="#E5E7EB" />
-                <Rectangle Canvas.Left="332" Canvas.Top="153" Width="136" Height="4" Fill="#E5E7EB" />
-                <Rectangle Canvas.Left="320" Canvas.Top="206" Width="160" Height="5" Fill="#D1D5DB" />
-                <!-- A clock that keeps time, and a board of sticky notes -->
-                <Ellipse Canvas.Left="259" Canvas.Top="116" Width="32" Height="32" Fill="White" Stroke="#6B7280" StrokeThickness="2" />
-                <Line X1="275" Y1="132" X2="275" Y2="124" Stroke="{StaticResource Ink}" StrokeThickness="2.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round">
-                    <Line.RenderTransform>
-                        <RotateTransform CenterX="275" CenterY="132" Angle="{Binding HourAngle}" />
-                    </Line.RenderTransform>
-                </Line>
-                <Line X1="275" Y1="132" X2="275" Y2="120" Stroke="{StaticResource Ink}" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round">
-                    <Line.RenderTransform>
-                        <RotateTransform CenterX="275" CenterY="132" Angle="{Binding MinuteAngle}" />
-                    </Line.RenderTransform>
-                </Line>
-                <Rectangle Canvas.Left="494" Canvas.Top="116" Width="72" Height="54" Fill="White" Stroke="#9CA3AF" StrokeThickness="1.5" />
-                <Path Stroke="#CBD5E1" StrokeThickness="1" Data="M 518,120 L 518,166 M 542,120 L 542,166" />
-                <Rectangle Canvas.Left="499" Canvas.Top="121" Width="14" Height="10" Fill="#FDE68A" />
-                <Rectangle Canvas.Left="499" Canvas.Top="134" Width="14" Height="10" Fill="#FBCFE8" />
-                <Rectangle Canvas.Left="499" Canvas.Top="147" Width="14" Height="10" Fill="#FDE68A" />
-                <Rectangle Canvas.Left="523" Canvas.Top="121" Width="14" Height="10" Fill="#BFDBFE" />
-                <Rectangle Canvas.Left="523" Canvas.Top="134" Width="14" Height="10" Fill="#FDE68A" />
-                <Rectangle Canvas.Left="547" Canvas.Top="121" Width="14" Height="10" Fill="#BBF7D0" />
-                <Rectangle Canvas.Left="547" Canvas.Top="134" Width="14" Height="10" Fill="#BBF7D0" />
-                <Rectangle Canvas.Left="547" Canvas.Top="147" Width="14" Height="10" Fill="#BBF7D0" />
-                <Rectangle Canvas.Left="490" Canvas.Top="170" Width="80" Height="3" Fill="#9CA3AF" />
-                <!-- A plant in the left corner -->
-                <Rectangle Canvas.Left="244" Canvas.Top="276" Width="22" Height="24" Fill="#B45309" Opacity="0.85" />
-                <Ellipse Canvas.Left="236" Canvas.Top="236" Width="22" Height="40" Fill="#16A34A" Opacity="0.9" />
-                <Ellipse Canvas.Left="252" Canvas.Top="232" Width="20" Height="44" Fill="#22C55E" Opacity="0.9" />
-                <!-- The water cooler, under the window -->
-                <Rectangle Canvas.Left="388" Canvas.Top="258" Width="24" Height="42" RadiusX="2" RadiusY="2" Fill="#E5E7EB" Stroke="#9CA3AF" StrokeThickness="1" />
-                <Rectangle Canvas.Left="392" Canvas.Top="224" Width="16" Height="34" RadiusX="7" RadiusY="7" Fill="#7DD3FC" Opacity="0.85" />
-                <Rectangle Canvas.Left="396" Canvas.Top="274" Width="8" Height="3" Fill="#60A5FA" />
-                <!-- Desks and agents, back to front -->
-                <ItemsControl ItemsSource="{Binding Scene}" Focusable="False">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <Canvas Width="800" Height="520" />
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                    <ItemsControl.ItemContainerStyle>
-                        <Style TargetType="ContentPresenter">
-                            <Setter Property="Panel.ZIndex" Value="{Binding ZIndex}" />
-                        </Style>
-                    </ItemsControl.ItemContainerStyle>
-                </ItemsControl>
-                <TextBlock Canvas.Left="0" Canvas.Top="440" Width="800" TextAlignment="Center" Text="Nobody's in yet: agents take a desk when they connect."
-                           Style="{StaticResource MutedText}" FontSize="16" Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVis}}" />
             </Canvas>
         </Viewbox>
     </DockPanel>

@@ -8,6 +8,9 @@ public sealed record ChatSegment(ChatSegmentKind Kind, string Text, string? Targ
 /// <summary>@mentions, #channel and item links, and web links in chat messages.</summary>
 public static class ChatText
 {
+    /// <summary>"@everyone" mentions everyone in the channel (see <see cref="ChatRoom.Mentions"/>).</summary>
+    public const string Everyone = "everyone";
+
     /// <summary>
     /// Whether the text @mentions this name. An agent with a label ("Claude Code · login fix") is also reached by its
     /// plain name ("@Claude Code").
@@ -19,13 +22,16 @@ public static class ChatText
         // A guest's agent, "Ada (via Alice)", is mentioned as @Ada too.
         var via = name.LastIndexOf(" (via ", StringComparison.Ordinal);
         return Has(text, name) || (label > 0 && Has(text, name[..label])) || (via > 0 && name.EndsWith(')') && Has(text, name[..via]));
+    }
 
-        static bool Has(string text, string name)
-        {
-            for (var i = text.IndexOf('@'); i >= 0; i = text.IndexOf('@', i + 1))
-                if (StartsAt(text, i, name)) return true;
-            return false;
-        }
+    /// <summary>Whether the text says "@everyone".</summary>
+    public static bool MentionsEveryone(string text) => Has(text, Everyone);
+
+    private static bool Has(string text, string name)
+    {
+        for (var i = text.IndexOf('@'); i >= 0; i = text.IndexOf('@', i + 1))
+            if (StartsAt(text, i, name)) return true;
+        return false;
     }
 
     /// <summary>"@name" at <paramref name="at"/>, standing on its own (not inside an e-mail address or a longer word).</summary>
@@ -38,12 +44,12 @@ public static class ChatText
     }
 
     /// <summary>
-    /// Splits a message into pieces to show: @mentions of the given names (longest first), #channels that exist, items as
-    /// # and the first 8 characters of their id (#4e84570c), and http(s) links.
+    /// Splits a message into pieces to show: @mentions of the given names (longest first) and @everyone, #channels that
+    /// exist, items as # and the first 8 characters of their id (#4e84570c), and http(s) links.
     /// </summary>
     public static IReadOnlyList<ChatSegment> Parse(string text, IEnumerable<string> names, Func<string, bool> isChannel, Func<string, Guid?> findItem)
     {
-        var candidates = names.Where(n => n.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).OrderByDescending(n => n.Length).ToList();
+        var candidates = names.Append(Everyone).Where(n => n.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).OrderByDescending(n => n.Length).ToList();
         var segments = new List<ChatSegment>();
         var plain = new System.Text.StringBuilder();
         void Add(ChatSegment segment)

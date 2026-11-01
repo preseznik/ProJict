@@ -80,9 +80,11 @@ public sealed class ChatChannel
 /// <summary>
 /// Who is acting in Chat. You, the owner of the workspace, moderate every channel. An agent reaches the projects its
 /// API token allows (null: all of them). A guest is a person connected through sharing: it reaches the projects shared
-/// with it, and sees channels about nothing in particular only when it's in them.
+/// with it, and sees channels about nothing in particular only when it's in them. Channels about a project in
+/// <paramref name="Hidden"/> (your private projects, for a guest) it never sees, even ones it's in.
 /// </summary>
-public sealed record ChatActor(string Name, bool Agent, bool Owner = false, IReadOnlySet<Guid>? Projects = null, bool Guest = false);
+public sealed record ChatActor(string Name, bool Agent, bool Owner = false, IReadOnlySet<Guid>? Projects = null, bool Guest = false,
+    IReadOnlySet<Guid>? Hidden = null);
 
 /// <summary>Something Chat doesn't allow, in words for the person or agent who tried.</summary>
 public sealed class ChatException(string message) : InvalidOperationException(message);

@@ -54,6 +54,9 @@ public sealed partial class OfficeViewModel : ObservableObject
 
     public OfficeDeskViewModel? DeskOf(McpSession session) => _deskOf.TryGetValue(session, out var i) ? Desks[i] : null;
 
+    /// <summary>How far the room is zoomed in and which part shows; kept here, so it stays when the view is rebuilt.</summary>
+    public OfficeCamera Camera { get; } = new(Width, Height);
+
     // ───────────── Sky ─────────────
 
     [ObservableProperty] private Brush _sky = SkyAt(DateTime.Now.Hour);
@@ -105,7 +108,7 @@ public sealed partial class OfficeViewModel : ObservableObject
             }
             if (!_agents.TryGetValue(card.Session, out var agent))
             {
-                agent = new OfficeAgentViewModel(card);
+                agent = new OfficeAgentViewModel(card, BringToFront);
                 _agents[card.Session] = agent;
                 Agents.Add(agent);
                 Scene.Add(agent);
@@ -157,6 +160,12 @@ public sealed partial class OfficeViewModel : ObservableObject
         OnPropertyChanged(nameof(MoreText));
         OnPropertyChanged(nameof(Summary));
     }
+
+    /// <summary>A clicked agent is drawn in front of everything, in case a desk or another agent hides part of it.</summary>
+    private void BringToFront(OfficeAgentViewModel agent)
+    {
+        foreach (var other in Agents) other.OnTop = other == agent;
+    }
 }
 
 /// <summary>What a desk's monitor shows: its agent's work, a screen saver while it's at the cooler, or nothing.</summary>
@@ -195,8 +204,11 @@ public sealed partial class OfficeDeskViewModel : ObservableObject
 /// An agent in the office: a small robot in its badge's colour with its initials, at its desk or at the cooler, posed by
 /// what it's doing; the view walks it over when that changes.
 /// </summary>
-public sealed partial class OfficeAgentViewModel(AgentCardViewModel card) : ObservableObject
+public sealed partial class OfficeAgentViewModel(AgentCardViewModel card, Action<OfficeAgentViewModel> bringToFront) : ObservableObject
 {
+    /// <summary>Above anything else in the room.</summary>
+    private const int FrontZ = 100_000;
+
     /// <summary>Its card in the view (rebuilt as agents come and go).</summary>
     [ObservableProperty] private AgentCardViewModel _card = card;
     public McpSession Session => Card.Session;
@@ -219,8 +231,11 @@ public sealed partial class OfficeAgentViewModel(AgentCardViewModel card) : Obse
     [ObservableProperty] private bool _facingRight;
     /// <summary>On its way between its desk and the cooler (set by the view while it walks).</summary>
     [ObservableProperty] private bool _walking;
-    /// <summary>In front of its desk; at the cooler, by where it stands.</summary>
-    [ObservableProperty] private int _zIndex;
+    /// <summary>In front of its desk; at the cooler, by where it stands; in front of everything once clicked.</summary>
+    public int ZIndex => OnTop ? FrontZ : _depthZ;
+    private int _depthZ;
+    /// <summary>Clicked, so drawn in front of everything until another agent is clicked or it moves.</summary>
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(ZIndex))] private bool _onTop;
     /// <summary>What it says at the cooler: its last chat message, or that it's listening.</summary>
     [ObservableProperty] private string? _bubble;
     [ObservableProperty] private string _toolTip = "";
@@ -235,9 +250,11 @@ public sealed partial class OfficeAgentViewModel(AgentCardViewModel card) : Obse
         Standing = standing;
         FacingRight = facingRight;
         Scale = standing ? OfficeViewModel.ScaleAt(y) : desk.Scale;
+        if (x != X || y != Y) OnTop = false;
         X = x;
         Y = y;
-        ZIndex = standing ? (int)(y + 24 * Scale) * 2 + 1 : desk.ZIndex + 1;
+        _depthZ = standing ? (int)(y + 24 * Scale) * 2 + 1 : desk.ZIndex + 1;
+        OnPropertyChanged(nameof(ZIndex));
         Bubble = activity == OfficeActivity.Talking ? Said(said) ?? (Session.Listening ? "Listening…" : "…") : null;
         var doing = activity switch
         {
@@ -257,6 +274,11 @@ public sealed partial class OfficeAgentViewModel(AgentCardViewModel card) : Obse
         return line.Length > 80 ? line[..79].TrimEnd() + "…" : line;
     }
 
-    /// <summary>A click on it shows its card.</summary>
-    [RelayCommand] private void ShowCard() => Card.RequestReveal();
+    /// <summary>A click on it brings it to the front and shows its card.</summary>
+    [RelayCommand]
+    private void ShowCard()
+    {
+        bringToFront(this);
+        Card.RequestReveal();
+    }
 }

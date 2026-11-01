@@ -702,7 +702,7 @@ public sealed partial class AgentCardViewModel : ObservableObject
         var statusFresh = Session.Status != null && Session.StatusAt is { } since && now - since < TimeSpan.FromMinutes(15);
         // Its own words while they're fresh, else what it last did.
         (StatusText, var at) = statusFresh ? (Session.Status!, Session.StatusAt!.Value)
-            : last != null ? (last.Text, last.At)
+            : last != null ? (last.Times > 1 ? $"{last.Text} ×{last.Times}" : last.Text, last.At)
             : ("Connected, nothing done yet", Session.ConnectedAt);
         IsBusy = now - (Session.LastActive ?? Session.ConnectedAt) < AgentActivityViewModel.BusyFor ||
                  (statusFresh && now - Session.StatusAt!.Value < AgentActivityViewModel.BusyFor);
@@ -716,14 +716,20 @@ public sealed partial class AgentCardViewModel : ObservableObject
     private static string Age(DateTime at, DateTime now) => AgentActivityViewModel.Age(at, now);
 }
 
-/// <summary>One of an agent's latest actions; the newest stands out, the rest are quieter.</summary>
+/// <summary>
+/// One of an agent's latest actions; the newest stands out, the rest are quieter. Done several times in a row, it says
+/// how often ("×6") on one line, aged by the last time.
+/// </summary>
 public sealed partial class AgentActionRow(AgentAction action, bool isLatest, AgentActivityViewModel owner) : ObservableObject
 {
     public string Text => action.Text;
     public bool IsLatest => isLatest;
+    public string? TimesText => action.Times > 1 ? $"×{action.Times}" : null;
     public string Project => owner.ProjectName(action.ProjectId);
     public string Age { get; private set; } = AgentActivityViewModel.Age(action.At, DateTime.Now);
-    public string Time => action.At.ToString("HH:mm:ss", CultureInfo.CurrentCulture);
+    public string Time => action.Times > 1 && action.Since is { } since
+        ? $"{action.Times} times, {since.ToString("HH:mm:ss", CultureInfo.CurrentCulture)} to {action.At.ToString("HH:mm:ss", CultureInfo.CurrentCulture)}"
+        : action.At.ToString("HH:mm:ss", CultureInfo.CurrentCulture);
 
     public void Tick(DateTime now)
     {

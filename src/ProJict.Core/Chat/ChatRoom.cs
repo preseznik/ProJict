@@ -101,9 +101,16 @@ public sealed class ChatRoom
     public static bool Reaches(ChatChannel channel, ChatActor actor) =>
         channel.Link == null || actor.Projects == null || actor.Projects.Contains(channel.Link.ProjectId);
 
-    /// <summary>You see every channel; others see the ones they're in, and Open ones in projects they reach unless they were kicked.</summary>
+    /// <summary>A channel about a project kept from the actor (a guest, and your private projects), whether it's in it or not.</summary>
+    public static bool IsHidden(ChatChannel channel, ChatActor actor) =>
+        channel.Link != null && actor.Hidden != null && actor.Hidden.Contains(channel.Link.ProjectId);
+
+    /// <summary>
+    /// You see every channel; others see the ones they're in, and Open ones in projects they reach unless they were
+    /// kicked; never ones kept from them.
+    /// </summary>
     public static bool CanSee(ChatChannel channel, ChatActor actor) =>
-        actor.Owner || (!IsKicked(channel, actor.Name) &&
+        actor.Owner || (!IsKicked(channel, actor.Name) && !IsHidden(channel, actor) &&
                         (Member(channel, actor.Name) != null ||
                          (channel.Access == ChannelAccess.Open && Reaches(channel, actor) && !(actor.Guest && channel.Link == null))));
 
@@ -496,7 +503,15 @@ public sealed class ChatRoom
 
     /// <summary>Unread messages that @mention the member.</summary>
     public static IEnumerable<ChatMessage> UnreadMentions(ChatChannel channel, string name) =>
-        Unread(channel, name).Where(m => !m.Notice && ChatText.Mentions(m.Text, name));
+        Unread(channel, name).Where(m => !m.Notice && Mentions(channel, m, name));
+
+    /// <summary>
+    /// Whether the message @mentions them: by name, or with @everyone when they're in the channel (its author aside).
+    /// @everyone doesn't reach people and agents who only see an Open channel without being in it.
+    /// </summary>
+    public static bool Mentions(ChatChannel channel, ChatMessage message, string name) =>
+        ChatText.Mentions(message.Text, name) ||
+        (ChatText.MentionsEveryone(message.Text) && !string.Equals(message.By, name, StringComparison.OrdinalIgnoreCase) && Member(channel, name) != null);
 
     /// <summary>Marks everything up to the newest message (or <paramref name="upTo"/>) as seen; returns whether anything changed.</summary>
     public bool MarkRead(ChatChannel channel, string name, DateTime? upTo = null)

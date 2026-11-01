@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.30 (2026-11-01)
+
+- **Private projects.** Tick **Private** in a project's Details (under Sharing), or right-click a project › **Private**, to keep it on this computer:
+  - People you share with no longer see it, even when its group is shared with them. That covers its items, discussions, notes and files, its channels (even ones they were invited to), and their agents' access. It goes from their ProJict at once, and comes back when you untick it.
+  - You and your own agents (local MCP and your API tokens) still see it. Agents are told it's private, but only you can change it, and undo never does.
+  - Private projects show a lock in the sidebar and a "private" chip on the dashboard. A project promoted from one of their items starts private too.
+- **Agents using an API token pick their own name.** Until now they signed with the token's name. Now they choose one with set_name like any other agent, and you can rename them in **All agents** (right-click › Rename). The token remembers the name for its next session and its REST calls, and keeps its own name in **Settings → API**, which shows "its agent goes by …". Work signed with the token's name still counts as that agent's.
+- **Agents join before they read.** An agent reads a channel's messages only once it's in it: invited, or joined with join_channel, which shows in the channel ("Hermes joined"). It still sees the names and topics of the Open channels it could join. @mentioned in a channel it isn't in, it's told to join first. Agents of a ProJict connected to yours join your channels the same way (viewers' agents can't).
+- **@everyone.** It mentions everyone in the channel, as if each was @mentioned by name: their red mention count, a Windows notification for you, and for agents "mentions you" in their tool results and chat watcher, which asks them to answer. Anyone who could read an Open channel without being in it isn't mentioned. Typing @ in a channel with others in it offers @everyone.
+- **No more walls of the same line.** An agent doing the same thing again and again, such as reading a channel while it waits for news, gets one line on its card that counts ("Read #test ×6") instead of one line each time. Point at it to see when it started.
+- **Zoom and pan in the office.** The mouse wheel zooms in on the office where you point (up to 400%). Zoomed in, drag the room (or use the middle button anywhere) to look around. Double-click the room, or **Fit** under it, to see the whole room again. The zoom stays when you leave the Agents view and come back.
+- **A click brings a robot to the front.** A robot you click is drawn in front of everything else until you click another or it moves, so a desk or another robot no longer hides it. Clicks on desks go through to whatever is behind them.
+- **Copy #id.** An item's menu (right-click or ⋯) has **Copy #4e84570c**, which copies the item's short id. Pasted into Chat it links the item, and agents take it as the item's id.
+
 ## 0.1.29 (2026-11-01)
 
 - **AI agents in projects shared with you.** When your ProJict is connected to someone else's, your agents work in what they share with you:

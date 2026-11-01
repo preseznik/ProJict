@@ -30,8 +30,10 @@ public sealed class McpSession
     /// <summary>Names it had earlier in this session, before it (or the user) picked another.</summary>
     public HashSet<string> FormerNames { get; } = new(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>The name it signs with whatever the client calls itself: an API token's name.</summary>
+    /// <summary>The name it signs with, whatever the client calls itself, until it picks one: an API token's name.</summary>
     public string? SignAs { get; init; }
+    /// <summary>The API token it connected with, which remembers the name it picks.</summary>
+    public Guid? TokenId { get; init; }
     /// <summary>Connected over the API rather than the local pipe: files come as uploads, never as paths on this computer.</summary>
     public bool Remote { get; init; }
     /// <summary>A read-only API token: reading only (it can change while connected).</summary>
@@ -52,17 +54,31 @@ public sealed class McpSession
     /// <summary>What it did lately, oldest first (at most <see cref="KeptActions"/>), for the Agents view.</summary>
     public List<AgentAction> Recent { get; } = [];
     public const int KeptActions = 40;
+
+    /// <summary>
+    /// Keeps what it did. The same thing again right after (reading the same channel while it waits for news, say) counts
+    /// on the last line instead of adding one: "Read #test", 6 times. Returns the line as kept.
+    /// </summary>
+    public AgentAction Remember(AgentAction action)
+    {
+        if (Recent.Count > 0 && Recent[^1] is var last && last.Text == action.Text && last.ProjectId == action.ProjectId &&
+            last.ItemId == action.ItemId && last.Tool == action.Tool)
+            return Recent[^1] = action with { Times = last.Times + 1, Since = last.Since ?? last.At };
+        Recent.Add(action);
+        if (Recent.Count > KeptActions) Recent.RemoveRange(0, Recent.Count - KeptActions);
+        return action;
+    }
     /// <summary>Waiting for chat messages (wait_for_messages) right now.</summary>
     public volatile bool Listening;
     /// <summary>What its tool results already told it is waiting (chat messages, comments, …), so each is mentioned once.</summary>
     public HashSet<string> Noticed { get; } = [];
 
     /// <summary>
-    /// How the agent signs its work: an API token's name, the name it picked ("Ada"), or else its client's name
+    /// How the agent signs its work: the name it picked ("Ada"), else an API token's name, or else its client's name
     /// ("Claude Code" for a client named "claude-code"), numbered when several run at once ("Claude Code 2").
     /// </summary>
-    public string AgentName => !string.IsNullOrWhiteSpace(SignAs) ? SignAs.Trim()
-        : Name ?? (Number > 1 ? $"{Client} {Number}" : Client);
+    public string AgentName => Name ?? (!string.IsNullOrWhiteSpace(SignAs) ? SignAs.Trim()
+        : Number > 1 ? $"{Client} {Number}" : Client);
 
     /// <summary>What it runs in: "Claude Code", "Codex", …</summary>
     public string Client => !string.IsNullOrWhiteSpace(ClientTitle) ? ClientTitle.Trim()
@@ -75,8 +91,11 @@ public sealed class McpSession
         string.Join(" ", name.Split(['-', '_'], StringSplitOptions.RemoveEmptyEntries).Select(w => char.ToUpperInvariant(w[0]) + w[1..]));
 }
 
-/// <summary>One thing an agent did, in a few words ("Checked out “Fix the launcher”"), and the project and item it was about.</summary>
-public sealed record AgentAction(DateTime At, string Text, Guid? ProjectId, Guid? ItemId, string? Tool = null);
+/// <summary>
+/// One thing an agent did, in a few words ("Checked out “Fix the launcher”"), and the project and item it was about; done
+/// <paramref name="Times"/> times in a row, the first <paramref name="Since"/>, the last <paramref name="At"/>.
+/// </summary>
+public sealed record AgentAction(DateTime At, string Text, Guid? ProjectId, Guid? ItemId, string? Tool = null, int Times = 1, DateTime? Since = null);
 
 public interface IMcpToolHost
 {

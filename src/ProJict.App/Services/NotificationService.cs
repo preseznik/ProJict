@@ -165,7 +165,7 @@ public sealed class NotificationService
         foreach (var (channel, me, host) in places)
             foreach (var message in ProJict.Core.Chat.ChatRoom.Unread(channel, me).Where(m => !m.Notice))
             {
-                var mention = channel.Direct || ProJict.Core.Chat.ChatText.Mentions(message.Text, me);
+                var mention = channel.Direct || ProJict.Core.Chat.ChatRoom.Mentions(channel, message, me);
                 var where = ProJict.Core.Chat.ChatRoom.Title(channel, me) + (host != null ? $" ({host}'s ProJict)" : "");
                 var open = () => _main.ShowChannel(channel, message.Id);
                 events.Add(new Event(mention ? NotificationKind.ChatMention : NotificationKind.ChatMessage, $"chat:{message.Id}", channel.Link?.ProjectId, where,

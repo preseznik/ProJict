@@ -86,10 +86,11 @@ public sealed partial class AgentListRow : ObservableObject
     private void ShowCard() => _owner.ShowCardOf(Session!);
 
     // Renaming happens in the row itself: Enter keeps the name, Esc cancels.
-    public bool CanRename => Session is { } s && string.IsNullOrWhiteSpace(s.SignAs);
+    public bool CanRename => Session != null;
     public string RenameToolTip => Session == null ? "Only while it's connected: from then on it signs with the new name."
-        : CanRename ? "Give it another name: what it has checked out and its channels go with it, and it's told."
-        : "An API token signs with the name you gave it: rename it under Settings › API.";
+        : !string.IsNullOrWhiteSpace(Session.SignAs)
+            ? "Give it another name: what it has checked out and its channels go with it, and it's told. Its API token remembers the name; the token keeps its own in Settings › API."
+            : "Give it another name: what it has checked out and its channels go with it, and it's told.";
     [ObservableProperty] private bool _isRenaming;
     [ObservableProperty] private string _renameText = "";
     [ObservableProperty] private string? _renameProblem;

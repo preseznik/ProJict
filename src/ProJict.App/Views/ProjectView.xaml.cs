@@ -398,6 +398,7 @@ public partial class ProjectView : UserControl
         menu.Items.Add(move);
 
         menu.Items.Add(new Separator());
+        menu.Items.Add(Item($"Copy {ProjectViewModel.ShortIdOf(row.Item)}", row.CopyIdCommand));
         menu.Items.Add(Item("Copy as prompt", row.CopyPromptCommand));
         menu.Items.Add(new MenuItem { Header = "Select for prompt", Command = row.ToggleSelectedCommand, IsChecked = row.IsSelected, InputGestureText = "Ctrl+Space" });
         menu.Items.Add(Item("Promote to project…", row.PromoteCommand));

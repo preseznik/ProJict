@@ -109,6 +109,13 @@
                                                 Visibility="{Binding HasReview, Converter={StaticResource BoolToVis}}" ToolTip="Finished by an AI agent, waiting for your review">
                                             <TextBlock Text="{Binding ReviewText}" Style="{StaticResource ChipText}" />
                                         </Border>
+                                        <Border Style="{StaticResource TagChip}" Background="{DynamicResource SubtleFillColorSecondaryBrush}" Margin="0,0,4,0"
+                                                Visibility="{Binding IsPrivate, Converter={StaticResource BoolToVis}}" ToolTip="{x:Static vm:ProjectListItemViewModel.PrivateToolTip}">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Style="{StaticResource Icon}" Text="&#xE72E;" FontSize="10" VerticalAlignment="Center" Margin="0,0,4,0" />
+                                                <TextBlock Text="private" FontSize="11" />
+                                            </StackPanel>
+                                        </Border>
                                         <Border Style="{StaticResource TagChip}" Background="{DynamicResource AccentFillColorDefaultBrush}" Margin="0,0,4,0"
                                                 Visibility="{Binding HasShip, Converter={StaticResource BoolToVis}}" ToolTip="{Binding ShipToolTip}">
                                             <TextBlock Text="{Binding ShipText}" Style="{StaticResource ChipText}" />

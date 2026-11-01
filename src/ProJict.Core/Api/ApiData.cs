@@ -13,8 +13,13 @@ public enum ApiAccess { ReadWrite, ReadOnly }
 public sealed class ApiToken
 {
     public Guid Id { get; set; } = Guid.NewGuid();
-    /// <summary>Signs everything done with the token, e.g. "n8n".</summary>
+    /// <summary>Signs everything done with the token, e.g. "n8n", until its agent has a name of its own.</summary>
     public string Name { get; set; } = "";
+    /// <summary>
+    /// The name its agent picked (set_name) or you gave it (Agents › Rename), e.g. "Hermes": it signs with that instead,
+    /// also the next time it connects with the token. Null while it goes by the token's name.
+    /// </summary>
+    public string? AgentName { get; set; }
     public ApiAccess Access { get; set; }
     /// <summary>Paused by the user: it still connects (and can ask who it is) but can't do anything, not even read, until unfrozen.</summary>
     public bool Frozen { get; set; }

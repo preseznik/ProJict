@@ -58,7 +58,7 @@ public sealed partial class AgentTools
             ["member"] = member != null,
             ["members"] = channel.Members.Count,
             ["unread"] = unread.Count > 0 ? unread.Count : null,
-            ["mentionsYou"] = unread.Any(m => ChatText.Mentions(m.Text, me)) ? true : null,
+            ["mentionsYou"] = unread.Any(m => ChatRoom.Mentions(channel, m, me)) ? true : null,
             ["lastMessage"] = channel.Messages.LastOrDefault(m => !m.Notice) is { } last ? Time(last.At) : null,
             ["startedBy"] = channel.CreatedBy,
         };
@@ -72,6 +72,8 @@ public sealed partial class AgentTools
 
     private string SharedRead(McpSession session, HostConnection host, ChatChannel channel, Args args)
     {
+        if (ChatRoom.Member(channel, ViaIn(session, host)) == null)
+            throw new McpToolException($"You're not in {SharedName(host, channel)}: join it first with join_channel, then read_channel shows its messages.", ToolProblem.Forbidden);
         var limit = Math.Clamp(args.Int("limit") ?? 30, 1, 200);
         IEnumerable<ChatMessage> messages = channel.Messages;
         if (args.String("before") is { } before)
@@ -83,10 +85,27 @@ public sealed partial class AgentTools
         var me = ViaIn(session, host);
         var json = SharedChannelJson(host, channel, session);
         json["members"] = new JsonArray(channel.Members.Select(m => (JsonNode)new JsonObject { ["name"] = m.Name, ["agent"] = m.Agent ? true : null }).ToArray());
-        json["messages"] = new JsonArray(shown.Select(m => (JsonNode)MessageJson(m, me)).ToArray());
+        json["messages"] = new JsonArray(shown.Select(m => (JsonNode)MessageJson(channel, m, me)).ToArray());
         if (shown.Count > 0 && shown[0] != channel.Messages[0]) json["more"] = $"Earlier messages: read_channel with before={ShortId(shown[0].Id)}.";
         SharedDelivered(session, host, channel, shown);
         return Json(json);
+    }
+
+    /// <summary>Joins (or leaves) another ProJict's channel, through the guest's connection; the host says so in the channel.</summary>
+    private string SharedJoin(McpSession session, HostConnection host, ChatChannel channel, bool leave)
+    {
+        if (!host.AgentsAllowed)
+            throw new McpToolException($"{host.HostName} doesn't let guests' AI agents take part (or runs an older ProJict), so you can't join {SharedName(host, channel)}.", ToolProblem.Forbidden);
+        if (!GuestAccess.CanComment(host.Role))
+            throw new McpToolException($"You take part in {host.HostName}'s ProJict through {host.MyName}, who is a viewer there, so you can't join its channels.", ToolProblem.Forbidden);
+        _main.Guest.ChatOp(host, leave ? "leave" : "join", ("channel", channel.Id.ToString()), ("as", session.AgentName));
+        return Json(new JsonObject
+        {
+            ["channel"] = SharedName(host, channel),
+            [leave ? "left" : "joined"] = true,
+            ["as"] = ViaIn(session, host),
+            ["note"] = $"Sent to {host.HostName}'s ProJict; read_channel shows its messages once you're in.",
+        });
     }
 
     private string SharedPost(McpSession session, HostConnection host, ChatChannel channel, Args args, List<Core.Model.Attachment> files)
@@ -157,7 +176,9 @@ public sealed partial class AgentTools
         var parts = fresh.GroupBy(w => (w.Host, w.Channel)).Select(g =>
         {
             var me = ViaIn(session, g.Key.Host);
-            var mentions = g.Count(w => ChatText.Mentions(w.Message.Text, me));
+            if (ChatRoom.Member(g.Key.Channel, me) == null)
+                return $"{Count(g.Count(), "message")} mentioning you in {SharedName(g.Key.Host, g.Key.Channel)}, which you're not in (join_channel first)";
+            var mentions = g.Count(w => ChatRoom.Mentions(w.Channel, w.Message, me));
             return $"{Count(g.Count(), "new message")} in {SharedName(g.Key.Host, g.Key.Channel)}" +
                    (mentions > 0 ? $" ({(mentions == 1 ? "one mentions" : $"{mentions} mention")} you)" : "");
         });
@@ -182,7 +203,7 @@ public sealed partial class AgentTools
                 }
                 var text = OneLine(m.Text);
                 if (text.Length > WatchTextLength) text = text[..WatchTextLength].TrimEnd() + $"… (read_channel \"{where}\" for the rest)";
-                var mention = ChatText.Mentions(m.Text, me) ? " (mentions you)" : "";
+                var mention = ChatRoom.Mentions(group.Key.Channel, m, me) ? " (mentions you)" : "";
                 lines.Add($"[{where}] {m.By}{mention}: {text} (id {ShortId(m.Id)}; reply: post_message channel=\"{where}\")");
             }
             SharedDelivered(identity, group.Key.Host, group.Key.Channel, group.Select(w => w.Message).ToList());

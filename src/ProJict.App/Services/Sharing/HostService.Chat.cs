@@ -19,9 +19,10 @@ public sealed partial class HostService
     private static readonly TimeSpan ChatDelay = TimeSpan.FromMilliseconds(150);
     private readonly Dictionary<Guid, DispatcherTimer> _chatTimers = [];
 
-    /// <summary>The guest in Chat: a person, who reaches the projects shared with it.</summary>
+    /// <summary>The guest in Chat: a person, who reaches the projects shared with it and never sees your private ones.</summary>
     private ChatActor ChatActorOf(GuestAccount account) =>
-        new(account.Name, false, Projects: Visible(account).Select(p => p.Id).ToHashSet(), Guest: true);
+        new(account.Name, false, Projects: Visible(account).Select(p => p.Id).ToHashSet(), Guest: true,
+            Hidden: _state.Projects.Where(p => p.Private).Select(p => p.Id).ToHashSet());
 
     private static JsonNode ChannelJson(ChatChannel channel) => JsonNode.Parse(Json.Serialize(ChatRoom.ForGuest(channel)))!;
 
@@ -109,7 +110,7 @@ public sealed partial class HostService
             if (op is not ("post" or "read" or "edit" or "delete" or "join" or "leave")) return Refuse("Guests' AI agents read and write in channels; the rest is for people.");
             var agent = (AgentNaming.WithoutVia(agentName.Trim(), account.Name) ?? agentName).Trim();
             if (agent.Length is 0 or > 40 || agent.Contains(" (via ", StringComparison.Ordinal)) return Refuse("That isn't an agent's name.");
-            actor = new ChatActor(AgentNaming.Via(agent, account.Name), true, Projects: actor.Projects, Guest: true);
+            actor = actor with { Name = AgentNaming.Via(agent, account.Name), Agent = true };
         }
         try
         {

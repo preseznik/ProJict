@@ -418,8 +418,11 @@ public sealed partial class HostService
 
     // ───────────── Messages (UI thread) ─────────────
 
-    private IEnumerable<Project> Visible(GuestAccount account) =>
-        _state.Projects.Where(p => !p.IsInbox && p.Remote == null && account.Sees(ProjectGroups.Of(p)));
+    /// <summary>What a guest sees: your own projects in the groups shared with them, never a private one.</summary>
+    private IEnumerable<Project> Visible(GuestAccount account) => _state.Projects.Where(p => Sees(account, p));
+
+    private static bool Sees(GuestAccount account, Project project) =>
+        !project.IsInbox && project.Remote == null && !project.Private && account.Sees(ProjectGroups.Of(project));
 
     /// <summary>The welcome (who you are, which projects you'll get), then each project as a message of its own.</summary>
     private List<JsonObject> Welcome(GuestSession session, string? token)
@@ -597,7 +600,7 @@ public sealed partial class HostService
         var history = HistoryOf(project);
         Bump(project, history);
         var message = Wire.Message("project", ("revision", history.Revision), ("project", ForGuest(history.Latest)));
-        foreach (var session in _sessions.Where(s => s.Account.Sees(ProjectGroups.Of(project))))
+        foreach (var session in _sessions.Where(s => Sees(s.Account, project)))
         {
             session.Sent.Add(project.Id);
             session.Send((JsonObject)message.DeepClone());

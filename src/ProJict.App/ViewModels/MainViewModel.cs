@@ -39,6 +39,12 @@ public sealed partial class ProjectListItemViewModel(Project project, MainViewMo
     public bool HasShip => Project.OpenShip != null;
     public string? ShipToolTip => Project.OpenShip is { } s ? $"Ship request ({ShipFlow.Describe(s.Steps)}): {ShipFlow.StateName(s.State)}" : null;
 
+    /// <summary>Private: a lock next to the name, and right-click › Private ticked.</summary>
+    public bool IsPrivate => Project.Private;
+    /// <summary>Your own projects, not the Inbox (never shared) or one shared with you.</summary>
+    public bool CanBePrivate => Project.Remote == null && !Project.IsInbox;
+    public static string PrivateToolTip => "Only on this computer: people you share with, and their agents, don't see it or its channels";
+
     /// <summary>Projects offered under "Copy categories from" in the right-click menu.</summary>
     public List<TemplateSourceViewModel> TemplateSources => main.TemplateSourcesFor(Project);
 
@@ -733,6 +739,28 @@ public sealed partial class MainViewModel : ObservableObject
         if (_projectViewModels.TryGetValue(project.Id, out var vm)) vm.RefreshGroups();
         State.NotifyListChanged();
         State.StatusText = $"Moved {project.Name} to {group}.";
+    }
+
+    /// <summary>
+    /// Right-click a project › Private, or the check box in its Details: kept from everyone you share with (their
+    /// sidebars lose it at once), or shared again through its group.
+    /// </summary>
+    public void SetPrivate(Project project, bool isPrivate)
+    {
+        if (NotYours(project) || project.IsInbox || project.Private == isPrivate) return;
+        project.Private = isPrivate;
+        State.MarkDirty(project, touch: false);
+        if (_projectViewModels.TryGetValue(project.Id, out var vm)) vm.RefreshPrivate();
+        State.NotifyListChanged();
+        State.StatusText = isPrivate
+            ? $"{project.Name} is private: people you share with no longer see it."
+            : $"{project.Name} isn't private any more: people its group ({ProjectGroups.Of(project)}) is shared with see it again.";
+    }
+
+    [RelayCommand]
+    private void TogglePrivate(ProjectListItemViewModel? item)
+    {
+        if (item != null) SetPrivate(item.Project, !item.Project.Private);
     }
 
     /// <summary>Right-click › Ship…: opens the project with a new ship request to fill in.</summary>

@@ -1,20 +1,109 @@
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using ProJict.App.ViewModels;
+using ProJict.Core.Agents;
 
 namespace ProJict.App.Views;
 
 /// <summary>
 /// The Agents view's office. Each robot is placed, scaled and mirrored here rather than by bindings, so that when it
 /// moves (to the cooler to chat, back to its desk) it can walk there: the walk takes its steps frame by frame, growing
-/// as it comes forward and turned the way it goes, then it turns to face where it arrived.
+/// as it comes forward and turned the way it goes, then it turns to face where it arrived. The room zooms and pans.
 /// </summary>
 public partial class OfficeView : UserControl
 {
-    public OfficeView() => InitializeComponent();
+    public OfficeView()
+    {
+        InitializeComponent();
+        // Rebuilt (another view and back, or the theme changed), it shows the room as it was left.
+        DataContextChanged += (_, _) => ShowCamera();
+    }
+
+    // ───────────── Zoom and pan ─────────────
+    // In room units: the Viewbox scales the room to fit, and the world inside it is zoomed and panned by the camera.
+
+    private OfficeCamera? Camera => (DataContext as OfficeViewModel)?.Camera;
+    private Point? _panFrom;
+    private MouseButton _panButton;
+
+    private void Room_MouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (Camera is not { } camera) return;
+        var factor = Math.Pow(1.2, e.Delta / 120.0);
+        // Already the whole room: the wheel scrolls the page around it.
+        if (factor < 1 && !camera.IsZoomed) return;
+        var at = e.GetPosition(Room);
+        camera.ZoomAt(at.X, at.Y, factor);
+        ShowCamera();
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// A robot takes its own left clicks (they show its card), so a left button here is on the room: drag to pan, or
+    /// double-click for the whole room. The middle button pans anywhere.
+    /// </summary>
+    private void Room_MouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ChangedButton is not (MouseButton.Left or MouseButton.Middle)) return;
+        if (e.ChangedButton == MouseButton.Left && e.ClickCount == 2)
+        {
+            FitRoom();
+            e.Handled = true;
+            return;
+        }
+        if (Camera is not { IsZoomed: true }) return;
+        _panFrom = e.GetPosition(Room);
+        _panButton = e.ChangedButton;
+        Room.CaptureMouse();
+        Room.Cursor = Cursors.SizeAll;
+        e.Handled = true;
+    }
+
+    private void Room_MouseMove(object sender, MouseEventArgs e)
+    {
+        if (_panFrom is not { } from || Camera is not { } camera) return;
+        var at = e.GetPosition(Room);
+        camera.PanBy(at.X - from.X, at.Y - from.Y);
+        _panFrom = at;
+        ShowCamera();
+    }
+
+    private void Room_MouseUp(object sender, MouseButtonEventArgs e)
+    {
+        if (_panFrom == null || e.ChangedButton != _panButton) return;
+        Room.ReleaseMouseCapture();
+        e.Handled = true;
+    }
+
+    private void Room_LostMouseCapture(object sender, MouseEventArgs e)
+    {
+        _panFrom = null;
+        Room.ClearValue(CursorProperty);
+    }
+
+    private void Fit_Click(object sender, RoutedEventArgs e) => FitRoom();
+
+    private void FitRoom()
+    {
+        Camera?.Reset();
+        ShowCamera();
+    }
+
+    private void ShowCamera()
+    {
+        var camera = Camera ?? new OfficeCamera(OfficeViewModel.Width, OfficeViewModel.Height);
+        ZoomScale.ScaleX = ZoomScale.ScaleY = camera.Zoom;
+        PanMove.X = camera.OffsetX;
+        PanMove.Y = camera.OffsetY;
+        FitButton.Visibility = camera.IsZoomed ? Visibility.Visible : Visibility.Collapsed;
+        FitText.Text = $"{camera.Zoom * 100:0}% · Fit";
+    }
+
+    // ───────────── Robots ─────────────
 
     private void Agent_Loaded(object sender, RoutedEventArgs e)
     {

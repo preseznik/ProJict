@@ -518,16 +518,23 @@ public sealed class ApiServer
         return client.Session;
     }
 
-    /// <summary>The token's access may have changed since its session started: each request goes by what it is now.</summary>
+    /// <summary>
+    /// The token's access, and its agent's name, may have changed since its session started (the name in another session
+    /// with the same token): each request goes by what they are now.
+    /// </summary>
     private static void Follow(McpSession session, ApiToken token)
     {
         session.ReadOnly = token.ReadOnly;
         session.Frozen = token.Frozen;
+        if (token.AgentName != null) session.Name = token.AgentName;
     }
 
     private static McpSession NewSession(ApiToken token) => new()
     {
         SignAs = token.Name,
+        TokenId = token.Id,
+        // The name its agent picked last time.
+        Name = token.AgentName,
         Remote = true,
         ReadOnly = token.ReadOnly,
         Frozen = token.Frozen,

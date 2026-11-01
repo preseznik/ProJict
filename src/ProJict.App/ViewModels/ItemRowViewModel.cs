@@ -197,6 +197,7 @@ public sealed partial class ItemRowViewModel : ObservableObject
     [RelayCommand] private void Delete() => Owner.Delete(this, focusPrevious: false);
     [RelayCommand] private void Promote() => Owner.PromoteToProject(this);
     [RelayCommand] private void CopyPrompt() => Owner.CopyPromptFor([Item]);
+    [RelayCommand] private void CopyId() => Owner.CopyIdOf(Item);
     [RelayCommand] private void ToggleSelected() => IsSelected = !IsSelected;
     [RelayCommand] private void AddChild() => Owner.AddChild(this);
     [RelayCommand] private void Attach() => Owner.BrowseAttachments(this);
