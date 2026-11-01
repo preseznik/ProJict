@@ -226,7 +226,11 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
-        try { State?.SaveNow(); }
+        try
+        {
+            MainVm?.Wiki.Page?.Leave();
+            State?.SaveNow();
+        }
         catch (Exception) { }
         State?.SaveAppSettings();
         _agents?.Dispose();

@@ -125,6 +125,18 @@ public sealed partial class MainViewModel : ObservableObject
             if (e.PropertyName == nameof(ChatViewModel.Channel) && CurrentView == Chat) Arrived();
         };
         Guest.ChatChanged += connection => Chat.OnRemoteChanged(connection);
+        Wiki = new WikiViewModel(state, this);
+        // Another page opened from the wiki's own tree or links is a new place too.
+        Wiki.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(WikiViewModel.Page) && CurrentView == Wiki) Arrived();
+        };
+        Wiki.CountsChanged += () =>
+        {
+            OnPropertyChanged(nameof(WikiReviewCount));
+            OnPropertyChanged(nameof(HasWikiReview));
+            OnPropertyChanged(nameof(WikiToolTip));
+        };
         Chat.CountsChanged += () =>
         {
             foreach (var name in new[] { nameof(ChatUnread), nameof(HasChatUnread), nameof(ChatHasMention), nameof(ChatToolTip) })
@@ -234,6 +246,12 @@ public sealed partial class MainViewModel : ObservableObject
     public AgentActivityViewModel AgentActivity { get; }
     /// <summary>Connected agents, for the count next to Agents in the sidebar.</summary>
     public ChatViewModel Chat { get; }
+    /// <summary>The workspace's wiki.</summary>
+    public WikiViewModel Wiki { get; }
+    /// <summary>The sidebar's Wiki count: pages agents changed (or with clashing edits) that you haven't checked.</summary>
+    public string WikiReviewCount => Wiki.ReviewCount is > 0 and var n ? n.ToString(System.Globalization.CultureInfo.CurrentCulture) : "";
+    public bool HasWikiReview => Wiki.ReviewCount > 0;
+    public string WikiToolTip => Wiki.ReviewToolTip;
     /// <summary>The sidebar's Chat count: unread messages in your channels.</summary>
     public string ChatUnread => Chat.UnreadCount is > 0 and var n ? n.ToString(System.Globalization.CultureInfo.CurrentCulture) : "";
     public bool HasChatUnread => Chat.UnreadCount > 0;
@@ -261,9 +279,12 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty] private bool _isFeedActive;
     [ObservableProperty] private bool _isAgentsActive;
     [ObservableProperty] private bool _isChatActive;
+    [ObservableProperty] private bool _isWikiActive;
 
     partial void OnCurrentViewChanged(object? oldValue, object? newValue)
     {
+        if (oldValue == Wiki && newValue != Wiki) Wiki.Hide();
+        if (newValue != Wiki) IsWikiActive = false;
         if (oldValue == AgentActivity && newValue != AgentActivity) AgentActivity.Hide();
         if (oldValue == Chat && newValue != Chat) Chat.Hide();
         if (newValue != Chat) IsChatActive = false;
@@ -552,6 +573,53 @@ public sealed partial class MainViewModel : ObservableObject
         Arrived();
     }
 
+    // ───────────── Wiki ─────────────
+
+    /// <summary>The Wiki view, at a page or where you were.</summary>
+    [RelayCommand]
+    public void ShowWiki(object? target) => ShowWikiPage(target as ProJict.Core.Wiki.WikiPage);
+
+    public void ShowWikiPage(ProJict.Core.Wiki.WikiPage? page)
+    {
+        CurrentView = Wiki;
+        IsWikiActive = true;
+        IsAgentsActive = false;
+        IsDashboardActive = false;
+        IsFeedActive = false;
+        IsInboxActive = false;
+        _syncingSelection = true;
+        SelectedProjectItem = null;
+        _syncingSelection = false;
+        Wiki.Show(page);
+        Arrived();
+    }
+
+    /// <summary>A project's header › Wiki: its first page, or a new one about it.</summary>
+    public void ShowProjectWiki(Project project)
+    {
+        if (State.Wiki.LinkedTo(project.Id).FirstOrDefault() is { } page) ShowWikiPage(page);
+        else
+        {
+            ShowWikiPage(null);
+            Wiki.NewPageFor(project);
+        }
+    }
+
+    /// <summary>The pages about a project, as chips for its header.</summary>
+    public List<WikiPageChip> WikiChips(Project project)
+    {
+        IEnumerable<ProJict.Core.Wiki.WikiPage> pages = project.Remote is { } remote
+            ? Guest.Connections.FirstOrDefault(c => c.Address == remote.HostKey)?.Wiki?.LinkedTo(project.Id) ?? []
+            : State.Wiki.LinkedTo(project.Id);
+        return pages.Select(p => new WikiPageChip(p, this)).ToList();
+    }
+
+    /// <summary>Pages were started, linked, renamed or changed: the chips on the projects' headers follow.</summary>
+    public void RefreshWikiChips()
+    {
+        foreach (var vm in _projectViewModels.Values) vm.RefreshWikiPages();
+    }
+
     /// <summary>Opens Chat with the form to start a channel about a project, category or item, its name suggested from it.</summary>
     public void StartChannel(Project project, Category? category = null, TodoItem? item = null)
     {
@@ -828,6 +896,8 @@ public sealed partial class MainViewModel : ObservableObject
     {
         if (item != null) new ExportDialog(State, item.Project) { Owner = Application.Current.MainWindow }.ShowDialog();
     }
+
+    public void Navigate(ProJict.Core.Wiki.WikiHit hit) => ShowWikiPage(hit.Page);
 
     public void Navigate(SearchHit hit)
     {

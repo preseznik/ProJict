@@ -21,6 +21,9 @@
         <DataTemplate DataType="{x:Type vm:ChatViewModel}">
             <views:ChatView />
         </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:WikiViewModel}">
+            <views:WikiView />
+        </DataTemplate>
     </Window.Resources>
     <Window.InputBindings>
         <KeyBinding Gesture="Ctrl+K" Command="{Binding SearchCommand}" />
@@ -139,6 +142,22 @@
                                         </Style>
                                     </TextBlock.Style>
                                 </TextBlock>
+                            </Border>
+                        </Grid>
+                    </Button>
+                    <Button x:Name="WikiNav" Style="{StaticResource NavButton}" Command="{Binding ShowWikiCommand}" Tag="{Binding IsWikiActive}" ToolTip="{Binding WikiToolTip}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="26" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE82D;" HorizontalAlignment="Left" />
+                            <TextBlock Grid.Column="1" Text="Wiki" />
+                            <!-- Pages agents changed (or with clashing edits) that wait for you. -->
+                            <Border Grid.Column="2" CornerRadius="8" Padding="6,0" MinWidth="18" VerticalAlignment="Center" Background="{DynamicResource SystemFillColorCautionBrush}"
+                                    Visibility="{Binding HasWikiReview, Converter={StaticResource BoolToVis}}">
+                                <TextBlock Text="{Binding WikiReviewCount}" FontSize="11" HorizontalAlignment="Center" Foreground="Black" />
                             </Border>
                         </Grid>
                     </Button>

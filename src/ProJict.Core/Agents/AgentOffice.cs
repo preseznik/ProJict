@@ -5,8 +5,8 @@ public enum OfficeActivity { Building, Managing, Reading, Talking, Resting }
 
 /// <summary>
 /// Reads an agent's latest tool call as an activity for the office: chatting (or listening for chat) is Talking,
-/// checking out and finishing items is Building, adding items, comments and notes is Managing, going through items and
-/// discussions is Reading, and nothing for a while is Resting. Saying what it does (set_status, set_label, set_name)
+/// checking out and finishing items is Building, adding items, comments, notes and wiki pages is Managing, going through
+/// items, discussions and the wiki is Reading, and nothing for a while is Resting. Saying what it does (set_status, set_label, set_name)
 /// changes nothing.
 /// </summary>
 public static class OfficeActivities
@@ -17,7 +17,7 @@ public static class OfficeActivities
     private static readonly HashSet<string> Chat =
         ["list_channels", "create_channel", "read_channel", "post_message", "edit_message", "join_channel", "invite_to_channel", "moderate_channel", "wait_for_messages"];
     private static readonly HashSet<string> Build = ["claim_item", "complete_item", "attach_file", "report_ship", "finish_ship"];
-    private static readonly HashSet<string> Manage = ["add_item", "add_comment", "write_doc", "update_project", "plan_ship", "draft_release", "update_item"];
+    private static readonly HashSet<string> Manage = ["add_item", "add_comment", "write_doc", "write_wiki", "update_project", "plan_ship", "draft_release", "update_item"];
     private static readonly HashSet<string> Meta = ["set_status", "set_label", "set_name"];
 
     public static OfficeActivity Of(McpSession session, DateTime now, bool holdsItems)

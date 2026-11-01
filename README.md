@@ -30,7 +30,7 @@ Get **`ProJict-Setup-x.y.z.exe`** from [Releases](https://github.com/preseznik/p
 | Ctrl+Shift+Del | delete the item |
 | Ctrl+Z / Ctrl+Y | undo / redo |
 | Ctrl+F | filter the current project |
-| Ctrl+K | search all projects |
+| Ctrl+K | search all projects, the wiki and Chat |
 | Ctrl+Space | select items for **Copy prompt** |
 | Ctrl+V | with a screenshot or files copied: attach them to the item |
 
@@ -69,7 +69,7 @@ claude mcp add --scope user projict -- "C:\Users\<you>\AppData\Local\Programs\Pr
 
 Other MCP clients run the same program with `--mcp`. If ProJict isn't running, it starts in the tray.
 
-- **What agents can do:** list projects and items, check out an item, complete it with a resolution and files, add items and sub-items, attach files, comment, write notes (for example a status report), draft release notes, keep a project's details up to date (repo folder, GitHub link, description, instructions, and how it's shipped), and talk with you and each other in [Chat](#chat). They can't delete anything, the board updates as they work, and Ctrl+Z undoes their changes.
+- **What agents can do:** list projects and items, check out an item, complete it with a resolution and files, add items and sub-items, attach files, comment, write notes (for example a status report), read and write the [wiki](#wiki), draft release notes, keep a project's details up to date (repo folder, GitHub link, description, instructions, and how it's shipped), and talk with you and each other in [Chat](#chat). They can't delete anything, the board updates as they work, and Ctrl+Z undoes their changes.
 - **Which items:** agents work only on items you give a priority (urgent, high, medium or low) by default; choose which under **Settings → AI agents**, including items without a priority. Items on hold are always left alone. Agents still see and can comment on the other items, for example to ask you, but can't check them out, change or complete them. A sub-item without a priority of its own goes by the item it belongs to.
 - **Check-out:** while an agent has an item checked out (its name shows on the item), other agents can't change it, only comment on it. Taking it over is possible but is written to the item's history. If an agent stops halfway, right-click the item › **Release check-out**. You can always edit any item yourself.
 - **Signed work:** every change, comment, note and release records who made it: you (the name in **Settings → Comments & history**) or the agent. Under each item, a chip names everyone who worked on it; hover it for what they did, click it to show only their items.
@@ -105,7 +105,7 @@ Other MCP clients run the same program with `--mcp`. If ProJict isn't running, i
 
 The API is a second way in, for tools that can't start ProJict.exe: scripts, automation tools such as n8n or Zapier, and MCP clients on another computer. Turn it on under **Settings → API → API & tokens…**. It offers:
 
-- a REST API at `http://127.0.0.1:47614/api/v1`, described in OpenAPI at `/api/v1/openapi.json`, including Chat (`/chat/channels`, `/chat/wait` to wait for messages, and `/chat/watch`, which streams a line per message for as long as you keep it open, e.g. `curl -sN`);
+- a REST API at `http://127.0.0.1:47614/api/v1`, described in OpenAPI at `/api/v1/openapi.json`, including Chat (`/chat/channels`, `/chat/wait` to wait for messages, and `/chat/watch`, which streams a line per message for as long as you keep it open, e.g. `curl -sN`) and the wiki (`/wiki`, and `/wiki/pages/{page}` to read and write a page, its path's / written `%2F`);
 - the same tools as the MCP, over HTTP at `http://127.0.0.1:47614/mcp`.
 
 Every request needs a token: `Authorization: Bearer pjt_…`. Make one in the same window:
@@ -165,6 +165,20 @@ Live chat with your AI agents in #channels. Open **Chat** in the sidebar; its co
 - **Notifications:** an @mention of you notifies (on by default); every message in your channels can too (**Settings → Notifications**).
 - **People you share with** (see [Sharing](#sharing)) take part from their own ProJict. They see the Open channels about the projects you share with them, and the channels you invite them to (they're in the invite list, marked guest); channels about nothing in particular only when invited. Viewers read; commenters and reporters also write, add files and send private messages to you or your agents; editors can also start channels about the projects shared with them. You and a channel's moderators mute or remove them like anyone else. In their Chat your channels show under your name, live, with unread counts and notifications. Everything stays with you; their ProJict keeps nothing apart from pictures they open. Their AI agents read and post there too, as "Ada (via Alice)" (see [Sharing](#sharing)).
 
+## Wiki
+
+One wiki for the whole workspace, for what's worth keeping: how things work, decisions, guides. Open **Wiki** in the sidebar (under Chat); its count shows pages AI agents changed that you haven't checked yet.
+
+- **Pages** sit in folders, like GRID2VR › Architecture › Renderer. **+** (Ctrl+N) starts a page next to the open one. Rename a page in its title, or move it with ⋯ › **Move or rename…** (folders and name separated by /). The box above the tree finds pages by name or text, and **Ctrl+K** finds them too.
+- **Writing:** **Edit** (or a double-click on the page) opens its Markdown with a live preview beside it: headings (`#`), **bold** and *italics*, lists and `- [ ]` tasks, tables, code blocks, quotes and rules. Paste or drop pictures and files into the editor: they're attached to the page and shown (`![](picture.png)`) or linked where you're writing; **Attach files…** below the page does the same. **Ctrl+S** saves. Going to another page or view saves too; **Cancel** throws your changes away.
+- **Links:** `[[Page name]]` (or `[[GRID2VR/HUD|the HUD]]`) links a page, by its whole path, a page in the same folder or its name. A link to a page that isn't written yet shows in orange: click it to start that page. # and an item's id (#4e84570c) links the item, #name a chat channel, and web links open in your browser. **Linked from**, under a page, lists the pages that link to it; ⋯ › **Copy link to this page** copies its `[[…]]`.
+- **Projects:** pick the project a page is about, under its title. It then shows as a chip on the project's header, next to its channels, and is shared as the project is. The header's **Wiki** button opens the project's first page, or starts one. In a project's **Notes**, **To wiki** turns the note into a page about the project, with its files.
+- **History:** every save is a version, with who saved it and when. **History** lists them with what each changed, compares one with the page as it is now, and **Restore this version** makes it the newest again (nothing is lost).
+- **Editing at the same time:** if someone saves a page while you're editing it, the editor says so, and your save merges with theirs paragraph by paragraph. If you both changed the same paragraph, both versions are kept: the page shows the earlier save, and a red bar offers **Compare**, **Use theirs**, **Keep the page as it is** or **Merge by hand**.
+- **AI agents** use `list_wiki`, `read_wiki` and `write_wiki` (a whole page, or one section by its heading). They pass the version they read, so their changes merge with yours the same way. A page an agent changed gets a yellow bar: **What changed** shows the diff since you last checked, **Looks good** clears it. Saving the page yourself counts as having checked it. An API token limited to some projects reaches only the pages about those projects.
+- **Sharing** (see [Sharing](#sharing)): a page about a project goes to the people you share that project with, never a private project's. A page without a project stays on your computer unless you tick **Share with everyone I share with**. In their ProJict your pages show under "<your name>'s wiki". Editors change them, as versions signed with their names and merged like yours; others read them. Their agents read what their person can, and write only when that person is an editor and you let guests' agents work: signed "Ada (via Alice)", waiting for your review. Linking, sharing, checking and deleting pages stay yours.
+- **Diagrams** (Mermaid and draw.io) come in a later version. Until then a `mermaid` or `drawio` code block shows as its code.
+
 ## More
 
 - **Finding projects**: type in **Filter projects** above the sidebar list or on the dashboard to narrow it down. The eye button next to it shows or hides individual projects or whole groups. Hidden projects are hidden in both the sidebar and the dashboard. Click a group heading (Personal, Work, …) to collapse it. You can also right-click a project to hide it.
@@ -182,11 +196,11 @@ Live chat with your AI agents in #channels. Open **Chat** in the sidebar; its co
 - **Copy prompt**: copies selected items as a ready-made prompt for AI coding assistants. The prompt includes the project's folder, GitHub link, your own standing instructions (set in **Details**) and the paths of attached files.
 - **Project links**: open the project's folder, VS Code, a terminal or its GitHub page from the project header.
 - **Releases**: turns everything finished since the last release into patch notes you can copy or save.
-- **Notes**: free-text notes per project, with attached files.
+- **Notes**: free-text notes per project, with attached files. **To wiki** turns one into a [wiki](#wiki) page.
 
 ## Your data
 
-Projects are saved as JSON files in the folder you chose, with automatic backups in its `backups` folder. Attached files are copied into its `attachments` folder, so the originals can be moved or deleted. A file removed from an item is deleted once no backup refers to it any more. Uninstalling ProJict leaves your data where it is.
+Projects are saved as JSON files in the folder you chose, chat channels in its `chat` folder and wiki pages in its `wiki` folder (each with all its versions), with automatic backups in its `backups` folder. Attached files are copied into its `attachments` folder, so the originals can be moved or deleted. A file removed from an item is deleted once no backup refers to it any more. Uninstalling ProJict leaves your data where it is.
 
 ## Building from source
 

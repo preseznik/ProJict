@@ -1,6 +1,7 @@
 using System.Globalization;
 using ProJict.Core.Chat;
 using ProJict.Core.Model;
+using ProJict.Core.Wiki;
 
 namespace ProJict.Core.Storage;
 
@@ -12,8 +13,8 @@ public sealed class Workspace
 }
 
 /// <summary>
-/// One JSON file per project under &lt;dataRoot&gt;/projects, one per chat channel under &lt;dataRoot&gt;/chat,
-/// workspace.json for settings, timestamped copies under &lt;dataRoot&gt;/backups.
+/// One JSON file per project under &lt;dataRoot&gt;/projects, one per chat channel under &lt;dataRoot&gt;/chat, one per
+/// wiki page under &lt;dataRoot&gt;/wiki, workspace.json for settings, timestamped copies under &lt;dataRoot&gt;/backups.
 /// </summary>
 public sealed class ProjectStore
 {
@@ -32,6 +33,7 @@ public sealed class ProjectStore
     public string WorkspacePath => Path.Combine(DataRoot, "workspace.json");
     public string AttachmentsDir => Path.Combine(DataRoot, "attachments");
     public string ChatDir => Path.Combine(DataRoot, "chat");
+    public string WikiDir => Path.Combine(DataRoot, "wiki");
     public IReadOnlyList<string> LoadErrors => _loadErrors;
 
     public Workspace Load()
@@ -156,6 +158,43 @@ public sealed class ProjectStore
         File.Move(path, Path.Combine(deletedDir, $"{DateTime.Now.ToString(BackupStampFormat, CultureInfo.InvariantCulture)}-chat-{channel.Name}-{channel.Id}.json"), overwrite: true);
     }
 
+    // ───────────── Wiki ─────────────
+
+    /// <summary>The wiki's pages; a file that can't be read is reported in <see cref="LoadErrors"/> and left alone.</summary>
+    public List<WikiPage> LoadWikiPages()
+    {
+        var pages = new List<WikiPage>();
+        if (!Directory.Exists(WikiDir)) return pages;
+        foreach (var file in Directory.EnumerateFiles(WikiDir, "*.json"))
+        {
+            try
+            {
+                if (Json.Deserialize<WikiPage>(File.ReadAllText(file)) is { } page) pages.Add(page);
+            }
+            catch (Exception ex) when (ex is IOException or System.Text.Json.JsonException or UnauthorizedAccessException)
+            {
+                _loadErrors.Add($"wiki/{Path.GetFileName(file)}: {ex.Message}");
+            }
+        }
+        return pages.OrderBy(p => p.Path, StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    public void SaveWikiPage(WikiPage page)
+    {
+        Directory.CreateDirectory(WikiDir);
+        AtomicFile.WriteAllText(Path.Combine(WikiDir, $"{page.Id}.json"), Json.Serialize(page));
+    }
+
+    /// <summary>Moves the page's file into backups/deleted instead of erasing it.</summary>
+    public void DeleteWikiPage(WikiPage page)
+    {
+        var path = Path.Combine(WikiDir, $"{page.Id}.json");
+        if (!File.Exists(path)) return;
+        var deletedDir = Path.Combine(BackupsDir, "deleted");
+        Directory.CreateDirectory(deletedDir);
+        File.Move(path, Path.Combine(deletedDir, $"{DateTime.Now.ToString(BackupStampFormat, CultureInfo.InvariantCulture)}-wiki-{SafeFileName(page.Title)}-{page.Id}.json"), overwrite: true);
+    }
+
     public string Backup(DateTime? now = null)
     {
         var stamp = (now ?? DateTime.Now).ToString(BackupStampFormat, CultureInfo.InvariantCulture);
@@ -174,6 +213,13 @@ public sealed class ProjectStore
             Directory.CreateDirectory(chatBackup);
             foreach (var file in Directory.EnumerateFiles(ChatDir, "*.json"))
                 File.Copy(file, Path.Combine(chatBackup, Path.GetFileName(file)));
+        }
+        if (Directory.Exists(WikiDir))
+        {
+            var wikiBackup = Path.Combine(dir, "wiki");
+            Directory.CreateDirectory(wikiBackup);
+            foreach (var file in Directory.EnumerateFiles(WikiDir, "*.json"))
+                File.Copy(file, Path.Combine(wikiBackup, Path.GetFileName(file)));
         }
         Prune(now ?? DateTime.Now);
         return dir;
@@ -248,7 +294,7 @@ public sealed class ProjectStore
                 unused.Add((dir, id.ToString()));
         if (unused.Count == 0) return 0;
 
-        var files = new[] { ProjectsDir, ChatDir, BackupsDir }.Where(Directory.Exists)
+        var files = new[] { ProjectsDir, ChatDir, WikiDir, BackupsDir }.Where(Directory.Exists)
             .SelectMany(d => Directory.EnumerateFiles(d, "*.json", SearchOption.AllDirectories));
         foreach (var file in files)
         {

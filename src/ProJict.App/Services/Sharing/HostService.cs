@@ -43,6 +43,8 @@ public sealed class GuestSession(GuestAccount account, Wire wire, string address
     internal HashSet<Guid> Sent { get; } = [];
     /// <summary>Chat channels the guest has, likewise.</summary>
     internal HashSet<Guid> ChatSent { get; } = [];
+    /// <summary>Wiki pages the guest has, likewise.</summary>
+    internal HashSet<Guid> WikiSent { get; } = [];
     /// <summary>The agent rules the guest last heard (so it hears again only when they change).</summary>
     internal string? RulesSent { get; set; }
 
@@ -102,6 +104,8 @@ public sealed partial class HostService
         state.ProjectListChanged += OnProjectListChanged;
         state.Chat.Changed += OnChatChanged;
         state.Chat.Removed += channel => SendChannel(channel);
+        state.Wiki.Changed += OnWikiChanged;
+        state.Wiki.Removed += SendPage;
     }
 
     public SharingData Data => _store.Data;
@@ -456,6 +460,7 @@ public sealed partial class HostService
             messages.Add(Wire.Message("project", ("revision", revision), ("project", ForGuest(json))));
         }
         messages.Add(ChatSnapshot(session));
+        messages.Add(WikiSnapshot(session));
         return messages;
     }
 
@@ -474,6 +479,8 @@ public sealed partial class HostService
                 return null;
             case "chatOp":
                 return ChatOp(session, message);
+            case "wikiOp":
+                return WikiOp(session, message);
             case "selfCode":
                 return ConfirmSelf(session, message);
             case "viewing":
@@ -539,7 +546,7 @@ public sealed partial class HostService
     private void SendFile(GuestSession session, JsonObject message)
     {
         if (!Guid.TryParse((string?)message["id"], out var id)) return;
-        var attachment = Visible(session.Account).SelectMany(p => p.Attachments()).FirstOrDefault(a => a.Id == id) ?? ChatAttachment(session, id);
+        var attachment = Visible(session.Account).SelectMany(p => p.Attachments()).FirstOrDefault(a => a.Id == id) ?? ChatAttachment(session, id) ?? WikiAttachment(session, id);
         if (attachment == null) return;
         var path = _state.Store.AttachmentPath(attachment);
         _ = Task.Run(async () =>
@@ -671,6 +678,7 @@ public sealed partial class HostService
     private void OnProjectListChanged()
     {
         SyncChat();
+        SyncWiki();
         // Settings › AI agents saved (it refreshes the list too): the agent rules may have changed.
         SendAgentRules();
         foreach (var session in _sessions)

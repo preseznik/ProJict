@@ -13,6 +13,7 @@ using ProJict.Core.Features;
 using ProJict.Core.Import;
 using ProJict.Core.Model;
 using ProJict.Core.Sharing;
+using ProJict.Core.Wiki;
 
 namespace ProJict.App.Services;
 
@@ -169,6 +170,7 @@ public sealed partial class AgentTools : IMcpToolHost
             Schema(ProjectArg, ("outcome", "enum:shipped|failed", "Whether it shipped.", true), ("summary", "string", "A sentence or two for the user.", true)),
             FinishShip);
         AddChatTools();
+        AddWikiTools();
     }
 
     public IReadOnlyList<McpTool> Tools => _tools;
@@ -257,6 +259,8 @@ public sealed partial class AgentTools : IMcpToolHost
         "the others and items on hold are off limits: list_items leaves them out, and you may read and comment on them but not check them out, " +
         "change or complete them. Ask the user questions or report progress with add_comment, and check list_comments for their " +
         "answers. File problems you notice with add_item, and put documentation or reports for people in a note with write_doc. " +
+        "Knowledge that lasts (architecture, how things work, decisions) goes in the wiki: list_wiki, read_wiki and write_wiki (a whole page, or a section by heading, " +
+        "in Markdown with [[Page name]] links); pass the version you read so your change merges with others', and what you write waits for the user's review. " +
         "Keep a project's details (repo folder, GitHub link, description, instructions, how it's shipped) up to date with update_project, and set its test_build when you make a build worth trying (the user runs it from the project page). " +
         "When you start a longer step (running tests, a build, a bigger change), tell the user with set_status; it shows live in ProJict. " +
         "Items with a gitHubIssue stand for that GitHub issue: mention \"Fixes #<number>\" in the commit or pull request that resolves one. " +
@@ -375,6 +379,7 @@ public sealed partial class AgentTools : IMcpToolHost
                 var attachment = LocalProjects.SelectMany(p => p.Attachments())
                     .Concat(session.Projects == null ? _state.Settings.GroupAttachments() : [])
                     .Concat(Chat.Visible(ActorOf(session)).SelectMany(c => c.Messages).SelectMany(m => m.Attachments ?? []))
+                    .Concat(WikiPagesFor(session).SelectMany(p => p.Attachments ?? []))
                     .FirstOrDefault(a => a.Id == id);
                 return attachment == null ? ((Attachment, string)?)null : (attachment, _state.Store.AttachmentPath(attachment));
             }
@@ -404,6 +409,19 @@ public sealed partial class AgentTools : IMcpToolHost
                 "invite_to_channel" => $"Invited {args.String("who")} to {name}",
                 _ => $"Moderated {name} ({args.String("action")?.Replace('_', ' ')})",
             }, channel, tool);
+            return;
+        }
+        if (WikiTools.Contains(tool))
+        {
+            var page = args.String("page") is { } key ? (FindPageQuietly(session, key) ?? _state.Wiki.Find(key)) : null;
+            var name = page != null ? $"“{page.Title}”" : args.String("page") is { } typed ? $"“{WikiPaths.Title(WikiPaths.Normalize(typed))}”" : "";
+            var wikiText = tool switch
+            {
+                "list_wiki" => "Looked through the wiki",
+                "read_wiki" => $"Read the wiki page {name}",
+                _ => $"Wrote the wiki page {name}",
+            };
+            Remember(session, new AgentAction(DateTime.Now, wikiText, page?.ProjectId, null, tool));
             return;
         }
         (Project Project, ItemLocation Loc)? found = null;

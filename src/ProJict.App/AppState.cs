@@ -6,16 +6,18 @@ using ProJict.Core.Export;
 using ProJict.Core.Features;
 using ProJict.Core.Model;
 using ProJict.Core.Storage;
+using ProJict.Core.Wiki;
 
 namespace ProJict.App;
 
-/// <summary>Owns the loaded workspace and chat and persists them: debounced autosave, periodic backups and the optional TXT mirror.</summary>
+/// <summary>Owns the loaded workspace, chat and wiki and persists them: debounced autosave, periodic backups and the optional TXT mirror.</summary>
 public sealed partial class AppState : ObservableObject
 {
     private static readonly TimeSpan BackupInterval = TimeSpan.FromMinutes(30);
     private readonly HashSet<Project> _dirty = [];
     private readonly HashSet<Project> _mirrorPending = [];
     private readonly HashSet<ChatChannel> _dirtyChannels = [];
+    private readonly HashSet<WikiPage> _dirtyPages = [];
     private readonly DispatcherTimer _saveTimer;
     private readonly bool _persistAppSettings;
     private bool _settingsDirty;
@@ -41,6 +43,18 @@ public sealed partial class AppState : ObservableObject
             try { Store.DeleteChannel(channel); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { StatusText = $"#{channel.Name}: {ex.Message}"; }
         };
+        Wiki = new WikiBook(store.LoadWikiPages(), () => UserName);
+        Wiki.Changed += page =>
+        {
+            _dirtyPages.Add(page);
+            RestartTimer();
+        };
+        Wiki.Removed += page =>
+        {
+            _dirtyPages.Remove(page);
+            try { Store.DeleteWikiPage(page); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { StatusText = $"{page.Title}: {ex.Message}"; }
+        };
         if (AppSettings.UnreadSince == null)
         {
             AppSettings.UnreadSince = DateTime.Now;
@@ -58,6 +72,10 @@ public sealed partial class AppState : ObservableObject
     public Project Inbox => Workspace.Inbox;
     /// <summary>The chat channels, saved one file each under &lt;data&gt;/chat.</summary>
     public ChatRoom Chat { get; }
+    /// <summary>The wiki's pages, saved one file each under &lt;data&gt;/wiki.</summary>
+    public WikiBook Wiki { get; }
+    /// <summary>You in the wiki.</summary>
+    public WikiAuthor WikiMe => new(UserName);
     /// <summary>You in Chat: the owner of the workspace, who moderates every channel.</summary>
     public ChatActor ChatMe => new(UserName, false, Owner: true);
 
@@ -269,6 +287,19 @@ public sealed partial class AppState : ObservableObject
             }
         }
 
+        foreach (var page in _dirtyPages.ToList())
+        {
+            try
+            {
+                Store.SaveWikiPage(page);
+                _dirtyPages.Remove(page);
+            }
+            catch (Exception ex)
+            {
+                failed.Add($"{page.Title}: {ex.Message}");
+            }
+        }
+
         if (_settingsDirty)
         {
             try
@@ -341,7 +372,8 @@ public sealed partial class AppState : ObservableObject
     public void CleanUpAttachments()
     {
         var inUse = Projects.SelectMany(p => p.Attachments()).Concat(Settings.GroupAttachments())
-            .Concat(Chat.Channels.SelectMany(c => c.Messages).SelectMany(m => m.Attachments ?? [])).Select(a => a.Id).ToHashSet();
+            .Concat(Chat.Channels.SelectMany(c => c.Messages).SelectMany(m => m.Attachments ?? []))
+            .Concat(Wiki.Pages.SelectMany(p => p.Attachments ?? [])).Select(a => a.Id).ToHashSet();
         var started = DateTime.Now;
         Task.Run(() =>
         {

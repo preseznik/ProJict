@@ -65,6 +65,7 @@ public partial class MainWindow : Window
     {
         SavePlacement();
         var app = App.Current;
+        app.MainVm?.Wiki.Page?.Leave();
         app.State.SaveNow();
         if (!app.IsExiting && app.State.Settings.CloseToTray)
         {

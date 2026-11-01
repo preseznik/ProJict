@@ -3,7 +3,7 @@ using CommunityToolkit.Mvvm.Input;
 namespace ProJict.App.ViewModels;
 
 /// <summary>
-/// Back and Forward, like a browser's: through the views, projects and Chat channels you went to (the arrows at the top
+/// Back and Forward, like a browser's: through the views, projects, Chat channels and wiki pages you went to (the arrows at the top
 /// of the sidebar, Alt+← and Alt+→, or the mouse's side buttons). A place that's gone since is skipped.
 /// </summary>
 public sealed partial class MainViewModel
@@ -25,6 +25,7 @@ public sealed partial class MainViewModel
         FeedViewModel => new Place("feed"),
         AgentActivityViewModel => new Place("agents", State.Projects.FirstOrDefault(p => p.Name == AgentActivity.ProjectFilter)?.Id),
         ChatViewModel => new Place("chat", Chat.Channel?.Id),
+        WikiViewModel => new Place("wiki", Wiki.Page?.Model.Id),
         _ => null,
     };
 
@@ -94,6 +95,13 @@ public sealed partial class MainViewModel
                         : null;
                     if (place.Id != null && channel == null) return false;
                     ShowChannel(channel);
+                    return true;
+                case "wiki":
+                    var page = place.Id is { } w
+                        ? State.Wiki.Pages.FirstOrDefault(x => x.Id == w) ?? Guest.Connections.SelectMany(h => h.Wiki?.Pages ?? []).FirstOrDefault(x => x.Id == w)
+                        : null;
+                    if (place.Id != null && page == null) return false;
+                    ShowWikiPage(page);
                     return true;
                 default:
                     return false;

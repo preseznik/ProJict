@@ -188,6 +188,23 @@ public sealed partial class ProjectViewModel : ObservableObject
     }
 
     /// <summary>Chat channels about the project itself (its categories and items show their own).</summary>
+    /// <summary>The wiki pages about the project, as chips on its header.</summary>
+    public List<WikiPageChip> WikiPages => Main.WikiChips(Project);
+    public bool HasWikiPages => WikiPages.Count > 0;
+
+    public void RefreshWikiPages()
+    {
+        OnPropertyChanged(nameof(WikiPages));
+        OnPropertyChanged(nameof(HasWikiPages));
+    }
+
+    /// <summary>Your own projects have wiki pages about them (the Inbox and others' projects don't get the Wiki button).</summary>
+    public bool CanHaveWikiPages => Project.Remote == null && !Project.IsInbox;
+
+    /// <summary>The header's Wiki button: the project's first page, or a new one about it.</summary>
+    [RelayCommand]
+    private void OpenWiki() => Main.ShowProjectWiki(Project);
+
     public List<ChannelChip> Channels => Main.ChannelChips(Project.Id);
     public bool HasChannels => Channels.Count > 0;
 
@@ -1893,6 +1910,24 @@ public sealed partial class ProjectViewModel : ObservableObject
         Notes.Remove(note);
         SelectedNote = Notes.FirstOrDefault();
         Touch();
+    }
+
+    /// <summary>
+    /// Moves the selected note into the wiki: it becomes a page about this project (with its files and who wrote it),
+    /// and the note goes (Ctrl+Z brings the note back; the page stays).
+    /// </summary>
+    [RelayCommand]
+    private void MoveNoteToWiki()
+    {
+        if (SelectedNote is not { } note || Project.Remote != null) return;
+        if (Main.Wiki.MoveNote(Project, note.Model) is not { } page) return;
+        Checkpoint();
+        Project.Notes.Remove(note.Model);
+        Notes.Remove(note);
+        SelectedNote = Notes.FirstOrDefault();
+        Touch();
+        _state.StatusText = $"“{note.Model.Title}” is a wiki page now: {ProJict.Core.Wiki.WikiPaths.Display(page.Path)}.";
+        Main.ShowWikiPage(page);
     }
 
     [RelayCommand]

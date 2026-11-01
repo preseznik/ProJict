@@ -367,6 +367,24 @@
                     <ComboBox ItemsSource="{Binding Groups}" Text="{Binding Group, UpdateSourceTrigger=LostFocus}" IsEditable="True" Width="150" Margin="8,0,0,0" ToolTip="Group" IsEnabled="{Binding IsOwnProject}" />
                     <ItemsControl x:Name="ProjectChannels" ItemsSource="{Binding Channels}" ItemTemplate="{StaticResource ChannelChipTemplate}" ItemsPanel="{StaticResource HorizontalPanel}"
                                   Focusable="False" Margin="10,0,0,0" VerticalAlignment="Center" Visibility="{Binding HasChannels, Converter={StaticResource BoolToVis}}" />
+                    <!-- The wiki pages about the project; a click opens one. -->
+                    <ItemsControl x:Name="ProjectWikiPages" ItemsSource="{Binding WikiPages}" ItemsPanel="{StaticResource HorizontalPanel}" Focusable="False" Margin="10,0,0,0"
+                                  VerticalAlignment="Center" Visibility="{Binding HasWikiPages, Converter={StaticResource BoolToVis}}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:WikiPageChip}">
+                                <Button Style="{StaticResource SubtleButton}" Padding="0" Margin="0,0,4,0" Command="{Binding OpenCommand}" ToolTip="{Binding ToolTip}"
+                                        AutomationProperties.Name="{Binding Text}">
+                                    <Border Style="{StaticResource TagChip}" Background="{DynamicResource SubtleFillColorSecondaryBrush}" Margin="0">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Style="{StaticResource Icon}" Text="&#xE8A5;" FontSize="10" Margin="0,1,4,0" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                                            <TextBlock Text="{Binding Text}" FontSize="11" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                                            <Ellipse Style="{StaticResource UnreadDot}" Margin="5,0,0,0" Visibility="{Binding NeedsAttention, Converter={StaticResource BoolToVis}}" />
+                                        </StackPanel>
+                                    </Border>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
                 </StackPanel>
                 <!-- The current test build, set by you or an agent: run it from here. -->
                 <Border Margin="2,8,0,0" Padding="10,4,6,4" CornerRadius="6" HorizontalAlignment="Left" Background="{DynamicResource SubtleFillColorSecondaryBrush}"
@@ -406,6 +424,10 @@
                 </Button>
                 <Button Style="{StaticResource SubtleButton}" AutomationProperties.Name="Chat" Command="{Binding OpenChatCommand}" ToolTip="Live chat about this project: its #channel, or start one" Visibility="{Binding CanStartChannels, Converter={StaticResource BoolToVis}}">
                     <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource Icon}" Text="&#xE8F2;" /><TextBlock Text="Chat" Margin="6,0,0,0" /></StackPanel>
+                </Button>
+                <Button Style="{StaticResource SubtleButton}" AutomationProperties.Name="Wiki" Command="{Binding OpenWikiCommand}" ToolTip="The project's wiki pages, or start one"
+                        Visibility="{Binding CanHaveWikiPages, Converter={StaticResource BoolToVis}}">
+                    <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource Icon}" Text="&#xE82D;" /><TextBlock Text="Wiki" Margin="6,0,0,0" /></StackPanel>
                 </Button>
                 <Button Style="{StaticResource SubtleButton}" AutomationProperties.Name="Copy prompt" Command="{Binding CopyPromptCommand}"
                         ToolTip="Copy selected items (Ctrl+Space / Ctrl+click the grip) — or all open items — as a prompt for Claude/Codex (Ctrl+Shift+C)">
@@ -644,6 +666,11 @@
                             </Button>
                             <Button Style="{StaticResource SubtleButton}" AutomationProperties.Name="Delete note" Command="{Binding DeleteNoteCommand}">
                                 <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource Icon}" Text="&#xE74D;" /><TextBlock Text="Delete" Margin="6,0,0,0" /></StackPanel>
+                            </Button>
+                            <Button Style="{StaticResource SubtleButton}" AutomationProperties.Name="Move to wiki" Command="{Binding MoveNoteToWikiCommand}"
+                                    ToolTip="Turn the note into a wiki page about this project, with its files: versions, links and the agents' wiki tools then apply"
+                                    Visibility="{Binding IsOwnProject, Converter={StaticResource BoolToVis}}">
+                                <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource Icon}" Text="&#xE82D;" /><TextBlock Text="To wiki" Margin="6,0,0,0" /></StackPanel>
                             </Button>
                         </StackPanel>
                         <ListBox ItemsSource="{Binding Notes}" SelectedItem="{Binding SelectedNote}" DisplayMemberPath="Title" />

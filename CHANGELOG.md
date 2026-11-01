@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.32
+
+- **A wiki.** **Wiki** in the sidebar, under Chat, is one wiki for the whole workspace, for what's worth keeping: how things work, decisions, guides. Pages sit in folders, like GRID2VR › Architecture › Renderer.
+  - **Writing:** **Edit** opens a page's Markdown with a live preview beside it: headings, lists and tasks, tables, code, quotes, pictures and files. Paste or drop a screenshot or files into it and they're attached and shown where you're writing. Ctrl+S saves, and so does going elsewhere.
+  - **Links:** `[[Page name]]` links a page (one that isn't written yet shows in orange, and a click starts it), `#4e84570c` an item and `#channel` a channel. **Linked from** under a page lists the pages that link to it.
+  - **Projects:** a page about a project shows as a chip on the project's header, and the header's **Wiki** button opens its pages or starts one. In a project's Notes, **To wiki** turns a note into a page about the project, with its files.
+  - **History:** every save is a version, with who and when. **History** shows what each version changed, and **Restore** brings one back as the newest.
+  - **Editing at the same time:** when someone saves a page you're editing, the editor says so, and your save merges with theirs paragraph by paragraph. If you both changed the same paragraph, both versions are kept for you to compare and pick, or merge by hand.
+  - **Finding pages:** the box above the page tree finds pages by name or text, and Ctrl+K search finds them too.
+- **AI agents write the wiki.** New tools `list_wiki`, `read_wiki` and `write_wiki` (a whole page, or one section by its heading), also over the API under `/api/v1/wiki`. A page an agent changes gets a review bar (**What changed**, **Looks good**) and counts on Wiki in the sidebar until you've checked it. A token limited to some projects reaches only the pages about them.
+- **The wiki is shared like its projects.** A page about a project goes to the people you share the project with (never a private project's); a page without one stays on your computer unless you tick **Share with everyone I share with**. Editors change your pages from their ProJict, as versions signed with their names. Their agents read what their person can and write only as editors, signed "Ada (via Alice)", waiting for your review. Both ProJicts need 0.1.32.
+- **Diagrams come next.** Mermaid and draw.io diagrams are for a later version; until then a diagram in a page shows as its code.
+
 ## 0.1.31 (2026-11-01)
 
 - **Done stands apart.** A category's Done section sits in a panel of its own, shaded and with a line above it, so it no longer blends into the open items (side by side, the Done column is shaded too).

@@ -316,7 +316,11 @@ public sealed partial class GuestService
 
     private void SetConnected(HostConnection connection, bool connected)
     {
-        if (!connected) DropChat(connection);
+        if (!connected)
+        {
+            DropChat(connection);
+            DropWiki(connection);
+        }
         foreach (var copy in connection.Copies.Values)
         {
             if (copy.Project.Remote is { } remote) remote.Connected = connected;
@@ -386,6 +390,9 @@ public sealed partial class GuestService
                 break;
             case "chat" or "chatChannel" or "chatGone" or "chatError":
                 HandleChat(connection, (string)message["type"]!, message);
+                break;
+            case "wiki" or "wikiPage" or "wikiGone" or "wikiError":
+                HandleWiki(connection, (string)message["type"]!, message);
                 break;
         }
     }
@@ -546,7 +553,11 @@ public sealed partial class GuestService
         var copy = connection.Copies.Values.FirstOrDefault(c => c.Project.Attachments().Any(a => a.Id == id));
         if (copy == null)
         {
-            try { StoreChatFile(connection, id, Convert.FromBase64String((string?)message["data"] ?? "")); }
+            try
+            {
+                var data = Convert.FromBase64String((string?)message["data"] ?? "");
+                if (!StoreChatFile(connection, id, data)) StoreWikiFile(connection, id, data);
+            }
             catch (Exception ex) when (ex is IOException or FormatException or UnauthorizedAccessException) { connection.Requested.Remove(id); }
             return;
         }
