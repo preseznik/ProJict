@@ -1,10 +1,17 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json.Serialization;
 using ProJict.Core.Storage;
 
 namespace ProJict.Core.Api;
 
 public enum ApiAccess { ReadWrite, ReadOnly }
+
+/// <summary>
+/// The tools a token's agent is offered, and may use: all an agent needs over the network (not the ones that need this
+/// computer itself), Chat only, or the ones you ticked.
+/// </summary>
+public enum ApiToolSet { Agent, ChatOnly, Custom }
 
 /// <summary>
 /// A key for ProJict's API (Settings › API). Its secret is shown once when it's made; only a hash of it is kept, plus
@@ -21,6 +28,12 @@ public sealed class ApiToken
     /// </summary>
     public string? AgentName { get; set; }
     public ApiAccess Access { get; set; }
+    /// <summary>The tools its agent is offered (Agent unless you chose otherwise); it applies from its next request.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public ApiToolSet ToolSet { get; set; }
+    /// <summary>For <see cref="ApiToolSet.Custom"/>: the tools you ticked, by name.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<string>? CustomTools { get; set; }
     /// <summary>Paused by the user: it still connects (and can ask who it is) but can't do anything, not even read, until unfrozen.</summary>
     public bool Frozen { get; set; }
     /// <summary>The projects the token reaches; null for all of yours.</summary>

@@ -53,9 +53,32 @@
                             <Button DockPanel.Dock="Right" Content="Copy" MinWidth="70" Margin="8,0,0,0" Click="CopySecret_Click" />
                             <TextBox x:Name="SecretText" Style="{StaticResource Code}" Text="{Binding Secret, Mode=OneWay}" AutomationProperties.Name="Token" />
                         </DockPanel>
-                        <TextBlock Text="For example, with curl, and to add it to Claude Code:" Style="{StaticResource MutedText}" Margin="2,10,0,4" />
-                        <TextBox Style="{StaticResource Code}" Text="{Binding SecretExamples, Mode=OneWay}" AutomationProperties.Name="Examples" />
+                        <StackPanel Orientation="Horizontal" Margin="2,10,0,4">
+                            <TextBlock Text="Connect an agent in" Style="{StaticResource MutedText}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                            <ComboBox ItemsSource="{Binding SetupClients}" SelectedItem="{Binding SetupClient}" Width="190" AutomationProperties.Name="Agent program" />
+                        </StackPanel>
+                        <DockPanel>
+                            <Button DockPanel.Dock="Right" Content="Copy" MinWidth="70" Margin="8,0,0,0" VerticalAlignment="Top" Click="CopySetup_Click" />
+                            <TextBox Style="{StaticResource Code}" Text="{Binding SetupText, Mode=OneWay}" TextWrapping="Wrap" AutomationProperties.Name="Setup" />
+                        </DockPanel>
                         <Button Content="Done" HorizontalAlignment="Right" MinWidth="90" Margin="0,10,0,0" Command="{Binding DismissSecretCommand}" />
+                    </StackPanel>
+                </Border>
+
+                <!-- How to connect an agent with a token made earlier (its secret isn't shown again) -->
+                <Border x:Name="SetupCard" Style="{StaticResource Card}" Padding="12,10" Margin="0,14,0,0"
+                        Visibility="{Binding HasSetup, Converter={StaticResource BoolToVis}}">
+                    <StackPanel>
+                        <TextBlock Text="{Binding SetupTitle}" TextWrapping="Wrap" FontWeight="SemiBold" />
+                        <StackPanel Orientation="Horizontal" Margin="2,10,0,4">
+                            <TextBlock Text="Agent program" Style="{StaticResource MutedText}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                            <ComboBox ItemsSource="{Binding SetupClients}" SelectedItem="{Binding SetupClient}" Width="190" AutomationProperties.Name="Agent program" />
+                        </StackPanel>
+                        <DockPanel>
+                            <Button DockPanel.Dock="Right" Content="Copy" MinWidth="70" Margin="8,0,0,0" VerticalAlignment="Top" Click="CopySetup_Click" />
+                            <TextBox Style="{StaticResource Code}" Text="{Binding SetupText, Mode=OneWay}" TextWrapping="Wrap" AutomationProperties.Name="Setup" />
+                        </DockPanel>
+                        <Button Content="Close" HorizontalAlignment="Right" MinWidth="90" Margin="0,10,0,0" Command="{Binding CloseSetupCommand}" />
                     </StackPanel>
                 </Border>
 
@@ -94,11 +117,28 @@
                                                 <Run Text="{Binding LastUsedText, Mode=OneWay}" />
                                             </TextBlock>
                                             <!-- Its access can change at any time, and it can be frozen for a while. -->
-                                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                            <WrapPanel Margin="0,8,0,0">
                                                 <ComboBox x:Name="TokenAccess" Width="210" ItemsSource="{Binding AccessChoices}" SelectedItem="{Binding SelectedAccess}" DisplayMemberPath="Label"
                                                           AutomationProperties.Name="Access" ToolTip="What it may do, from its next request on" />
+                                                <ComboBox x:Name="TokenTools" Width="190" Margin="8,0,0,0" ItemsSource="{Binding ToolSetChoices}" SelectedItem="{Binding SelectedToolSet}"
+                                                          DisplayMemberPath="Label" AutomationProperties.Name="Tools"
+                                                          ToolTip="Which tools its agent is offered, from its next request on: it sees only those" />
                                                 <Button x:Name="FreezeButton" Content="{Binding FreezeLabel}" Command="{Binding ToggleFreezeCommand}" ToolTip="{Binding FreezeToolTip}" Margin="8,0,0,0" />
-                                            </StackPanel>
+                                                <Button Content="Connect an agent…" Command="{Binding ConnectAgentCommand}" Margin="0,6,8,0"
+                                                        ToolTip="How to set up Claude Code, Cursor, VS Code or another MCP client with this token" />
+                                            </WrapPanel>
+                                            <Expander Header="{Binding CustomToolsTitle}" Margin="0,6,0,0" Visibility="{Binding IsCustom, Converter={StaticResource BoolToVis}}">
+                                                <ItemsControl ItemsSource="{Binding CustomTools}" Focusable="False" Margin="0,4,0,0">
+                                                    <ItemsControl.ItemsPanel>
+                                                        <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                                                    </ItemsControl.ItemsPanel>
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate DataType="{x:Type vm:ToolChoice}">
+                                                            <CheckBox Content="{Binding Title}" IsChecked="{Binding IsChecked}" ToolTip="{Binding ToolTip}" Width="190" MinWidth="0" Margin="0,0,6,2" />
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </Expander>
                                         </StackPanel>
                                     </DockPanel>
                                     <DockPanel Margin="0,8,0,0" Visibility="{Binding IsConfirming, Converter={StaticResource BoolToVis}}">
@@ -114,6 +154,7 @@
                                 <DataTrigger Binding="{Binding IsFrozen}" Value="True">
                                     <Setter TargetName="DetailsText" Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
                                     <Setter TargetName="TokenAccess" Property="IsEnabled" Value="False" />
+                                    <Setter TargetName="TokenTools" Property="IsEnabled" Value="False" />
                                 </DataTrigger>
                             </DataTemplate.Triggers>
                         </DataTemplate>
@@ -130,6 +171,7 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
                     <TextBlock Text="Name" Style="{StaticResource MutedText}" VerticalAlignment="Center" />
                     <TextBox x:Name="NewName" Grid.Column="1" Width="260" HorizontalAlignment="Left" Text="{Binding NewName, UpdateSourceTrigger=PropertyChanged}"
@@ -139,8 +181,26 @@
                     <ComboBox Grid.Row="1" Grid.Column="1" Width="210" HorizontalAlignment="Left" Margin="0,8,0,0" ItemsSource="{Binding AccessChoices}"
                               SelectedItem="{Binding NewAccess}" DisplayMemberPath="Label" AutomationProperties.Name="Access" />
 
-                    <TextBlock Grid.Row="2" Text="Projects" Style="{StaticResource MutedText}" VerticalAlignment="Top" Margin="0,12,0,0" />
+                    <TextBlock Grid.Row="2" Text="Tools" Style="{StaticResource MutedText}" VerticalAlignment="Top" Margin="0,12,0,0" />
                     <StackPanel Grid.Row="2" Grid.Column="1" Margin="0,8,0,0">
+                        <ComboBox x:Name="NewTools" Width="210" HorizontalAlignment="Left" ItemsSource="{Binding ToolSetChoices}" SelectedItem="{Binding NewToolSet}"
+                                  DisplayMemberPath="Label" AutomationProperties.Name="Tools" />
+                        <TextBlock Text="{Binding NewToolSet.Description}" Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap" Margin="2,4,0,0" />
+                        <ItemsControl x:Name="NewToolList" ItemsSource="{Binding NewTools}" Focusable="False" Margin="0,6,0,0"
+                                      Visibility="{Binding IsNewCustom, Converter={StaticResource BoolToVis}}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:ToolChoice}">
+                                    <CheckBox Content="{Binding Title}" IsChecked="{Binding IsChecked}" ToolTip="{Binding ToolTip}" Width="190" MinWidth="0" Margin="0,0,6,2" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+
+                    <TextBlock Grid.Row="3" Text="Projects" Style="{StaticResource MutedText}" VerticalAlignment="Top" Margin="0,12,0,0" />
+                    <StackPanel Grid.Row="3" Grid.Column="1" Margin="0,8,0,0">
                         <RadioButton Content="All my projects" IsChecked="{Binding AllProjects}" GroupName="TokenProjects" />
                         <RadioButton x:Name="SomeProjects" Content="Only these:" GroupName="TokenProjects"
                                      IsChecked="{Binding AllProjects, Converter={StaticResource InvBool}}" />
@@ -161,8 +221,8 @@
                         </ItemsControl>
                     </StackPanel>
 
-                    <TextBlock Grid.Row="3" Text="Expires after" Style="{StaticResource MutedText}" VerticalAlignment="Center" Margin="0,8,0,0" />
-                    <ComboBox Grid.Row="3" Grid.Column="1" Width="180" HorizontalAlignment="Left" Margin="0,8,0,0" ItemsSource="{Binding ExpiryChoices}"
+                    <TextBlock Grid.Row="4" Text="Expires after" Style="{StaticResource MutedText}" VerticalAlignment="Center" Margin="0,8,0,0" />
+                    <ComboBox Grid.Row="4" Grid.Column="1" Width="180" HorizontalAlignment="Left" Margin="0,8,0,0" ItemsSource="{Binding ExpiryChoices}"
                               SelectedItem="{Binding NewExpiry}" DisplayMemberPath="Label" AutomationProperties.Name="Expires after" />
                 </Grid>
                 <StackPanel Orientation="Horizontal" Margin="110,12,0,0">

@@ -31,6 +31,8 @@ public sealed class TodoItem
     public bool Imported { get; set; }
     /// <summary>Files attached to the item; null (and left out of the JSON) while there are none.</summary>
     public List<Attachment>? Attachments { get; set; }
+    /// <summary>Big files linked where they are (captures, edits, exports), not copied; null while there are none.</summary>
+    public List<MediaLink>? Media { get; set; }
     /// <summary>The AI agent working on the item while it is in progress; any state change clears it.</summary>
     public string? ClaimedBy { get; set; }
     /// <summary>Finished by an AI agent and not checked by you yet; any state change clears it.</summary>
@@ -345,6 +347,8 @@ public sealed class Project
     public Studio? Studio { get; set; }
     /// <summary>Ship requests, oldest first (the last few are kept); null while there were none. Not part of undo.</summary>
     public List<ShipRequest>? Ships { get; set; }
+    /// <summary>Videos' publish plans, oldest first (the last few are kept); null while there were none. Not part of undo.</summary>
+    public List<PublishPlan>? Publishes { get; set; }
     /// <summary>On a guest: the ProJict this project is shown from. Such projects live only in memory and are never saved here.</summary>
     [JsonIgnore] public RemoteOrigin? Remote { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.Now;
@@ -395,13 +399,14 @@ public sealed class Project
                 if (seen.TryGetValue(item.Issue!.Number, out var current)) item.Issue = current.DeepClone();
         // With its items: undoing an import forgets it, so the next sync brings those issues back.
         Issues = snapshot.Issues;
-        // Shipping is about commits and releases that really happened (and what you approved), which undo can't take
+        // Shipping and publishing are about commits, releases and videos that really happened (and what you approved), which undo can't take
         // back; a guest takes the host's version as it is, with everything else only the host changes. (A guest that
         // kept its own test build never matched the host's version again, and kept sending its copy back.)
         if (!keepIssueLinks)
         {
             Shipping = snapshot.Shipping;
             Ships = snapshot.Ships;
+            Publishes = snapshot.Publishes;
             TestBuild = snapshot.TestBuild;
             Cleanups = snapshot.Cleanups;
             Studio = snapshot.Studio;

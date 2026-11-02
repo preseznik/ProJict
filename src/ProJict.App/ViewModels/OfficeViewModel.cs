@@ -102,7 +102,41 @@ public sealed partial class OfficeViewModel : ObservableObject
     public ObservableCollection<OfficeAgentViewModel> Agents { get; } = [];
     /// <summary>Desks and agents together, drawn back to front.</summary>
     public ObservableCollection<object> Scene { get; } = [];
-    public bool IsEmpty => Agents.Count == 0;
+    public bool IsEmpty => Agents.Count == 0 && _visitors.Count == 0;
+
+    // Agents connected to another ProJict connected here: at the back of the room, not at desks.
+    private readonly List<OfficeVisitorViewModel> _visitors = [];
+    private string? _visitorsSignature;
+    /// <summary>Visitors shown at most; the rest are counted in <see cref="VisitorsText"/>.</summary>
+    public const int MaxVisitors = 6;
+    private const double VisitorsX = 302, VisitorGap = 27, VisitorsFeetY = 306;
+    /// <summary>"2 visiting from other ProJicts".</summary>
+    [ObservableProperty] private string? _visitorsText;
+    public IReadOnlyList<OfficeVisitorViewModel> Visitors => _visitors;
+
+    /// <summary>Who's visiting from other ProJicts; only rebuilt when that changes.</summary>
+    internal void SetVisitors(IReadOnlyList<AgentActivityViewModel.Visitor> visitors, Action<string> message)
+    {
+        var signature = string.Join("|", visitors.Select(v => $"{v.Name}:{v.From}:{v.Away}"));
+        if (signature == _visitorsSignature) return;
+        _visitorsSignature = signature;
+        foreach (var visitor in _visitors) Scene.Remove(visitor);
+        _visitors.Clear();
+        foreach (var (v, i) in visitors.Take(MaxVisitors).Select((v, i) => (v, i)))
+        {
+            var visitor = new OfficeVisitorViewModel(v.Name, v.From, v.Away, VisitorsX + VisitorGap * i, VisitorsFeetY, () => message(v.Name));
+            _visitors.Add(visitor);
+            Scene.Add(visitor);
+        }
+        VisitorsText = visitors.Count switch
+        {
+            0 => null,
+            1 => $"Visiting: {visitors[0].Name}, from {visitors[0].From}'s ProJict",
+            _ => $"Visiting from other ProJicts: {string.Join(", ", visitors.Select(v => v.Name))}",
+        };
+        OnPropertyChanged(nameof(IsEmpty));
+        OnPropertyChanged(nameof(Visitors));
+    }
     public string? MoreText { get; private set; }
     /// <summary>All projects: the agents hired in a project's studio, who are there rather than here.</summary>
     [ObservableProperty] private string? _elsewhere;
@@ -540,6 +574,26 @@ public sealed partial class OfficeAgentViewModel(AgentCardViewModel card, Action
         bringToFront(this);
         Card.RequestReveal();
     }
+}
+
+/// <summary>
+/// An agent connected to another ProJict connected here: it stands at the back of the room with a suitcase, asleep when
+/// it's away there; its name and whose ProJict on hover, and a click writes to it.
+/// </summary>
+public sealed partial class OfficeVisitorViewModel(string name, string from, bool away, double feetX, double feetY, Action message)
+{
+    public string Name => name;
+    public string From => from;
+    public bool Away => away;
+    public double Scale { get; } = OfficeViewModel.ScaleAt(feetY);
+    /// <summary>Its hips, like a robot's.</summary>
+    public double X => feetX;
+    public double Y => feetY - 24 * Scale;
+    public int ZIndex => (int)Y * 2;
+    public WorkerBadge Badge { get; } = WorkerBadge.For([name])[0];
+    public string ToolTip => $"{name}: an AI agent connected to {from}'s ProJict, {(away ? "away" : "online")}.\nClick to write to it.";
+
+    [CommunityToolkit.Mvvm.Input.RelayCommand] private void Message() => message();
 }
 
 /// <summary>The water cooler at the front of the room, drawn by depth among the desks and agents.</summary>

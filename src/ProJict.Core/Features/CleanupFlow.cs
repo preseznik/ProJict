@@ -68,6 +68,12 @@ public static class CleanupFlow
                 problems.Add($"{parts[1]}: that's (or holds) the current test build");
                 continue;
             }
+            if (MediaLinks.LinkedIn(project, full).FirstOrDefault() is { Item: { } linked })
+            {
+                var text = linked.Text.Length > 60 ? linked.Text[..60] + "…" : linked.Text;
+                problems.Add($"{parts[1]}: {(folder ? "holds files" : "it's")} linked to the item “{text}” (unlink it there first)");
+                continue;
+            }
             relative = Path.GetRelativePath(repo, full);
             if (entries.Any(e => string.Equals(e.Path, relative, StringComparison.OrdinalIgnoreCase))) continue;
             var (tracked, changed) = git?.Invoke(relative, folder) ?? (false, false);

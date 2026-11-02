@@ -119,6 +119,8 @@ public sealed partial class SharingViewModel : ObservableObject
 
     [ObservableProperty] private string? _newCode;
     [ObservableProperty] private string? _newCodeText;
+    /// <summary>The next invite lets whoever uses it in at once, without asking you.</summary>
+    [ObservableProperty] private bool _inviteLetsIn;
 
     [RelayCommand]
     private void CreateInvite()
@@ -130,10 +132,10 @@ public sealed partial class SharingViewModel : ObservableObject
             return;
         }
         var groups = InviteGroups.Where(g => g.IsChecked).Select(g => g.Name).ToList();
-        var invite = Host.CreateInvite(InviteRole, groups.Count == 0 ? null : groups);
+        var invite = Host.CreateInvite(InviteRole, groups.Count == 0 ? null : groups, InviteLetsIn);
         NewCode = invite.Code;
         NewCodeText = $"Give them this code and your address ({AddressesText}). It works once, until {invite.ExpiresAt.ToString("ddd HH:mm", CultureInfo.CurrentCulture)}, " +
-                      "and you'll still be asked to let them in.";
+                      (invite.LetsIn ? "and lets them in at once: keep it to them." : "and you'll still be asked to let them in.");
     }
 
     public IReadOnlyList<JoinRequest> Requests => Host.Requests.ToList();
@@ -242,7 +244,8 @@ public sealed partial class GroupChoice(string name) : ObservableObject
 public sealed class InviteRow(Invite invite, Action revoke)
 {
     public string Code => invite.Code;
-    public string Details => $"{invite.Role} · {(invite.Groups == null ? "all groups" : string.Join(", ", invite.Groups))} · until {invite.ExpiresAt.ToString("ddd HH:mm", CultureInfo.CurrentCulture)}";
+    public string Details => $"{invite.Role} · {(invite.Groups == null ? "all groups" : string.Join(", ", invite.Groups))} · until {invite.ExpiresAt.ToString("ddd HH:mm", CultureInfo.CurrentCulture)}" +
+                             (invite.LetsIn ? " · lets them in without asking" : "");
     public IRelayCommand Revoke { get; } = new RelayCommand(revoke);
 }
 

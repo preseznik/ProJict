@@ -20,6 +20,8 @@ public sealed partial class ApiViewModel : ObservableObject
             .Select(p => new ProjectChoice(p)).ToList();
         AccessChoices = [new(ApiAccess.ReadWrite, "Read and write"), new(ApiAccess.ReadOnly, ReadOnlyLabel)];
         _newAccess = AccessChoices[0];
+        _newToolSet = ToolSetChoices[0];
+        NewTools = DefaultToolChoices();
         _newExpiry = ExpiryChoices.First(e => e.Days == ApiData.DefaultExpiryDays);
         Server.Changed += Refresh;
     }
@@ -127,27 +129,90 @@ public sealed partial class ApiViewModel : ObservableObject
 
     [ObservableProperty] private string _newName = "";
     [ObservableProperty] private AccessChoice? _newAccess;
+
+    /// <summary>Which tools a token's agent is offered: it sees only those, so it isn't shown ones it would be refused.</summary>
+    public IReadOnlyList<ToolSetChoice> ToolSetChoices { get; } =
+    [
+        new(ApiToolSet.Agent, "All an agent needs", "Everything an agent does here, except clean-ups, shipping and linking local files, which need this computer."),
+        new(ApiToolSet.ChatOnly, "Chat only", "Channels and private messages, nothing else."),
+        new(ApiToolSet.Custom, "Only the tools I tick", "Tick them below. Picking a name and saying what it's doing are always allowed."),
+    ];
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(IsNewCustom))] private ToolSetChoice? _newToolSet;
+    public bool IsNewCustom => NewToolSet?.Set == ApiToolSet.Custom;
+    /// <summary>For a new token with ticked tools: what an agent gets, to start from.</summary>
+    [ObservableProperty] private IReadOnlyList<ToolChoice> _newTools;
+
+    /// <summary>The tools a token can be given, ticked as for an agent (not the ones that need this computer).</summary>
+    private List<ToolChoice> DefaultToolChoices() =>
+        [.. Server.TickableTools.Select(t => new ToolChoice(t.Name, t.Title, !ApiServer.ApiToolSets.NeedThisComputer.Contains(t.Name)))];
+
+    internal IReadOnlyList<(string Name, string Title)> TickableTools => Server.TickableTools;
+    internal static IEnumerable<string> AgentTools(IEnumerable<(string Name, string Title)> tools) =>
+        tools.Select(t => t.Name).Where(n => !ApiServer.ApiToolSets.NeedThisComputer.Contains(n));
     [ObservableProperty] private bool _allProjects = true;
     [ObservableProperty] private ExpiryChoice? _newExpiry;
     [ObservableProperty] private string? _newError;
 
     /// <summary>A secret just made or renewed, shown once.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasSecret), nameof(SecretTitle), nameof(SecretExamples))]
+    [NotifyPropertyChangedFor(nameof(HasSecret), nameof(SecretTitle), nameof(SetupText), nameof(HasSetup))]
     private string? _secret;
     private string _secretFor = "";
 
     public bool HasSecret => Secret != null;
     public string SecretTitle => $"Copy the token for “{_secretFor}” now: ProJict keeps only a fingerprint of it and can't show it again.";
 
-    public string SecretExamples
+    // ───────────── Connecting an agent ─────────────
+
+    /// <summary>The agent programs a token's setup is shown for.</summary>
+    public IReadOnlyList<string> SetupClients { get; } = ["Claude Code", "Cursor", "VS Code", "Another MCP client"];
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(SetupText))] private string _setupClient = "Claude Code";
+    /// <summary>The token whose setup is shown from its row ("Connect an agent…"); its secret isn't known then.</summary>
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(HasSetup), nameof(SetupTitle), nameof(SetupText))] private string? _setupFor;
+    public bool HasSetup => SetupFor != null && Secret == null;
+    public string SetupTitle => $"Connect an agent with “{SetupFor}”: put its token where it says <token>. ProJict shows a token only when it's made or renewed.";
+    /// <summary>The setup for the chosen program, with the secret just made, or a place for it.</summary>
+    public string SetupText => Setup(SetupClient, Secret ?? "<token>");
+
+    internal void ShowSetup(TokenRow row)
     {
-        get
+        Secret = null;
+        SetupFor = row.Name;
+    }
+
+    [RelayCommand] private void CloseSetup() => SetupFor = null;
+
+    private string BaseUrl => Server.IsRunning ? Server.Https ? Server.NetworkUrls()[0] : Server.LocalUrl : $"http://127.0.0.1:{Data.Port}";
+
+    internal string Setup(string client, string token)
+    {
+        var mcp = $"{BaseUrl}/mcp";
+        var https = BaseUrl.StartsWith("https:", StringComparison.OrdinalIgnoreCase)
+            ? "\n\nOver your network it's HTTPS with ProJict's own certificate: save it here (Save certificate…) and trust it on the agent's computer." : "";
+        return client switch
         {
-            if (Secret == null) return "";
-            var url = Server.IsRunning ? Server.Https ? Server.NetworkUrls()[0] : Server.LocalUrl : $"http://127.0.0.1:{Data.Port}";
-            return $"curl -H \"Authorization: Bearer {Secret}\" {url}{ApiRoutes.Base}/projects\n\n" +
-                   $"claude mcp add --transport http projict {url}/mcp --header \"Authorization: Bearer {Secret}\"";
+            "Claude Code" => $"claude mcp add --transport http projict {mcp} --header \"Authorization: Bearer {token}\"" + https,
+            "Cursor" => "In ~/.cursor/mcp.json (or .cursor/mcp.json in a project):\n" +
+                        $"{{\n  \"mcpServers\": {{\n    \"projict\": {{\n      \"url\": \"{mcp}\",\n      \"headers\": {{ \"Authorization\": \"Bearer {token}\" }}\n    }}\n  }}\n}}" + https,
+            "VS Code" => "In .vscode/mcp.json:\n" +
+                         $"{{\n  \"servers\": {{\n    \"projict\": {{\n      \"type\": \"http\",\n      \"url\": \"{mcp}\",\n      \"headers\": {{ \"Authorization\": \"Bearer {token}\" }}\n    }}\n  }}\n}}" + https,
+            _ => $"MCP (Streamable HTTP): {mcp}\nHeader: Authorization: Bearer {token}\n\n" +
+                 $"A client that can only start a command (stdio) can go through mcp-remote:\nnpx -y mcp-remote {mcp} --header \"Authorization: Bearer {token}\"\n\n" +
+                 $"Or the REST API, described at {BaseUrl}{ApiRoutes.Base}/openapi.json:\ncurl -H \"Authorization: Bearer {token}\" {BaseUrl}{ApiRoutes.Base}/projects" + https,
+        };
+    }
+
+    /// <summary>Copies the setup shown; false when the clipboard is busy.</summary>
+    public bool CopySetup()
+    {
+        try
+        {
+            System.Windows.Clipboard.SetText(SetupText);
+            return true;
+        }
+        catch (Exception)
+        {
+            return false;
         }
     }
 
@@ -159,13 +224,17 @@ public sealed partial class ApiViewModel : ObservableObject
         var projects = AllProjects ? null : ProjectChoices.Where(c => c.IsChecked).Select(c => c.Project.Id).ToList();
         try
         {
-            var secret = Server.CreateToken(NewName, NewAccess?.Access ?? ApiAccess.ReadWrite, projects, NewExpiry?.Days ?? ApiData.DefaultExpiryDays);
+            var secret = Server.CreateToken(NewName, NewAccess?.Access ?? ApiAccess.ReadWrite, projects, NewExpiry?.Days ?? ApiData.DefaultExpiryDays,
+                NewToolSet?.Set ?? ApiToolSet.Agent, NewTools.Where(t => t.IsChecked).Select(t => t.Name).ToList());
             _secretFor = NewName.Trim();
+            SetupFor = null;
             Secret = secret;
             NewName = "";
             NewError = null;
             foreach (var choice in ProjectChoices) choice.IsChecked = false;
             AllProjects = true;
+            NewToolSet = ToolSetChoices[0];
+            NewTools = DefaultToolChoices();
         }
         catch (ArgumentException ex)
         {
@@ -222,10 +291,23 @@ public sealed partial class ApiViewModel : ObservableObject
     }
 
     internal void SetAccess(TokenRow row, ApiAccess access) => Server.SetTokenAccess(row.Token, access);
+    internal void SetTools(TokenRow row, ApiToolSet set, IReadOnlyCollection<string>? custom) => Server.SetTokenTools(row.Token, set, custom);
     internal void SetFrozen(TokenRow row, bool frozen) => Server.SetTokenFrozen(row.Token, frozen);
 }
 
 public sealed record AccessChoice(ApiAccess Access, string Label);
+
+public sealed record ToolSetChoice(ApiToolSet Set, string Label, string Description);
+
+/// <summary>A tool to tick for a token that offers only the ones you choose.</summary>
+public sealed partial class ToolChoice(string name, string title, bool isChecked, Action? changed = null) : ObservableObject
+{
+    public string Name => name;
+    public string Title => title;
+    public string ToolTip => name;
+    [ObservableProperty] private bool _isChecked = isChecked;
+    partial void OnIsCheckedChanged(bool value) => changed?.Invoke();
+}
 
 public sealed record ExpiryChoice(int Days, string Label);
 
@@ -245,7 +327,7 @@ public sealed partial class TokenRow(ApiToken token, ApiViewModel owner, string 
     public string Masked => Token.Masked;
     public string Details => (Token.Frozen
         ? $"Frozen: it connects, but can't do anything until you unfreeze it · {projects}"
-        : $"{(Token.ReadOnly ? owner.ReadOnlyLabel : "Read and write")} · {projects}") +
+        : $"{(Token.ReadOnly ? owner.ReadOnlyLabel : "Read and write")} · {SelectedToolSet.Label} · {projects}") +
         (Token.AgentName is { } agent ? $" · its agent goes by {agent}" : "");
 
     /// <summary>Its access, changeable at any time; it applies from the token's next request.</summary>
@@ -259,6 +341,27 @@ public sealed partial class TokenRow(ApiToken token, ApiViewModel owner, string 
         }
     }
 
+    /// <summary>Which tools its agent is offered, changeable at any time; it applies from the token's next request.</summary>
+    public IReadOnlyList<ToolSetChoice> ToolSetChoices => owner.ToolSetChoices;
+    public ToolSetChoice SelectedToolSet
+    {
+        get => ToolSetChoices.First(c => c.Set == Token.ToolSet);
+        set
+        {
+            if (value == null || value.Set == Token.ToolSet) return;
+            // Ticking starts from what an agent gets.
+            owner.SetTools(this, value.Set, value.Set == ApiToolSet.Custom ? ApiViewModel.AgentTools(owner.TickableTools).ToList() : null);
+        }
+    }
+    public bool IsCustom => Token.ToolSet == ApiToolSet.Custom;
+    private IReadOnlyList<ToolChoice>? _customTools;
+    /// <summary>The tools ticked for it (only with "Only the tools I tick").</summary>
+    public IReadOnlyList<ToolChoice> CustomTools => _customTools ??= owner.TickableTools
+        .Select(t => new ToolChoice(t.Name, t.Title, Token.CustomTools?.Contains(t.Name) == true, SaveTicks)).ToList();
+    public string CustomToolsTitle => $"Its tools ({Token.CustomTools?.Count ?? 0} ticked)";
+
+    private void SaveTicks() => owner.SetTools(this, ApiToolSet.Custom, CustomTools.Where(t => t.IsChecked).Select(t => t.Name).ToList());
+
     /// <summary>Freezing pauses the token without losing it: whatever it asks is refused until it's unfrozen.</summary>
     public bool IsFrozen => Token.Frozen;
     public string FreezeLabel => Token.Frozen ? "Unfreeze" : "Freeze";
@@ -266,6 +369,8 @@ public sealed partial class TokenRow(ApiToken token, ApiViewModel owner, string 
         ? "Let it work again, with the access it has"
         : "Pause it: it still connects, but can't do anything, not even read, until you unfreeze it";
     [RelayCommand] private void ToggleFreeze() => owner.SetFrozen(this, !Token.Frozen);
+    /// <summary>Shows how to set an agent up with this token (with a place for its secret).</summary>
+    [RelayCommand] private void ConnectAgent() => owner.ShowSetup(this);
 
     public string ExpiresText
     {

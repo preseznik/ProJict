@@ -112,8 +112,8 @@ public static class StudioFlow
             "and channel need, attached to the video's item. Works with the Director on the look and the Publisher on the thumbnail choice.");
         yield return Role("Publisher", StudioStation.Publishing,
             "Owns publishing: the title, description, tags, playlists, end screens and the date for each video, and its thumbnail choices. Never " +
-            "publishes before the user approves. Delivers a publish plan in the video's item, and the link once it's out. Works with the Writer on the " +
-            "text, Graphics on the thumbnails and the Producer on the schedule.");
+            "publishes before the user approves. Delivers a publish plan for each video (plan_publish, with 2–4 thumbnails to choose from), and the " +
+            "link once it's out (finish_publish). Works with the Writer on the text, Graphics on the thumbnails and the Producer on the schedule.");
         yield return Role("Producer", StudioStation.Producing,
             "Owns the schedule: which videos are made when, what each still needs, and that nothing waits unnoticed. Delivers milestones and their " +
             "items, and a short status when asked. Works with everyone: agrees what's next with the Director and checks with the Publisher what's due.");

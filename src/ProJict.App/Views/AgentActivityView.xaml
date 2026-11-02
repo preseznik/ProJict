@@ -193,7 +193,7 @@
                             <TextBlock Text="{Binding Badge.Initials}" Foreground="White" FontWeight="SemiBold" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Border>
                         <Ellipse x:Name="Online" Width="9" Height="9" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-1,-1" Fill="#22C55E"
-                                 Stroke="{DynamicResource CardBackgroundFillColorDefaultBrush}" StrokeThickness="1.5" Visibility="{Binding IsConnected, Converter={StaticResource BoolToVis}}" />
+                                 Stroke="{DynamicResource CardBackgroundFillColorDefaultBrush}" StrokeThickness="1.5" Visibility="{Binding ShowsDot, Converter={StaticResource BoolToVis}}" />
                     </Grid>
                     <StackPanel>
                         <TextBlock x:Name="NameText" Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
@@ -214,8 +214,11 @@
                 <DataTrigger Binding="{Binding IsConnected}" Value="True">
                     <Setter TargetName="Row" Property="Cursor" Value="Hand" />
                 </DataTrigger>
-                <DataTrigger Binding="{Binding IsConnected}" Value="False">
+                <DataTrigger Binding="{Binding ShowsDot}" Value="False">
                     <Setter TargetName="Row" Property="Opacity" Value="0.65" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsAway}" Value="True">
+                    <Setter TargetName="Online" Property="Fill" Value="#F59E0B" />
                 </DataTrigger>
                 <DataTrigger Binding="{Binding IsRenaming}" Value="True">
                     <Setter TargetName="NameText" Property="Visibility" Value="Collapsed" />

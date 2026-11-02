@@ -178,10 +178,16 @@ public sealed class ApiServer
     // ───────────── Tokens (UI thread) ─────────────
 
     /// <summary>Makes a token and returns its secret; throws ArgumentException when something is missing.</summary>
-    public string CreateToken(string name, ApiAccess access, IReadOnlyCollection<Guid>? projects, int days)
+    public string CreateToken(string name, ApiAccess access, IReadOnlyCollection<Guid>? projects, int days, ApiToolSet toolSet = ApiToolSet.Agent,
+        IReadOnlyCollection<string>? customTools = null)
     {
         string secret;
-        lock (_store.Sync) secret = Data.Create(name, access, projects, days, DateTime.Now, out _);
+        lock (_store.Sync)
+        {
+            secret = Data.Create(name, access, projects, days, DateTime.Now, out var token);
+            token.ToolSet = toolSet;
+            token.CustomTools = toolSet == ApiToolSet.Custom ? [.. customTools ?? []] : null;
+        }
         _store.Save();
         RaiseChanged();
         return secret;
@@ -213,6 +219,22 @@ public sealed class ApiServer
         _store.Save();
         RaiseChanged();
     }
+
+    /// <summary>The tools the token offers its agent, from its next request on.</summary>
+    public void SetTokenTools(ApiToken token, ApiToolSet toolSet, IReadOnlyCollection<string>? customTools)
+    {
+        lock (_store.Sync)
+        {
+            token.ToolSet = toolSet;
+            token.CustomTools = toolSet == ApiToolSet.Custom ? [.. customTools ?? []] : null;
+        }
+        _store.Save();
+        RaiseChanged();
+    }
+
+    /// <summary>The tools a token can be given, by name and title, for ticking (not the ones every token has).</summary>
+    public IReadOnlyList<(string Name, string Title)> TickableTools =>
+        [.. _tools.Tools.Where(t => !ApiToolSets.Always.Contains(t.Name)).Select(t => (t.Name, t.Title))];
 
     /// <summary>Freezes the token (it still connects, but can't do anything) or thaws it; a chat watch it runs ends.</summary>
     public void SetTokenFrozen(ApiToken token, bool frozen)
@@ -364,6 +386,11 @@ public sealed class ApiServer
             return;
         }
         var (route, values) = match;
+        if (!host.Offers(route.Tool))
+        {
+            await Problem(context, 403, $"This token doesn't offer {route.Tool}: the user chose its tools in Settings › API.");
+            return;
+        }
 
         var body = await BodyAsync(context.Request, _tools.FilesArgument(route.Tool) != null);
         var query = context.Request.Query.Select(q => KeyValuePair.Create(q.Key, q.Value.ToString()));
@@ -544,7 +571,26 @@ public sealed class ApiServer
         Projects = token.Projects?.ToHashSet(),
     };
 
-    private ApiToolHost HostFor(ApiToken token) => token.ReadOnly ? _readOnly : _readWrite;
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, ApiToolHost> _hosts = new();
+
+    /// <summary>The tools the token offers its agent: by its access and its tool set (which can change while it's connected).</summary>
+    private ApiToolHost HostFor(ApiToken token)
+    {
+        if (token.ToolSet == ApiToolSet.Agent) return token.ReadOnly ? _readOnly : _readWrite;
+        var custom = token.ToolSet == ApiToolSet.Custom ? (token.CustomTools ?? []).Order(StringComparer.Ordinal).ToList() : [];
+        return _hosts.GetOrAdd($"{token.ReadOnly}|{token.ToolSet}|{string.Join(",", custom)}",
+            _ => new ApiToolHost(_tools, token.ReadOnly, token.ToolSet, custom.ToHashSet(StringComparer.Ordinal)));
+    }
+
+    /// <summary>Tools sorted for API tokens' tool sets.</summary>
+    internal static class ApiToolSets
+    {
+        /// <summary>Need the user's computer itself (its folders, its repository): not in the Agent set, only if ticked.</summary>
+        public static readonly HashSet<string> NeedThisComputer =
+            ["cleanup_request", "plan_cleanup", "link_media", "ship_request", "plan_ship", "report_ship", "finish_ship"];
+        /// <summary>In every set: picking a name and saying what it's doing.</summary>
+        public static readonly HashSet<string> Always = ["set_name", "set_label", "set_status"];
+    }
 
     // ───────────── MCP over HTTP ─────────────
 
@@ -614,7 +660,7 @@ public sealed class ApiServer
     /// The agent tools as an API token sees them: files as uploads, no folders, and only reading for a read-only token
     /// (apart from Chat while Settings › API lets read-only tokens use it).
     /// </summary>
-    private sealed class ApiToolHost(AgentTools tools, bool readOnly) : IMcpToolHost
+    private sealed class ApiToolHost(AgentTools tools, bool readOnly, ApiToolSet set = ApiToolSet.Agent, IReadOnlySet<string>? custom = null) : IMcpToolHost
     {
         private static readonly JsonElement NoArguments = JsonSerializer.SerializeToElement(new JsonObject());
         private static readonly McpSession ReadOnlySession = new() { ReadOnly = true };
@@ -623,14 +669,27 @@ public sealed class ApiServer
             .Select(t => t with { InputSchema = Schema(t, tools.FilesArgument(t.Name)) })
             .ToList();
 
-        public IReadOnlyList<McpTool> Tools => readOnly ? _all.Where(t => tools.Allows(ReadOnlySession, t.Name, NoArguments)).ToList() : _all;
+        public IReadOnlyList<McpTool> Tools => (readOnly ? _all.Where(t => tools.Allows(ReadOnlySession, t.Name, NoArguments)) : _all).Where(t => Offers(t.Name)).ToList();
+
+        /// <summary>Whether the token's tool set has the tool (whatever its access).</summary>
+        public bool Offers(string name) => set switch
+        {
+            ApiToolSet.Agent => !ApiToolSets.NeedThisComputer.Contains(name),
+            ApiToolSet.ChatOnly => ApiToolSets.Always.Contains(name) || AgentTools.ChatToolNames.Contains(name),
+            _ => ApiToolSets.Always.Contains(name) || custom?.Contains(name) == true,
+        };
 
         public string Instructions => tools.InstructionsFor(remote: true) +
-            " You're connected over ProJict's API, signing with the token's name: say which project with \"project\" (there's no working " +
-            "directory), send files as objects with \"name\" and \"data\" (base64), and download attachments from their url with the same " +
-            "Authorization header." + (!readOnly ? ""
+            " You're connected to the user's ProJict over the network with an API token, signing with its name: say which project with \"project\" " +
+            "(there's no working directory), send files as objects with \"name\" and \"data\" (base64), and download attachments from their url " +
+            "with the same Authorization header. Files on your computer aren't reachable from there: send them." + (!readOnly ? ""
                 : tools.ChatAccess(readOnly) == "read and write" ? " This token is read only, apart from Chat: there you read, post, start channels and invite like any agent."
-                : " This token is read only.");
+                : " This token is read only.") + set switch
+            {
+                ApiToolSet.Agent => " Clean-ups, shipping and linking local files need the user's computer, so they aren't offered here.",
+                ApiToolSet.ChatOnly => " This token is for Chat only: channels and private messages.",
+                _ => " This token offers only the tools the user ticked for it.",
+            };
 
         public void SessionStarted(McpSession session) => tools.SessionStarted(session);
         public void SessionEnded(McpSession session) => tools.SessionEnded(session);

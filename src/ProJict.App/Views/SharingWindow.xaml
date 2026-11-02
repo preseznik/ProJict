@@ -84,7 +84,9 @@
                                 <TextBlock Text="None ticked: all groups." Style="{StaticResource MutedText}" FontSize="12" />
                             </StackPanel>
                         </Grid>
-                        <Button Content="Create invite" Command="{Binding CreateInviteCommand}" HorizontalAlignment="Left" Margin="110,10,0,0" />
+                        <CheckBox x:Name="InviteLetsInBox" Content="Let them in without asking me" IsChecked="{Binding InviteLetsIn}" Margin="110,10,0,0"
+                                  ToolTip="Whoever uses the code is in at once, with the role and groups above. It still works only once, for 24 hours." />
+                        <Button Content="Create invite" Command="{Binding CreateInviteCommand}" HorizontalAlignment="Left" Margin="110,8,0,0" />
                         <StackPanel Margin="110,8,0,0" Visibility="{Binding NewCodeText, Converter={StaticResource EmptyToVis}}">
                             <TextBox Text="{Binding NewCode, Mode=OneWay}" IsReadOnly="True" FontSize="22" FontFamily="{StaticResource MonoFont}" HorizontalAlignment="Left" MinWidth="170"
                                      Visibility="{Binding NewCode, Converter={StaticResource EmptyToVis}}" />

@@ -179,6 +179,8 @@ public sealed partial class AgentTools : IMcpToolHost
         AddToolTools();
         AddWorkTools();
         AddCleanupTools();
+        AddPublishTools();
+        AddMediaTools();
     }
 
     public IReadOnlyList<McpTool> Tools => _tools;
@@ -278,6 +280,9 @@ public sealed partial class AgentTools : IMcpToolHost
         "When a project shows a shipRequest, the user wants it committed, built, packaged, pushed or released: read it with ship_request, post your " +
         "plan with plan_ship and wait for their approval in ProJict; only then run the steps, report each with report_ship and end with finish_ship " +
         "(record a published release with draft_release save=true). " +
+        "Videos (a film studio's Publisher) are published through a publish plan: post it with plan_publish (title, description, tags, playlists, " +
+        "when, and 2–4 thumbnails to choose from) and wait for the user's decision; publish only an approved plan, with the text and thumbnail it " +
+        "then has (publish_plan), and end with finish_publish. " +
         "When a result says asleep, the user put every agent to sleep: finish what you're doing, then stop and stay idle until you're told you're " +
         "woken (claim_item is refused meanwhile). " +
         "When a project shows a studio (a game or film studio), the user hires agents to its roles: if you have one, work as it expects, and agree with the " +
@@ -514,6 +519,10 @@ public sealed partial class AgentTools : IMcpToolHost
             "finish_ship" => args.String("outcome") == "shipped" ? "Shipped it" : "Couldn't ship it",
             "cleanup_request" => "Read the clean-up request",
             "plan_cleanup" => "Posted a clean-up plan",
+            "link_media" => args.Bool("unlink") == true ? $"Unlinked files from {what}" : $"Linked files to {what}",
+            "plan_publish" => $"Planned publishing “{Short(args.String("title") ?? "")}”",
+            "publish_plan" => "Read a publish plan",
+            "finish_publish" => args.String("outcome") == "published" ? "Published a video" : "Couldn't publish a video",
             _ => tool.Replace('_', ' '),
         };
         Remember(session, new AgentAction(DateTime.Now, text, project?.Id, item?.Id, tool));
@@ -1436,6 +1445,7 @@ public sealed partial class AgentTools : IMcpToolHost
         if (item.NeedsReview) json["needsReview"] = true;
         if (!MayWork(rules, item)) json["offLimits"] = true;
         if (item.HasAttachments) json["attachments"] = Paths(item.Attachments, rules.Project);
+        if (item.Media is { Count: > 0 } media) json["media"] = MediaJson(media, rules.Project);
         if (item.Issue is { } issue)
         {
             var link = new JsonObject { ["number"] = issue.Number, ["url"] = issue.Url };
