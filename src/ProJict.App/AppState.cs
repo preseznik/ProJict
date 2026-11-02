@@ -63,6 +63,9 @@ public sealed partial class AppState : ObservableObject
     }
 
     public ProjectStore Store { get; }
+    private Services.AgentPictures? _pictures;
+    /// <summary>Agents' pictures (the Agents view), in the data folder.</summary>
+    public Services.AgentPictures Pictures => _pictures ??= new Services.AgentPictures(Store.DataRoot);
     /// <summary>False in tests: nothing is written to this computer's settings (or sharing) files.</summary>
     public bool PersistsSettings => _persistAppSettings;
     public AppSettings AppSettings { get; }

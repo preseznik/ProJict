@@ -205,6 +205,9 @@ public sealed class WorkspaceSettings
     /// <summary>The names agents picked for themselves, and the client each runs in ("Ada" → "Claude Code").</summary>
     public Dictionary<string, string>? AgentNames { get; set; }
 
+    /// <summary>Agents that can't make their own picture and asked another agent to (set_picture wanted=true); null while none.</summary>
+    public List<string>? PicturesWanted { get; set; }
+
     /// <summary>How much of its usage each agent has used, by name, as it last reported (or you set it); null while none.</summary>
     public Dictionary<string, ProJict.Core.Agents.AgentUsage>? AgentUsage { get; set; }
 

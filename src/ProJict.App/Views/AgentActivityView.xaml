@@ -45,13 +45,27 @@
                     <ContextMenu>
                         <MenuItem Header="Private message" Command="{Binding PrivateMessageCommand}" ToolTip="Write to this agent in Chat, just the two of you" />
                         <MenuItem Header="Usage…" Command="{Binding SetUsageCommand}" ToolTip="How much of its usage it has used (it can report it itself with report_usage)" />
+                        <MenuItem Header="Change picture…" Command="{Binding ChangePictureCommand}" ToolTip="Agents make their own (set_picture); you can choose another" />
+                        <MenuItem Header="Remove picture" Command="{Binding RemovePictureCommand}" Visibility="{Binding HasPicture, Converter={StaticResource BoolToVis}}" />
                     </ContextMenu>
                 </Border.ContextMenu>
                 <StackPanel>
                     <DockPanel>
-                        <Border DockPanel.Dock="Left" Width="34" Height="34" CornerRadius="17" Background="{Binding Badge.Background}" Margin="0,0,12,0" VerticalAlignment="Top">
-                            <TextBlock Text="{Binding Badge.Initials}" Foreground="White" FontWeight="SemiBold" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                        </Border>
+                        <Grid DockPanel.Dock="Left" Width="44" Height="44" Margin="0,0,12,0" VerticalAlignment="Top">
+                            <Border CornerRadius="22" Background="{Binding Badge.Background}">
+                                <TextBlock Text="{Binding Badge.Initials}" Foreground="White" FontWeight="SemiBold" FontSize="15" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <Ellipse Visibility="{Binding HasPicture, Converter={StaticResource BoolToVis}}" Stroke="{DynamicResource CardStrokeColorDefaultBrush}" StrokeThickness="1">
+                                <Ellipse.Fill>
+                                    <ImageBrush ImageSource="{Binding Picture}" Stretch="UniformToFill" />
+                                </Ellipse.Fill>
+                            </Ellipse>
+                            <Border HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-3,-3" Width="18" Height="18" CornerRadius="9"
+                                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                                    ToolTip="It can't make its own picture and asked another agent to" Visibility="{Binding PictureWanted, Converter={StaticResource BoolToVis}}">
+                                <TextBlock Style="{StaticResource Icon}" Text="&#xE722;" FontSize="10" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                        </Grid>
                         <!-- Its private conversation in Chat -->
                         <Button DockPanel.Dock="Right" Style="{StaticResource SubtleIconButton}" Content="&#xE8BD;" FontSize="14" Padding="5,2" Margin="6,0,0,0"
                                 VerticalAlignment="Top" Command="{Binding PrivateMessageCommand}" ToolTip="{Binding OpenChatToolTip}"
@@ -213,6 +227,8 @@
                                   Click="InviteTarget_Click" ToolTipService.ShowOnDisabled="True" ToolTip="Your channels it isn't in yet" />
                         <MenuItem Header="Rename…" Command="{Binding StartRenameCommand}" ToolTip="{Binding RenameToolTip}" ToolTipService.ShowOnDisabled="True" />
                         <MenuItem Header="Usage…" Command="{Binding SetUsageCommand}" ToolTip="How much of its usage it has used (it can report it itself with report_usage)" />
+                        <MenuItem Header="Change picture…" Command="{Binding ChangePictureCommand}" />
+                        <MenuItem Header="Remove picture" Command="{Binding RemovePictureCommand}" Visibility="{Binding HasPicture, Converter={StaticResource BoolToVis}}" />
                         <Separator />
                         <MenuItem Header="Show its card" Command="{Binding ShowCardCommand}" />
                         <MenuItem Header="Show its work in the Feed" Command="{Binding ShowWorkCommand}" />
@@ -223,6 +239,11 @@
                         <Border CornerRadius="14" Background="{Binding Badge.Background}">
                             <TextBlock Text="{Binding Badge.Initials}" Foreground="White" FontWeight="SemiBold" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Border>
+                        <Ellipse Visibility="{Binding HasPicture, Converter={StaticResource BoolToVis}}">
+                            <Ellipse.Fill>
+                                <ImageBrush ImageSource="{Binding Picture}" Stretch="UniformToFill" />
+                            </Ellipse.Fill>
+                        </Ellipse>
                         <Ellipse x:Name="Online" Width="9" Height="9" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-1,-1" Fill="#22C55E"
                                  Stroke="{DynamicResource CardBackgroundFillColorDefaultBrush}" StrokeThickness="1.5" Visibility="{Binding ShowsDot, Converter={StaticResource BoolToVis}}" />
                     </Grid>

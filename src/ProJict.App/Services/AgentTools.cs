@@ -137,10 +137,13 @@ public sealed partial class AgentTools : IMcpToolHost
             ListComments, readOnly: true);
         Add("add_comment", "Add comment",
             "Posts in the discussion of an item, a category or a group: a new thread, or a reply to a comment (reply_to). " +
-            "Use it to ask the user questions, report progress, or answer them.",
+            "Use it to ask the user questions, report progress, or answer them. When you give the user choices, add them as choices: they " +
+            "answer with a click, and their answer comes back as their reply.",
             Schema(("text", "string", "The comment.", true), ("item", "string", "Item id.", false), ("category", "string", "Category name.", false),
                 ("group", "string", "Group name.", false), ProjectArg, ("reply_to", "string", "Id of the comment to reply to.", false),
-                ("attachments", "string[]", "Files to post with the comment, e.g. a screenshot (absolute paths or relative to your working directory).", false)),
+                ("attachments", "string[]", "Files to post with the comment, e.g. a screenshot (absolute paths or relative to your working directory).", false),
+                ("choices", "string[]", "Questions to answer with a click, one per entry as \"question | option | option\" (your suggestion first, " +
+                 "up to 6 options and 8 questions). They show as buttons under the comment.", false)),
             AddComment, filesArgument: "attachments");
         Add("read_docs", "Read notes", "Lists a project's notes (documents), or returns one note's text and attached files when a title is given.",
             Schema(ProjectArg, ("title", "string", "Note to read.", false)), ReadDocs, readOnly: true);
@@ -183,6 +186,7 @@ public sealed partial class AgentTools : IMcpToolHost
         AddCleanupTools();
         AddPublishTools();
         AddMediaTools();
+        AddPictureTools();
     }
 
     public IReadOnlyList<McpTool> Tools => _tools;
@@ -272,7 +276,8 @@ public sealed partial class AgentTools : IMcpToolHost
         "set_label says what you're working on. Everything you complete waits for the user's review, so only complete what you really finished; use " +
         "update_item with state todo if you stop. The user decides which items agents may work on, by priority (current_project says which); " +
         "the others and items on hold are off limits: list_items leaves them out, and you may read and comment on them but not check them out, " +
-        "change or complete them. Ask the user questions or report progress with add_comment, and check list_comments for their " +
+        "change or complete them. Ask the user questions or report progress with add_comment (offering options? give them as choices, which the user " +
+        "answers with a click), and check list_comments for their " +
         "answers. File problems you notice with add_item, and put documentation or reports for people in a note with write_doc. " +
         "Knowledge that lasts (architecture, how things work, decisions) goes in the wiki: list_wiki, read_wiki and write_wiki (a whole page, or a section by heading, " +
         "in Markdown with [[Page name]] links); pass the version you read so your change merges with others', and what you write waits for the user's review. " +
@@ -527,6 +532,7 @@ public sealed partial class AgentTools : IMcpToolHost
             "finish_ship" => args.String("outcome") == "shipped" ? "Shipped it" : "Couldn't ship it",
             "cleanup_request" => "Read the clean-up request",
             "plan_cleanup" => "Posted a clean-up plan",
+            "set_picture" => args.Bool("wanted") == true ? "Asked for a picture" : args.String("for") is { Length: > 0 } other ? $"Made {other}'s picture" : "Set its picture",
             "link_media" => args.Bool("unlink") == true ? $"Unlinked files from {what}" : $"Linked files to {what}",
             "plan_publish" => $"Planned publishing “{Short(args.String("title") ?? "")}”",
             "publish_plan" => "Read a publish plan",
@@ -708,6 +714,7 @@ public sealed partial class AgentTools : IMcpToolHost
             ["name"] = session.AgentName,
             ["client"] = session.Client,
             ["note"] = before ? $"You were {session.AgentName} here before: your earlier work counts as yours." : $"Everything you do is now signed {session.AgentName}.",
+            ["picture"] = PictureNote(session),
         });
     }
 
@@ -1141,6 +1148,11 @@ public sealed partial class AgentTools : IMcpToolHost
         if (target.Project != null) MayChange(target.Project, Change.Comment);
         var comment = NewComment(session, target.Project, text);
         if (files.Count > 0) comment.Attachments = files;
+        if (args.Strings("choices") is { Count: > 0 } choices)
+        {
+            try { comment.Choices = CommentChoices.Parse(choices); }
+            catch (InvalidOperationException ex) { throw new McpToolException(ex.Message); }
+        }
         if (target.Group != null) _state.PostGroupComment(target.Group, comment, replyTo);
         else _main.GetProjectViewModel(target.Project!).PostComment(target.TargetId!.Value, comment, replyTo);
         _state.StatusText = $"{comment.By} {(replyTo == null ? "commented on" : "replied on")} {target.Label}.";
@@ -1503,6 +1515,13 @@ public sealed partial class AgentTools : IMcpToolHost
         };
         if (comment.Agent) json["agent"] = true;
         if (comment.Attachments is { Count: > 0 } posted) json["attachments"] = Paths(posted, project);
+        if (comment.Choices is { Count: > 0 } choices)
+            json["choices"] = new JsonArray(choices.Select(c =>
+            {
+                var choice = new JsonObject { ["question"] = c.Question, ["options"] = new JsonArray(c.Options.Select(o => (JsonNode)o).ToArray()) };
+                if (c.Answer != null) choice["answer"] = c.Answer;
+                return (JsonNode)choice;
+            }).ToArray());
         if (nested && comment.Replies is { Count: > 0 } replies)
             json["replies"] = new JsonArray(replies.Select(r => (JsonNode)CommentJson(r, nested: true, project)).ToArray());
         return json;
