@@ -382,7 +382,7 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition x:Name="OfficeRow" Height="*" />
-                    <RowDefinition Height="Auto" />
+                    <RowDefinition x:Name="BottomRow" Height="Auto" />
                 </Grid.RowDefinitions>
                 <!-- Side by side: give the office the whole view, or fold it away. -->
                 <DockPanel x:Name="OfficeHeader" Margin="2,0,0,6">
@@ -455,9 +455,9 @@
                                        Visibility="{Binding HasOfficeChannel, Converter={StaticResource InvBoolToVis}}" />
                             <TextBlock Text="Nothing said here yet." Style="{StaticResource MutedText}" FontSize="12"
                                        Visibility="{Binding HasChannelLines, Converter={StaticResource InvBoolToVis}}" />
-                            <ScrollViewer x:Name="ChannelScroll" Height="220" VerticalScrollBarVisibility="Auto"
+                            <ScrollViewer x:Name="ChannelScroll" Height="260" VerticalScrollBarVisibility="Auto"
                                           Visibility="{Binding HasChannelLines, Converter={StaticResource BoolToVis}}">
-                                <ItemsControl x:Name="ChannelLines" ItemsSource="{Binding ChannelLines}" Focusable="False" Margin="0,0,6,0">
+                                <ItemsControl x:Name="ChannelLines" ItemsSource="{Binding ChannelLines}" Focusable="False" Margin="0,0,6,0" VerticalAlignment="Bottom">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate DataType="{x:Type vm:PrivateLine}">
                                             <TextBlock TextWrapping="Wrap" Margin="0,0,0,6">

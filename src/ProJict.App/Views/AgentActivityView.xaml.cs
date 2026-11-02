@@ -131,6 +131,15 @@ public partial class AgentActivityView : UserControl
         AgentListCard.Width = side ? AgentListBesideWidth : double.NaN;
         AgentListCard.Margin = side ? new Thickness(10, 0, 0, 0) : channel ? new Thickness(0, 10, 0, 0) : new Thickness(0);
         AgentListCard.VerticalAlignment = side ? VerticalAlignment.Bottom : VerticalAlignment.Top;
+        // Beside the page the office side has a height to share: the office and the channel split it 3:2, and the
+        // channel's messages fill its card (the newest by the box). Above the cards there's no height to share.
+        var fills = channel && OfficePane.Parent == OfficeSide;
+        OfficeRow.Height = fills ? new GridLength(3, GridUnitType.Star)
+            : (_vm?.ShowOffice ?? false) && OfficePane.Parent == OfficeSide ? new GridLength(1, GridUnitType.Star) : GridLength.Auto;
+        BottomRow.Height = fills ? new GridLength(2, GridUnitType.Star) : GridLength.Auto;
+        OfficeBottom.RowDefinitions[0].Height = fills ? new GridLength(1, GridUnitType.Star) : GridLength.Auto;
+        ChannelScroll.Height = fills ? double.NaN : 260;
+        ChannelCard.MinHeight = fills ? 200 : 0;
     }
 
     /// <summary>The divider was dragged: the office's new share of the width is kept.</summary>
