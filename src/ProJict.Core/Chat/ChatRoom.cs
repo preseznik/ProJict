@@ -329,14 +329,18 @@ public sealed class ChatRoom
         Changed?.Invoke(channel);
     }
 
-    /// <summary>An agent picked a name: its memberships go with it (what it wrote stays signed with the old one).</summary>
-    public void RenameMember(string from, string to)
+    /// <summary>
+    /// An agent picked a name: its memberships go with it (what it wrote stays signed with the old one). From a client's
+    /// default name ("Claude Code"), which other sessions went by before, only the ones made since <paramref name="joinedSince"/>
+    /// (it connected) are its own; the others stay. Kicks always go with it, so a new name doesn't get round one.
+    /// </summary>
+    public void RenameMember(string from, string to, DateTime? joinedSince = null)
     {
         if (string.Equals(from, to, StringComparison.OrdinalIgnoreCase)) return;
         foreach (var channel in Channels)
         {
             var changed = false;
-            if (Member(channel, from) is { } member)
+            if (Member(channel, from) is { } member && (joinedSince == null || member.JoinedAt >= joinedSince))
             {
                 if (Member(channel, to) is { } existing)
                 {
