@@ -96,15 +96,18 @@ public static class StudioFlow
             "video's item (or a note), timed to the shots, and changes after the Director's review. Works with the Director on the story, Sound on the " +
             "voice-over and the Publisher on the title and description.");
         yield return Role("Capture", StudioStation.Capture,
-            "Owns the recordings: desktop and game captures, and VR recordings (e.g. with VRCapture), in the resolution, frame rate and audio the video " +
-            "needs. Delivers the clips in the project's folder, named by shot, with a note of what's where. Works with the Director on the shots and " +
-            "with the Editor on what's missing.");
+            "Owns the recordings: desktop and game captures, and VR recordings with VRCapture, in the resolution, frame rate and audio the video " +
+            "needs (list_tools says where the user's VRCapture and ffmpeg are, and how they're used). Delivers the clips in the project's folder, " +
+            "named by shot and linked to the video's item (link_media), with a note of what's where. Works with the Director on the shots and with " +
+            "the Editor on what's missing.");
         yield return Role("Editor", StudioStation.Editing,
-            "Owns the cut: picks and orders the clips, pacing, transitions, color, titles and captions, and exports the finished video. Delivers each " +
-            "cut in the project's folder with a note of its length and what changed, and the final export. Works with Capture on missing shots, Sound " +
-            "on the mix and the Director on sign-off.");
+            "Owns the cut: picks and orders the clips, pacing, transitions, color, titles and captions, and exports the finished video (ffmpeg for " +
+            "cutting, joining, converting and exporting; list_tools says where it is). Delivers each cut in the project's folder, linked to the video's " +
+            "item (link_media), with a note of its length and what changed, and the final export. Works with Capture on missing shots, Sound on the mix " +
+            "and the Director on sign-off.");
         yield return Role("Sound", StudioStation.Mixing,
-            "Owns how the video sounds: music (e.g. made with Suno in the browser), voice-over (e.g. ElevenLabs), effects and the final mix and loudness. " +
+            "Owns how the video sounds: music (e.g. made with Suno in the browser), voice-over (e.g. ElevenLabs), effects and the final mix and loudness " +
+            "(ffmpeg for mixing, levels and loudness; list_tools says where the user's tools are). " +
             "Delivers the tracks and the mix in the project's folder, with the music's and voices' terms noted. Works with the Writer on the voice-over " +
             "and the Editor on timing.");
         yield return Role("Thumbnail & graphics", StudioStation.Graphics,

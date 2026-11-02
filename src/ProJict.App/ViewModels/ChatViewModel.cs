@@ -39,6 +39,9 @@ public sealed partial class ChatViewModel : ObservableObject
     {
         _state = state;
         _main = main;
+        Yours = new ChatSection(state, "yours", "Channels", "The channels you're in");
+        Others = new ChatSection(state, "others", "Other channels", "Channels you're not in");
+        Private = new ChatSection(state, "private", "Private messages", "One on one: right-click someone › Private message");
         Room.Changed += OnChanged;
         Room.Removed += channel =>
         {
@@ -150,8 +153,12 @@ public sealed partial class ChatViewModel : ObservableObject
     public bool HasPrivateChats => PrivateChats.Count > 0;
     public bool HasNoChannels => !AllChannels.Any();
     /// <summary>The channels of each ProJict you're connected to, under its owner's name.</summary>
-    public List<HostChatSection> HostChats { get; private set; } = [];
+    public List<ChatSection> HostChats { get; private set; } = [];
     public bool HasHostChats => HostChats.Count > 0;
+    /// <summary>The sidebar's sections, each folding under its heading.</summary>
+    public ChatSection Yours { get; }
+    public ChatSection Others { get; }
+    public ChatSection Private { get; }
 
     [ObservableProperty] private ChatChannel? _channel;
     public bool HasChannel => Channel != null;
@@ -330,9 +337,12 @@ public sealed partial class ChatViewModel : ObservableObject
         // Each host's: channels you're in, the others you could join, then private conversations.
         // And each guest's that shares its own channels back with you.
         HostChats = _main.Guest.Connections.Where(c => c.Chat is { Channels.Count: > 0 }).Cast<IChatRemote>().Concat(_main.Host.BackChats)
-            .Select(c => new HostChatSection($"{c.OwnerName}'s ProJict",
+            .Select(c => new ChatSection(_state, "host:" + c.OwnerName, $"{c.OwnerName}'s ProJict", "Shared with you: it's kept there, not here", shared: true).Set(
                 c.Chat!.Channels.OrderBy(ch => ch.Direct).ThenByDescending(ch => ChatRoom.Member(ch, c.MyName ?? "") != null).ThenBy(ch => ch.Name, StringComparer.Ordinal)
                     .Select(ch => new ChannelRowViewModel(ch, this)).ToList())).ToList();
+        Yours.Set(YourChannels);
+        Others.Set(OtherChannels);
+        Private.Set(PrivateChats);
         foreach (var name in new[] { nameof(YourChannels), nameof(OtherChannels), nameof(HasOtherChannels), nameof(HasNoChannels), nameof(UnreadCount), nameof(HasMention),
                      nameof(UnreadToolTip), nameof(BrowseRows), nameof(PrivateChats), nameof(HasPrivateChats), nameof(HostChats), nameof(HasHostChats),
                      nameof(AgentChats), nameof(HasAgentChats), nameof(AgentChatsTitle) })
@@ -1114,7 +1124,53 @@ public sealed record InviteChoice(string Name, string Label)
 }
 
 /// <summary>A connected ProJict's channels, under its owner's name.</summary>
-public sealed record HostChatSection(string Title, List<ChannelRowViewModel> Rows);
+/// <summary>A heading in Chat's sidebar with its channels under it. A click folds them away, leaving only the open one and those with
+/// something new; folded ones stay folded (AppSettings.FoldedChatSections).</summary>
+public sealed partial class ChatSection(AppState state, string key, string title, string hint, bool shared = false) : ObservableObject
+{
+    private List<ChannelRowViewModel> _all = [];
+    public string Key => key;
+    public string Title => title;
+    /// <summary>Another ProJict's, shown with a link mark.</summary>
+    public bool IsShared => shared;
+    public bool HasRows => _all.Count > 0;
+    public bool IsOpen
+    {
+        get => state.AppSettings.FoldedChatSections?.Contains(key) != true;
+        set
+        {
+            if (value == IsOpen) return;
+            var folded = state.AppSettings.FoldedChatSections ??= [];
+            if (value) folded.Remove(key);
+            else folded.Add(key);
+            if (folded.Count == 0) state.AppSettings.FoldedChatSections = null;
+            state.SaveAppSettings();
+            Changed();
+        }
+    }
+    /// <summary>All of them while it's open; folded, the open channel and those with something unread.</summary>
+    public List<ChannelRowViewModel> Rows { get; private set; } = [];
+    /// <summary>Folded: how many it hides.</summary>
+    public string HiddenText => _all.Count - Rows.Count is > 0 and var n ? $"{n} more" : "";
+    public string ToolTip => hint + "\n" + (IsOpen ? "Click to fold it away" : "Click to show them all");
+
+    internal ChatSection Set(List<ChannelRowViewModel> rows)
+    {
+        _all = rows;
+        Changed();
+        return this;
+    }
+
+    private void Changed()
+    {
+        Rows = IsOpen ? _all : _all.Where(r => r.IsSelected || r.HasUnread).ToList();
+        foreach (var name in new[] { nameof(IsOpen), nameof(Rows), nameof(HiddenText), nameof(HasRows), nameof(ToolTip) })
+            OnPropertyChanged(name);
+    }
+
+    [RelayCommand]
+    private void Toggle() => IsOpen = !IsOpen;
+}
 
 /// <summary>A #channel chip on a project, category or item it's linked to; a click opens it in Chat.</summary>
 public sealed partial class ChannelChip(ChatChannel channel, MainViewModel main, bool unread)
