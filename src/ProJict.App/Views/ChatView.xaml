@@ -144,7 +144,7 @@
             </DataTemplate.Triggers>
         </DataTemplate>
 
-        <DataTemplate x:Key="ChatFile" DataType="{x:Type vm:AttachmentViewModel}">
+        <DataTemplate x:Key="ChatFileChip" DataType="{x:Type vm:AttachmentViewModel}">
             <Button Style="{StaticResource SubtleButton}" Padding="0" Margin="0,0,6,4" Command="{Binding OpenCommand}"
                     ToolTip="{Binding ShortToolTip}" AutomationProperties.Name="{Binding FileName}">
                 <Border Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
@@ -161,6 +161,9 @@
                 </Border>
             </Button>
         </DataTemplate>
+
+        <!-- A message's file: audio and video play in place, other files show as their chip. -->
+        <local:PlayableTemplateSelector x:Key="ChatFile" Chip="{StaticResource ChatFileChip}" Player="{StaticResource PlayerTemplate}" />
 
         <DataTemplate x:Key="PendingFile" DataType="{x:Type vm:PendingFile}">
             <Border Background="{DynamicResource SubtleFillColorSecondaryBrush}" CornerRadius="4" Padding="6,2,2,2" Margin="0,4,6,0">
@@ -228,7 +231,7 @@
                             <local:ChatMessageText x:Name="Text" Segments="{Binding Segments}" Margin="0,0,0,2" />
                             <TextBlock Text="{Binding EditedText}" FontSize="11" Foreground="{DynamicResource TextFillColorTertiaryBrush}"
                                        Visibility="{Binding EditedText, Converter={StaticResource EmptyToVis}}" />
-                            <ItemsControl ItemsSource="{Binding Attachments}" ItemTemplate="{StaticResource ChatFile}" ItemsPanel="{StaticResource Wrap}"
+                            <ItemsControl ItemsSource="{Binding Attachments}" ItemTemplateSelector="{StaticResource ChatFile}" ItemsPanel="{StaticResource Wrap}"
                                           Focusable="False" Margin="0,4,0,0" Visibility="{Binding HasAttachments, Converter={StaticResource BoolToVis}}" />
                             <!-- Thumbs given: a yes or no to the message -->
                             <StackPanel Orientation="Horizontal" Margin="0,3,0,0">

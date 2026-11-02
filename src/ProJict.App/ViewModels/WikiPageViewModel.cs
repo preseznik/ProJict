@@ -510,6 +510,9 @@ public sealed partial class WikiPageViewModel : ObservableObject
     public bool HasFiles => Model.Attachments is { Count: > 0 };
 
     /// <summary>The local file a picture or file link names: a page's attachment by file name (or id).</summary>
+    /// <summary>Where a file of this ProJict's own page is; null for another ProJict's (fetched only when opened).</summary>
+    internal string? LocalFilePath(Attachment attachment) => Host == null ? State.Store.AttachmentPath(attachment) : null;
+
     private string? FilePath(string name)
     {
         var attachment = FindFile(name);

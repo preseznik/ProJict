@@ -53,6 +53,8 @@ public sealed partial class ItemRowViewModel : ObservableObject
     public string PriorityText => Priorities.Label(Item.Priority);
     public string PriorityToolTip => (Item.Priority == Priority.Hold ? "On hold: AI agents leave it alone" : $"{Item.Priority} priority") +
                                      " · click to change (Alt+1 urgent … Alt+4 low, Alt+5 on hold, Alt+0 none)";
+    /// <summary>No priority yet: a faint chip offers one, so the menus aren't the only way (not on done items, or on a board you can only read).</summary>
+    public bool ShowPriorityButton => Item.Priority == Priority.None && !Item.IsDone && Owner.CanEdit;
     public bool IsDone => Item.IsDone;
     public bool IsInProgress => Item.State == ItemState.InProgress;
     /// <summary>A done child still listed under an open parent (shown struck through).</summary>
