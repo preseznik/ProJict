@@ -43,6 +43,38 @@ public sealed partial class WikiViewModel : ObservableObject
     internal AppState State => _state;
     internal MainViewModel Main => _main;
 
+    // ───────────── Layout ─────────────
+
+    public const double DefaultListWidth = 270, MinListWidth = 180, MaxListWidth = 900;
+
+    /// <summary>How wide the list of pages is, as you last dragged its edge (on this computer).</summary>
+    public double ListWidth
+    {
+        get => _state.AppSettings.WikiListWidth ?? DefaultListWidth;
+        set
+        {
+            value = Math.Clamp(Math.Round(value), MinListWidth, MaxListWidth);
+            if (Math.Abs(ListWidth - value) < 0.5) return;
+            _state.AppSettings.WikiListWidth = value;
+            _state.SaveAppSettings();
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>The editor's share of the room it has with the preview, as you last dragged between them (on this computer).</summary>
+    public double EditorShare
+    {
+        get => _state.AppSettings.WikiEditorShare ?? 0.5;
+        set
+        {
+            value = Math.Round(Math.Clamp(value, 0.15, 0.85), 3);
+            if (Math.Abs(EditorShare - value) < 0.001) return;
+            _state.AppSettings.WikiEditorShare = value;
+            _state.SaveAppSettings();
+            OnPropertyChanged();
+        }
+    }
+
     public ObservableCollection<WikiNodeViewModel> Tree { get; } = [];
     public ObservableCollection<WikiHitViewModel> Results { get; } = [];
 

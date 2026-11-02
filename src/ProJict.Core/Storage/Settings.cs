@@ -90,6 +90,10 @@ public sealed class AppSettings
     /// chosen with the cog there. Null until you choose: Ship and Clean up.
     /// </summary>
     public List<string>? BigHeaderButtons { get; set; }
+    /// <summary>How wide the wiki's list of pages is, dragged by its edge; null for the usual 270.</summary>
+    public double? WikiListWidth { get; set; }
+    /// <summary>The wiki editor's share of the room it has with its preview (0.5 is half), dragged between them; null for half.</summary>
+    public double? WikiEditorShare { get; set; }
     /// <summary>Windows notifications for what needs you (Settings › Notifications).</summary>
     public NotificationSettings Notifications { get; set; } = new();
     /// <summary>How the Feed groups what happened: by day, week or month.</summary>

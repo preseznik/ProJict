@@ -56,8 +56,27 @@ public partial class WikiView : UserControl
     {
         if (_wiki != null) _wiki.PropertyChanged -= OnWikiChanged;
         _wiki = wiki;
-        if (_wiki != null) _wiki.PropertyChanged += OnWikiChanged;
+        if (_wiki != null)
+        {
+            _wiki.PropertyChanged += OnWikiChanged;
+            ListColumn.Width = new GridLength(_wiki.ListWidth);
+            EditorColumn.Width = new GridLength(_wiki.EditorShare, GridUnitType.Star);
+            PreviewColumn.Width = new GridLength(1 - _wiki.EditorShare, GridUnitType.Star);
+        }
         AttachPage(_wiki?.Page);
+    }
+
+    /// <summary>The list's edge dragged: it stays that wide, also next time.</summary>
+    private void ListSplitter_DragCompleted(object sender, DragCompletedEventArgs e)
+    {
+        if (_wiki != null && ListColumn.ActualWidth > 0) _wiki.ListWidth = ListColumn.ActualWidth;
+    }
+
+    /// <summary>The line between the editor and the preview dragged: they keep sharing the room so, also next time.</summary>
+    private void EditorSplitter_DragCompleted(object sender, DragCompletedEventArgs e)
+    {
+        var room = EditorColumn.ActualWidth + PreviewColumn.ActualWidth;
+        if (_wiki != null && room > 0) _wiki.EditorShare = EditorColumn.ActualWidth / room;
     }
 
     private void OnWikiChanged(object? sender, PropertyChangedEventArgs e)

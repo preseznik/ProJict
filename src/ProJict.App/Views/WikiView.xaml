@@ -65,7 +65,8 @@
 
     <Grid>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="270" MinWidth="180" />
+            <!-- As wide as you last dragged it (the view sets it). -->
+            <ColumnDefinition x:Name="ListColumn" Width="270" MinWidth="180" />
             <ColumnDefinition Width="Auto" />
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
@@ -122,7 +123,7 @@
 
         <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Center" VerticalAlignment="Stretch" Background="Transparent"
                       BorderThickness="1,0,0,0" BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}" ResizeBehavior="PreviousAndNext"
-                      ToolTip="Drag to make the list wider or narrower" />
+                      ToolTip="Drag to make the list wider or narrower" DragCompleted="ListSplitter_DragCompleted" />
 
         <!-- The open page -->
         <TextBlock Grid.Column="2" Text="Pick a page on the left, or start one with +." Style="{StaticResource MutedText}" Margin="24,28,0,0"
@@ -284,16 +285,18 @@
                 <!-- Editing: Markdown on the left, the live preview on the right -->
                 <Grid x:Name="EditorGrid" Visibility="{Binding IsEditing, Converter={StaticResource BoolToVis}}">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
+                        <!-- Shared as you last dragged between them (the view sets it). -->
+                        <ColumnDefinition x:Name="EditorColumn" Width="*" />
                         <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition x:Name="PreviewColumn" Width="*" />
                     </Grid.ColumnDefinitions>
                     <TextBox x:Name="Editor" Text="{Binding EditText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" AcceptsTab="True" TextWrapping="Wrap"
                              VerticalScrollBarVisibility="Auto" FontFamily="{StaticResource MonoFont}" FontSize="13" VerticalContentAlignment="Top"
                              AutomationProperties.Name="Markdown" AllowDrop="True" PreviewDragOver="Editor_PreviewDragOver" PreviewDrop="Editor_PreviewDrop"
                              PreviewKeyDown="Editor_PreviewKeyDown" SelectionChanged="Editor_SelectionChanged"
                              ToolTip="Markdown: # headings, **bold**, - lists, | tables |, ```code```, [[Page name]] links pages, #4e84570c items, #channel channels. Paste or drop pictures and files." />
-                    <GridSplitter Grid.Column="1" Width="8" HorizontalAlignment="Center" VerticalAlignment="Stretch" Background="Transparent" ResizeBehavior="PreviousAndNext" />
+                    <GridSplitter Grid.Column="1" Width="8" HorizontalAlignment="Center" VerticalAlignment="Stretch" Background="Transparent" ResizeBehavior="PreviousAndNext"
+                                  DragCompleted="EditorSplitter_DragCompleted" />
                     <Border Grid.Column="2" BorderThickness="1" CornerRadius="4" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}" Padding="8,6,0,0">
                         <DockPanel>
                             <TextBlock DockPanel.Dock="Top" Text="Preview" Style="{StaticResource MutedText}" FontSize="11" Margin="4,0,0,4" />
