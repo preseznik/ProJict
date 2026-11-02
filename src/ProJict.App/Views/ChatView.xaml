@@ -109,6 +109,33 @@
             </DataTemplate.Triggers>
         </DataTemplate>
 
+        <!-- A sidebar section: its heading folds the channels under it away (the open one and those with something new stay). -->
+        <DataTemplate x:Key="ChatSectionView" DataType="{x:Type vm:ChatSection}">
+            <StackPanel x:Name="Section">
+                <Button x:Name="Heading" Style="{StaticResource SubtleButton}" Command="{Binding ToggleCommand}" HorizontalAlignment="Stretch" Padding="0,4" Margin="-4,10,0,2"
+                        ToolTip="{Binding ToolTip}" AutomationProperties.Name="{Binding Title}">
+                    <DockPanel HorizontalAlignment="Stretch" Width="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=Button}}">
+                        <TextBlock x:Name="Chevron" DockPanel.Dock="Left" Style="{StaticResource Icon}" Text="&#xE70D;" FontSize="8" Width="12" TextAlignment="Center" Margin="0,2,0,0"
+                                   VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                        <TextBlock DockPanel.Dock="Left" Style="{StaticResource Icon}" Text="&#xE72D;" FontSize="11" Margin="0,1,6,0" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" Visibility="{Binding IsShared, Converter={StaticResource BoolToVis}}" />
+                        <TextBlock DockPanel.Dock="Right" Text="{Binding HiddenText}" Style="{StaticResource MutedText}" FontSize="11" Margin="6,0,8,0" VerticalAlignment="Center"
+                                   Visibility="{Binding HiddenText, Converter={StaticResource EmptyToVis}}" />
+                        <TextBlock Text="{Binding Title}" Style="{StaticResource MutedText}" FontSize="12" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                    </DockPanel>
+                </Button>
+                <ItemsControl ItemsSource="{Binding Rows}" ItemTemplate="{StaticResource ChannelRow}" Focusable="False" />
+            </StackPanel>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsOpen}" Value="False">
+                    <Setter TargetName="Chevron" Property="Text" Value="&#xE76C;" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding HasRows}" Value="False">
+                    <Setter TargetName="Section" Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
         <DataTemplate x:Key="ChatFile" DataType="{x:Type vm:AttachmentViewModel}">
             <Button Style="{StaticResource SubtleButton}" Padding="0" Margin="0,0,6,4" Command="{Binding OpenCommand}"
                     ToolTip="{Binding ShortToolTip}" AutomationProperties.Name="{Binding FileName}">
@@ -334,13 +361,9 @@
                     <StackPanel Margin="4,0">
                         <TextBlock Text="No channels yet. Start one with + above, or from the right-click menu of a project, category or item."
                                    Style="{StaticResource MutedText}" TextWrapping="Wrap" Visibility="{Binding HasNoChannels, Converter={StaticResource BoolToVis}}" />
-                        <ItemsControl x:Name="YourChannelList" ItemsSource="{Binding YourChannels}" ItemTemplate="{StaticResource ChannelRow}" Focusable="False" />
-                        <TextBlock Text="Other channels" Style="{StaticResource MutedText}" FontSize="12" Margin="8,14,0,4"
-                                   Visibility="{Binding HasOtherChannels, Converter={StaticResource BoolToVis}}" ToolTip="Channels you're not in" />
-                        <ItemsControl x:Name="OtherChannelList" ItemsSource="{Binding OtherChannels}" ItemTemplate="{StaticResource ChannelRow}" Focusable="False" />
-                        <TextBlock Text="Private messages" Style="{StaticResource MutedText}" FontSize="12" Margin="8,14,0,4"
-                                   Visibility="{Binding HasPrivateChats, Converter={StaticResource BoolToVis}}" ToolTip="One on one: right-click someone › Private message" />
-                        <ItemsControl x:Name="PrivateList" ItemsSource="{Binding PrivateChats}" ItemTemplate="{StaticResource ChannelRow}" Focusable="False" />
+                        <ContentControl x:Name="YourChannelList" Content="{Binding Yours}" ContentTemplate="{StaticResource ChatSectionView}" Focusable="False" />
+                        <ContentControl x:Name="OtherChannelList" Content="{Binding Others}" ContentTemplate="{StaticResource ChatSectionView}" Focusable="False" />
+                        <ContentControl x:Name="PrivateList" Content="{Binding Private}" ContentTemplate="{StaticResource ChatSectionView}" Focusable="False" />
                         <!-- The agents' private conversations with each other, while the toggle above is on. -->
                         <StackPanel x:Name="AgentChatsPanel" Visibility="{Binding ShowAgentChats, Converter={StaticResource BoolToVis}}">
                             <TextBlock Text="{Binding AgentChatsTitle}" Style="{StaticResource MutedText}" FontSize="12" Margin="8,14,0,4"
@@ -350,19 +373,7 @@
                             <ItemsControl x:Name="AgentChatList" ItemsSource="{Binding AgentChats}" ItemTemplate="{StaticResource AgentChatRow}" Focusable="False" />
                         </StackPanel>
                         <!-- The channels of the ProJicts you're connected to, under their owners' names. -->
-                        <ItemsControl x:Name="HostList" ItemsSource="{Binding HostChats}" Focusable="False">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate DataType="{x:Type vm:HostChatSection}">
-                                    <StackPanel>
-                                        <StackPanel Orientation="Horizontal" Margin="8,14,0,4">
-                                            <TextBlock Style="{StaticResource Icon}" Text="&#xE72D;" FontSize="11" Margin="0,1,6,0" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" />
-                                            <TextBlock Text="{Binding Title}" Style="{StaticResource MutedText}" FontSize="12" ToolTip="Shared with you: it's kept there, not here" />
-                                        </StackPanel>
-                                        <ItemsControl ItemsSource="{Binding Rows}" ItemTemplate="{StaticResource ChannelRow}" Focusable="False" />
-                                    </StackPanel>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
+                        <ItemsControl x:Name="HostList" ItemsSource="{Binding HostChats}" ItemTemplate="{StaticResource ChatSectionView}" Focusable="False" />
                         <Button Style="{StaticResource SubtleButton}" HorizontalAlignment="Left" Margin="0,10,0,0" Command="{Binding BrowseCommand}"
                                 Visibility="{Binding HasNoChannels, Converter={StaticResource InvBoolToVis}}">
                             <StackPanel Orientation="Horizontal">

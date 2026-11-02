@@ -64,6 +64,8 @@ public sealed class AppSettings
     public bool ReadOnlyTokensUseChat { get; set; } = true;
     /// <summary>Chat lists the agents' private conversations with each other (the toggle in its header).</summary>
     public bool ShowAgentChats { get; set; }
+    /// <summary>The sections of Chat's sidebar you folded ("yours", "others", "private", "host:" and its owner).</summary>
+    public List<string>? FoldedChatSections { get; set; }
     /// <summary>How you sign comments and history entries; empty means the Windows user name.</summary>
     public string? UserName { get; set; }
     /// <summary>Ask the GitHub CLI (gh) for its sign-in, so release checks include private repositories.</summary>
