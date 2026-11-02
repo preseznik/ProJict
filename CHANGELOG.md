@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.40
+
+- **The drawn office fits a full house.** With more than six agents, the drawn office's back desks stood on its back wall and the robots piled up in a line along each side. Its floor is shallower than the classic room's, so its eight desks now stand out on the floor in two rows on either side of the cooler, the back row's robots between the front row's, and talkers gather close round the cooler between them. Visitors from other ProJicts stand on the floor at the back instead of on the wall. In the drawn studios, the lobby is a step forward onto their floor. The classic look is as it was.
+- **Juniors work by their role's desk.** In a studio, a role's senior sits at its station, and its juniors stand beside it, a step apart and facing it, instead of waiting in the lobby as if unhired. While the senior isn't there, a junior takes the desk.
+
 ## 0.1.39 (2026-11-02)
 
 - **Instructions for all agents.** **Settings → AI agents** has a box for what every agent should keep to, in every project. For example: don't add yourself as a co-author of commits, which is what lists Claude as a contributor on GitHub. Each agent is told when it connects and with each project it opens (`current_project`, also through the API), and they head **Copy prompt** too. A project's own instructions come after them.

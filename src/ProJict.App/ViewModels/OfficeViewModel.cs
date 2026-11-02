@@ -48,6 +48,8 @@ public sealed partial class OfficeViewModel : ObservableObject
     private readonly Dictionary<McpSession, int> _deskOf = [];
     private readonly Dictionary<McpSession, int> _spotOf = [];
     private readonly Dictionary<McpSession, int> _lobbyOf = [];
+    /// <summary>In the studio, a role's juniors: they stand beside its desk, where its senior sits (the desk, and which of them).</summary>
+    private readonly Dictionary<McpSession, (int Desk, int Index)> _besideOf = [];
 
     /// <summary>The project whose game studio shows instead of the office (its banner), or null for the office.</summary>
     [ObservableProperty] [NotifyPropertyChangedFor(nameof(IsStudio), nameof(BannerText))] private string? _studioName;
@@ -117,14 +119,17 @@ public sealed partial class OfficeViewModel : ObservableObject
     /// <summary>Who's visiting from other ProJicts; only rebuilt when that changes.</summary>
     internal void SetVisitors(IReadOnlyList<AgentActivityViewModel.Visitor> visitors, Action<string> message)
     {
-        var signature = string.Join("|", visitors.Select(v => $"{v.Name}:{v.From}:{v.Away}"));
+        // In the drawn office they stand on its floor, at the back between the desks (its back wall is lower down).
+        var drawnOffice = IsDrawnLook && !IsStudio;
+        var (startX, feetY) = drawnOffice ? (334.0, 386.0) : (VisitorsX, VisitorsFeetY);
+        var signature = $"{drawnOffice}|" + string.Join("|", visitors.Select(v => $"{v.Name}:{v.From}:{v.Away}"));
         if (signature == _visitorsSignature) return;
         _visitorsSignature = signature;
         foreach (var visitor in _visitors) Scene.Remove(visitor);
         _visitors.Clear();
         foreach (var (v, i) in visitors.Take(MaxVisitors).Select((v, i) => (v, i)))
         {
-            var visitor = new OfficeVisitorViewModel(v.Name, v.From, v.Away, VisitorsX + VisitorGap * i, VisitorsFeetY, () => message(v.Name));
+            var visitor = new OfficeVisitorViewModel(v.Name, v.From, v.Away, startX + VisitorGap * i, feetY, () => message(v.Name));
             _visitors.Add(visitor);
             Scene.Add(visitor);
         }
@@ -197,6 +202,7 @@ public sealed partial class OfficeViewModel : ObservableObject
             _deskOf.Remove(gone);
             _spotOf.Remove(gone);
             _lobbyOf.Remove(gone);
+            _besideOf.Remove(gone);
         }
         StudioName = studio?.ProjectName;
         IsFilm = studio?.Studio.Kind == StudioKind.Film;
@@ -204,14 +210,24 @@ public sealed partial class OfficeViewModel : ObservableObject
         for (var i = 0; i < Desks.Count; i++) Desks[i].SetRole(studio?.Studio.Roles.FirstOrDefault(r => StudioFlow.PlaceOf(r.Station) == i));
         if (studio != null)
         {
-            // In the studio a desk is a role's station: its agent works there; the others wait in the lobby.
+            // In the studio a desk is a role's station: its senior works there (a junior, while the senior isn't here),
+            // its juniors stand beside it, and the others wait in the lobby.
             _deskOf.Clear();
-            foreach (var card in cards)
-                if (StudioFlow.RoleOf(studio.Studio, card.Session.AgentName) is { } role && !_deskOf.ContainsValue(StudioFlow.PlaceOf(role.Station)))
-                    _deskOf[card.Session] = StudioFlow.PlaceOf(role.Station);
-            foreach (var session in _lobbyOf.Keys.Where(_deskOf.ContainsKey).ToList()) _lobbyOf.Remove(session);
+            _besideOf.Clear();
+            var hired = cards.Select(c => (c.Session, Role: StudioFlow.RoleOf(studio.Studio, c.Session.AgentName))).Where(h => h.Role != null).ToList();
+            foreach (var (session, role) in hired.OrderBy(h => string.Equals(StudioFlow.HolderOf(studio.Studio, h.Role!), h.Session.AgentName, StringComparison.OrdinalIgnoreCase) ? 0 : 1))
+            {
+                var place = StudioFlow.PlaceOf(role!.Station);
+                if (!_deskOf.ContainsValue(place)) _deskOf[session] = place;
+                else _besideOf[session] = (place, _besideOf.Values.Count(b => b.Desk == place));
+            }
+            foreach (var session in _lobbyOf.Keys.Where(s => _deskOf.ContainsKey(s) || _besideOf.ContainsKey(s)).ToList()) _lobbyOf.Remove(session);
         }
-        else _lobbyOf.Clear();
+        else
+        {
+            _lobbyOf.Clear();
+            _besideOf.Clear();
+        }
         // Each keeps its desk; newcomers take the first free one, front first (they're easier to see).
         var order = Enumerable.Range(0, Desks.Count).OrderByDescending(i => Desks[i].Depth).ThenBy(i => Desks[i].Left ? 0 : 1).ToList();
         var placed = new List<OfficeAgentViewModel>();
@@ -219,9 +235,9 @@ public sealed partial class OfficeViewModel : ObservableObject
         {
             if (studio != null)
             {
-                if (!_deskOf.ContainsKey(card.Session) && !_lobbyOf.ContainsKey(card.Session))
+                if (!_deskOf.ContainsKey(card.Session) && !_besideOf.ContainsKey(card.Session) && !_lobbyOf.ContainsKey(card.Session))
                 {
-                    var spot = Enumerable.Range(0, LobbySpots.Length).Cast<int?>().FirstOrDefault(i => !_lobbyOf.ContainsValue(i!.Value));
+                    var spot = Enumerable.Range(0, Lobby.Length).Cast<int?>().FirstOrDefault(i => !_lobbyOf.ContainsValue(i!.Value));
                     if (spot == null) continue;
                     _lobbyOf[card.Session] = spot.Value;
                 }
@@ -257,7 +273,7 @@ public sealed partial class OfficeViewModel : ObservableObject
         }
         foreach (var (agent, activity) in activities)
             if (activity == OfficeActivity.Talking && !_spotOf.ContainsKey(agent.Session))
-                _spotOf[agent.Session] = Enumerable.Range(0, CoolerSpots.Length).Cast<int?>().FirstOrDefault(i => !_spotOf.ContainsValue(i!.Value)) ?? _spotOf.Count % CoolerSpots.Length;
+                _spotOf[agent.Session] = Enumerable.Range(0, TalkSpots.Length).Cast<int?>().FirstOrDefault(i => !_spotOf.ContainsValue(i!.Value)) ?? _spotOf.Count % TalkSpots.Length;
         foreach (var agent in placed)
         {
             var desk = _deskOf.TryGetValue(agent.Session, out var d) ? Desks[d] : null;
@@ -266,12 +282,19 @@ public sealed partial class OfficeViewModel : ObservableObject
             agent.SetStudio(studio);
             if (activity == OfficeActivity.Talking)
             {
-                var (x, y) = CoolerSpots[_spotOf[agent.Session]];
+                var (x, y) = TalkSpots[_spotOf[agent.Session]];
                 agent.Place(activity, x, y, standing: true, facingRight: x < CoolerX, desk, lastChat(agent.Session), hears);
+            }
+            else if (desk == null && _besideOf.TryGetValue(agent.Session, out var beside))
+            {
+                // Beside its senior's desk, on the room's side, facing it; the next one a step further and in front.
+                var station = Desks[beside.Desk];
+                var (x, y) = StandingAt(station.Seat.X + (station.Left ? 1 : -1) * (36 + 30 * beside.Index) * station.Scale, station.Y + 3 + 8 * beside.Index);
+                agent.Place(activity, x, y, standing: true, facingRight: !station.Left, null, null, hears);
             }
             else if (desk == null)
             {
-                var (x, y) = LobbySpots[_lobbyOf[agent.Session]];
+                var (x, y) = Lobby[_lobbyOf[agent.Session]];
                 agent.Place(activity, x, y, standing: true, facingRight: x < CoolerX, null, null, hears);
             }
             else
@@ -385,22 +408,30 @@ public sealed partial class OfficeDeskViewModel : ObservableObject
     {
         Left = left;
         Depth = depth;
-        (X, Y) = OfficeViewModel.WallPoint(left, depth);
-        Scale = OfficeViewModel.ScaleAt(Y);
-        Seat = (X + (left ? 89 : -89) * Scale, Y - 38 * Scale);
+        StandAt(OfficeViewModel.WallPoint(left, depth));
     }
 
     public bool Left { get; }
+    /// <summary>How far to the front it is (0 at the back, 1 at the front): newcomers take the front desks first.</summary>
     public double Depth { get; }
-    /// <summary>Where the desk stands against the wall, and how big it looks there.</summary>
-    public double X { get; }
-    public double Y { get; }
-    public double Scale { get; }
+    /// <summary>Where the desk stands, and how big it looks there.</summary>
+    public double X { get; private set; }
+    public double Y { get; private set; }
+    public double Scale { get; private set; }
     /// <summary>Mirrored on the right wall.</summary>
     public double ScaleX => Left ? Scale : -Scale;
     public int ZIndex => (int)Y * 2;
     /// <summary>Where its agent sits.</summary>
-    public (double X, double Y) Seat { get; }
+    public (double X, double Y) Seat { get; private set; }
+
+    /// <summary>Stands it at a point on the floor (against the wall in the classic room, out on the floor in the drawn office).</summary>
+    internal void StandAt((double X, double Y) at)
+    {
+        (X, Y) = at;
+        Scale = OfficeViewModel.ScaleAt(Y);
+        Seat = (X + (Left ? 89 : -89) * Scale, Y - 38 * Scale);
+        foreach (var name in new[] { nameof(X), nameof(Y), nameof(Scale), nameof(ScaleX), nameof(ZIndex), nameof(Seat) }) OnPropertyChanged(name);
+    }
 
     [ObservableProperty] private DeskScreen _screen = DeskScreen.Empty;
 
