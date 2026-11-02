@@ -1,7 +1,8 @@
 <UserControl x:Class="ProJict.App.Views.WikiView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:vm="clr-namespace:ProJict.App.ViewModels">
+             xmlns:vm="clr-namespace:ProJict.App.ViewModels"
+             xmlns:views="clr-namespace:ProJict.App.Views">
     <UserControl.InputBindings>
         <KeyBinding Gesture="Ctrl+S" Command="{Binding Page.SaveCommand}" />
         <KeyBinding Gesture="Ctrl+N" Command="{Binding NewPageCommand}" />
@@ -9,7 +10,7 @@
 
     <UserControl.Resources>
         <!-- A file on the page: a click opens it; insert puts a link to it where you're writing. -->
-        <DataTemplate x:Key="WikiFile" DataType="{x:Type vm:WikiFileViewModel}">
+        <DataTemplate x:Key="WikiFileChip" DataType="{x:Type vm:WikiFileViewModel}">
             <Border Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
                     BorderThickness="1" CornerRadius="4" Padding="2,0,2,0" Margin="0,0,6,4">
                 <StackPanel Orientation="Horizontal">
@@ -28,6 +29,16 @@
                 </StackPanel>
             </Border>
         </DataTemplate>
+
+        <!-- Audio or video on the page: its chip (insert, remove), and under it the player. -->
+        <DataTemplate x:Key="WikiFilePlayer" DataType="{x:Type vm:WikiFileViewModel}">
+            <StackPanel>
+                <ContentControl Content="{Binding}" ContentTemplate="{StaticResource WikiFileChip}" Focusable="False" HorizontalAlignment="Left" />
+                <views:InlinePlayer Path="{Binding PlayPath}" Kind="{Binding MediaKind}" FileName="{Binding FileName}" OpenCommand="{Binding OpenCommand}"
+                                   Margin="0,0,6,6" />
+            </StackPanel>
+        </DataTemplate>
+        <views:PlayableTemplateSelector x:Key="WikiFile" Chip="{StaticResource WikiFileChip}" Player="{StaticResource WikiFilePlayer}" />
 
         <!-- A line of a diff: added lines green, removed ones red. -->
         <DataTemplate x:Key="DiffLine" DataType="{x:Type vm:DiffLineViewModel}">
@@ -227,7 +238,7 @@
                         ToolTip="Pictures and files for the page; while editing, a link to each goes where you're writing (you can also paste or drop them there)">
                     <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource Icon}" Text="&#xE723;" /><TextBlock Text="Attach files…" Margin="6,0,0,0" /></StackPanel>
                 </Button>
-                <ItemsControl ItemsSource="{Binding Files}" ItemTemplate="{StaticResource WikiFile}" Focusable="False">
+                <ItemsControl ItemsSource="{Binding Files}" ItemTemplateSelector="{StaticResource WikiFile}" Focusable="False">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
                             <WrapPanel />

@@ -10,7 +10,7 @@ using ProJict.Core.Model;
 namespace ProJict.App.ViewModels;
 
 /// <summary>A file linked to an item where it is (a capture, an edit, an export): its preview frame, name and size.</summary>
-public sealed partial class MediaLinkViewModel
+public sealed partial class MediaLinkViewModel : IPlayable
 {
     // Rows are rebuilt on every edit: each file's preview is made once (again when the file changes).
     private static readonly Dictionary<(string, DateTime), ImageSource?> Previews = [];
@@ -36,6 +36,11 @@ public sealed partial class MediaLinkViewModel
     public bool Exists { get; }
     public ImageSource? Preview { get; }
     public bool HasPreview => Preview != null;
+    /// <summary>Audio or video that's there: it plays in place.</summary>
+    public bool Plays => Exists && Kind is MediaKind.Audio or MediaKind.Video;
+    public MediaKind MediaKind => Kind;
+    public string PlayPath => FullPath;
+    public ImageSource? Poster => Preview;
     public string FileName => Path.GetFileName(FullPath);
     public string SizeText { get; }
     public string Glyph => Kind switch

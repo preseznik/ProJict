@@ -2,6 +2,7 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:local="clr-namespace:ProJict.App"
                     xmlns:vm="clr-namespace:ProJict.App.ViewModels"
+                    xmlns:views="clr-namespace:ProJict.App.Views"
                     xmlns:sys="clr-namespace:System;assembly=System.Runtime">
 
     <FontFamily x:Key="IconFont">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
@@ -253,6 +254,11 @@
                 </StackPanel>
             </Border>
         </Button>
+    </DataTemplate>
+    <!-- Audio or video played in place: a file in Chat or a discussion (items and linked media add their menus in ProjectView). -->
+    <DataTemplate x:Key="PlayerTemplate">
+        <views:InlinePlayer Path="{Binding PlayPath}" Kind="{Binding MediaKind}" FileName="{Binding FileName}" Poster="{Binding Poster}"
+                           OpenCommand="{Binding OpenCommand}" Margin="0,0,6,4" />
     </DataTemplate>
     <ItemsPanelTemplate x:Key="HorizontalPanel">
         <StackPanel Orientation="Horizontal" />

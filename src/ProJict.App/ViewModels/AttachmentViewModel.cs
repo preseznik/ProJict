@@ -4,16 +4,27 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using CommunityToolkit.Mvvm.Input;
+using ProJict.App.Services;
+using ProJict.Core.Features;
 using ProJict.Core.Model;
 
 namespace ProJict.App.ViewModels;
 
+/// <summary>A file in a list that may play in place (audio or video): InlinePlayer plays it, PlayableTemplateSelector picks it.</summary>
+public interface IPlayable
+{
+    bool Plays { get; }
+}
+
 /// <summary>A file attached to an item or note: a thumbnail for images, otherwise a chip with the file name.</summary>
-public sealed partial class AttachmentViewModel
+public sealed partial class AttachmentViewModel : IPlayable
 {
     // Rows are rebuilt on every edit; stored attachments never change, so each thumbnail is decoded once.
     private static readonly Dictionary<Guid, ImageSource?> Thumbnails = [];
     private const int ThumbnailPixels = 480;
+    /// <summary>A frame from each video, for its player; also made once.</summary>
+    private static readonly Dictionary<Guid, ImageSource?> Posters = [];
+    private const int PosterPixels = 340;
 
     private readonly ProjectViewModel _owner;
     private readonly Action _remove;
@@ -47,6 +58,20 @@ public sealed partial class AttachmentViewModel
     public ImageSource? Thumbnail => Model.IsImage ? LoadThumbnail() : null;
     public bool ShowsThumbnail => Thumbnail != null;
     public string SizeText => FormatSize(Model.Size);
+    /// <summary>Audio or video: it plays in place.</summary>
+    public MediaKind MediaKind => MediaLinks.KindOf(FileName);
+    public bool Plays => MediaKind is MediaKind.Audio or MediaKind.Video;
+    public string PlayPath => Path;
+    /// <summary>A frame from a video, shown on its player until it plays.</summary>
+    public ImageSource? Poster
+    {
+        get
+        {
+            if (MediaKind != MediaKind.Video) return null;
+            if (!Posters.TryGetValue(Model.Id, out var poster)) Posters[Model.Id] = poster = ShellThumbnails.Get(Path, PosterPixels);
+            return poster;
+        }
+    }
     public string ToolTip => $"{FileName} · {SizeText}\nClick to open · right-click for more";
     /// <summary>For comments, which have no right-click menu on their files.</summary>
     public string ShortToolTip => $"{FileName} · {SizeText}\nClick to open";

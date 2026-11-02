@@ -426,10 +426,14 @@ public sealed partial class WikiClashViewModel(WikiPageViewModel owner, WikiClas
 }
 
 /// <summary>A file on a page: a click opens it, the cross removes it from the page.</summary>
-public sealed partial class WikiFileViewModel(WikiPageViewModel owner, Attachment attachment)
+public sealed partial class WikiFileViewModel(WikiPageViewModel owner, Attachment attachment) : IPlayable
 {
     public Attachment Model => attachment;
     public string FileName => attachment.FileName;
+    /// <summary>Audio or video on this ProJict's own page: it plays in place (another ProJict's files open as before).</summary>
+    public MediaKind MediaKind => MediaLinks.KindOf(attachment.FileName);
+    public string? PlayPath => owner.LocalFilePath(attachment);
+    public bool Plays => MediaKind is MediaKind.Audio or MediaKind.Video && PlayPath != null;
     public string SizeText => AttachmentViewModel.FormatSize(attachment.Size);
     public string ToolTip => $"{FileName} · {SizeText}\nClick to open · {(attachment.IsImage ? "![](" : "[" + FileName + "](")}{FileName}) shows it on the page";
     public bool CanRemove => owner.IsOwn;
