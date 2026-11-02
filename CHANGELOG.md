@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.39
+## 0.1.39 (2026-11-02)
 
 - **Instructions for all agents.** **Settings → AI agents** has a box for what every agent should keep to, in every project. For example: don't add yourself as a co-author of commits, which is what lists Claude as a contributor on GitHub. Each agent is told when it connects and with each project it opens (`current_project`, also through the API), and they head **Copy prompt** too. A project's own instructions come after them.
 
