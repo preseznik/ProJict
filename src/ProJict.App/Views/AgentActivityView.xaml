@@ -610,7 +610,7 @@
                         <RadioButton x:Name="DrawnLook" GroupName="OfficeLook" IsChecked="{Binding IsDrawnLook}" Margin="0,4,0,0"
                                      Content="Drawn: pictures of the rooms, light and dark (new)" />
                         <TextBlock Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap" Margin="0,6,0,0"
-                                   Text="For the office and the game and film studios. The robots and what they do stay the same." />
+                                   Text="For the office and the game and film studios. The robots get a matching look; what they do stays the same." />
                     </StackPanel>
                 </Grid>
             </Border>

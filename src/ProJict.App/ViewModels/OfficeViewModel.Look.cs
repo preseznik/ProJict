@@ -11,7 +11,7 @@ namespace ProJict.App.ViewModels;
 /// </summary>
 public sealed partial class OfficeViewModel
 {
-    [ObservableProperty] [NotifyPropertyChangedFor(nameof(RoomPicture), nameof(ShowsClassicRoom))] private bool _isDrawnLook;
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(RoomPicture), nameof(ShowsClassicRoom), nameof(IsDarkRoom))] private bool _isDrawnLook;
     /// <summary>Today's room, drawn in shapes: walls, window, clock, boards, plant.</summary>
     public bool ShowsClassicRoom => !IsDrawnLook;
 
@@ -19,6 +19,8 @@ public sealed partial class OfficeViewModel
     public ImageSource? RoomPicture => IsDrawnLook ? PictureOf(RoomName, _dark ??= Views.MermaidDiagram.IsDark()) : null;
     /// <summary>"office", "game-studio" or "film-studio": the room's pictures in Assets/Office.</summary>
     public string RoomName => !IsStudio ? "office" : IsFilm ? "film-studio" : "game-studio";
+    /// <summary>The drawn room at night (the dark theme): the furniture's pictures get the same night tint as the room.</summary>
+    public bool IsDarkRoom => IsDrawnLook && (_dark ??= Views.MermaidDiagram.IsDark());
 
     partial void OnStudioNameChanged(string? value) => OnPropertyChanged(nameof(RoomPicture));
     partial void OnIsFilmChanged(bool value) => OnPropertyChanged(nameof(RoomPicture));
@@ -29,7 +31,9 @@ public sealed partial class OfficeViewModel
         var dark = Views.MermaidDiagram.IsDark();
         if (dark == _dark) return;
         _dark = dark;
-        if (IsDrawnLook) OnPropertyChanged(nameof(RoomPicture));
+        if (!IsDrawnLook) return;
+        OnPropertyChanged(nameof(RoomPicture));
+        OnPropertyChanged(nameof(IsDarkRoom));
     }
 
     private static readonly Dictionary<string, ImageSource?> Pictures = [];
