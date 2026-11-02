@@ -396,6 +396,15 @@
                             <TextBlock Style="{StaticResource Icon}" Text="&#xE76C;" FontSize="12" />
                         </Button>
                     </StackPanel>
+                    <!-- The project's channel under the office. -->
+                    <ToggleButton x:Name="ChannelToggle" DockPanel.Dock="Right" Style="{StaticResource SubtleToggle}" IsChecked="{Binding ShowChannel}" Padding="7,4" Margin="0,0,4,0"
+                                  ToolTip="{Binding ShowChannelToolTip}" AutomationProperties.Name="Channel under the office"
+                                  Visibility="{Binding ShowOffice, Converter={StaticResource BoolToVis}}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE8BD;" FontSize="12" Margin="0,1,6,0" VerticalAlignment="Center" />
+                            <TextBlock Text="Channel" FontSize="12" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </ToggleButton>
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                         <TextBlock Text="{Binding OfficeTitle}" FontWeight="SemiBold" VerticalAlignment="Center" />
                         <!-- One of your projects without a studio: set one up, and it's the project's room from then on. -->
@@ -411,7 +420,58 @@
                 <Border x:Name="OfficeCard" Grid.Row="1" Style="{StaticResource Card}" Padding="10" Margin="0,0,0,10" Visibility="{Binding ShowOffice, Converter={StaticResource BoolToVis}}">
                     <local:OfficeView x:Name="Office" DataContext="{Binding Office}" />
                 </Border>
-                <Border x:Name="AgentListCard" Grid.Row="2">
+                <Grid x:Name="OfficeBottom" Grid.Row="2">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition x:Name="ChannelColumn" Width="*" />
+                        <ColumnDefinition x:Name="AgentListColumn" Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                <Border x:Name="ChannelCard" Style="{StaticResource Card}" Padding="12,10" Visibility="Collapsed">
+                    <DockPanel>
+                        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+                            <Button DockPanel.Dock="Right" Style="{StaticResource SubtleButton}" Command="{Binding OpenChannelInChatCommand}" Padding="7,3"
+                                    ToolTip="Open it in Chat" AutomationProperties.Name="Open it in Chat"
+                                    Visibility="{Binding HasOfficeChannel, Converter={StaticResource BoolToVis}}">
+                                <TextBlock Style="{StaticResource Icon}" Text="&#xE8A7;" FontSize="12" />
+                            </Button>
+                            <TextBlock Text="{Binding ChannelTitle}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding ChannelTopic}" Style="{StaticResource MutedText}" FontSize="12" Margin="8,1,0,0" VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis" ToolTip="{Binding ChannelTopic}" />
+                        </DockPanel>
+                        <DockPanel DockPanel.Dock="Bottom" Margin="0,6,0,0" Visibility="{Binding HasOfficeChannel, Converter={StaticResource BoolToVis}}">
+                            <Button DockPanel.Dock="Right" Content="Send" Command="{Binding SendToChannelCommand}" Style="{StaticResource AccentButtonStyle}" Margin="6,0,0,0" />
+                            <TextBox x:Name="ChannelDraft" Text="{Binding ChannelDraft, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Write in the channel"
+                                     ToolTip="Enter sends it to the channel, as in Chat (@name mentions someone)">
+                                <TextBox.InputBindings>
+                                    <KeyBinding Key="Enter" Command="{Binding SendToChannelCommand}" />
+                                </TextBox.InputBindings>
+                            </TextBox>
+                        </DockPanel>
+                        <Grid>
+                            <TextBlock Text="{Binding ChannelHint}" Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap"
+                                       Visibility="{Binding HasOfficeChannel, Converter={StaticResource InvBoolToVis}}" />
+                            <TextBlock Text="Nothing said here yet." Style="{StaticResource MutedText}" FontSize="12"
+                                       Visibility="{Binding HasChannelLines, Converter={StaticResource InvBoolToVis}}" />
+                            <ScrollViewer x:Name="ChannelScroll" Height="220" VerticalScrollBarVisibility="Auto"
+                                          Visibility="{Binding HasChannelLines, Converter={StaticResource BoolToVis}}">
+                                <ItemsControl x:Name="ChannelLines" ItemsSource="{Binding ChannelLines}" Focusable="False" Margin="0,0,6,0">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type vm:PrivateLine}">
+                                            <TextBlock TextWrapping="Wrap" Margin="0,0,0,6">
+                                                <Run Text="{Binding Who, Mode=OneWay}" FontWeight="SemiBold" /><Run Text="  " /><Run Text="{Binding Time, Mode=OneWay}" FontSize="11"
+                                                    Foreground="{DynamicResource TextFillColorTertiaryBrush}" /><LineBreak /><Run Text="{Binding Text, Mode=OneWay}" />
+                                            </TextBlock>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </Grid>
+                    </DockPanel>
+                </Border>
+                <Border x:Name="AgentListCard" Grid.Column="0" Grid.ColumnSpan="2">
                     <Expander x:Name="AgentListExpander" IsExpanded="{Binding IsAgentListOpen}" HorizontalAlignment="Stretch">
                         <Expander.Header>
                             <DockPanel>
@@ -428,6 +488,7 @@
                         </StackPanel>
                     </Expander>
                 </Border>
+                </Grid>
             </Grid>
         </Border>
         <!-- The office folded away: a click brings it back. -->

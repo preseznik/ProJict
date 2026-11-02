@@ -29,6 +29,10 @@ public partial class AgentActivityView : UserControl
         _flash = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1.6) };
         _flash.Tick += (_, _) => StopFlash();
         SizeChanged += (_, _) => PlaceOffice();
+        OfficePane.SizeChanged += (_, e) =>
+        {
+            if (e.WidthChanged) PlaceChannel();
+        };
         DataContextChanged += (_, _) => Attach(DataContext as AgentActivityViewModel);
         Loaded += (_, _) => Attach(DataContext as AgentActivityViewModel);
         Unloaded += (_, _) => Attach(null);
@@ -43,19 +47,22 @@ public partial class AgentActivityView : UserControl
         {
             _vm.RevealRequested -= OnRevealRequested;
             _vm.PropertyChanged -= OnViewModelChanged;
+            _vm.ChannelRefreshed -= ScrollChannelToEnd;
         }
         _vm = vm;
         if (_vm != null)
         {
             _vm.RevealRequested += OnRevealRequested;
             _vm.PropertyChanged += OnViewModelChanged;
+            _vm.ChannelRefreshed += ScrollChannelToEnd;
         }
         PlaceOffice();
     }
 
     private void OnViewModelChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(AgentActivityViewModel.ShowOffice) or nameof(AgentActivityViewModel.Fold) or nameof(AgentActivityViewModel.OfficeShare))
+        if (e.PropertyName is nameof(AgentActivityViewModel.ShowOffice) or nameof(AgentActivityViewModel.Fold) or nameof(AgentActivityViewModel.OfficeShare)
+            or nameof(AgentActivityViewModel.ShowChannel))
             PlaceOffice();
     }
 
@@ -97,7 +104,33 @@ public partial class AgentActivityView : UserControl
         OfficeCard.MaxHeight = beside ? double.PositiveInfinity : 420;
         FoldButtons.Visibility = beside ? Visibility.Visible : Visibility.Collapsed;
         WidenButton.Visibility = fold == AgentsFold.Page || !office ? Visibility.Collapsed : Visibility.Visible;
-        OfficeHeader.Visibility = beside ? Visibility.Visible : Visibility.Collapsed;
+        // Above the cards the header shows only for its Channel toggle.
+        OfficeHeader.Visibility = beside || office ? Visibility.Visible : Visibility.Collapsed;
+        PlaceChannel();
+    }
+
+    /// <summary>The channel under the office shows its newest message.</summary>
+    private void ScrollChannelToEnd() => Dispatcher.BeginInvoke(() => ChannelScroll.ScrollToEnd(), DispatcherPriority.Loaded);
+
+    /// <summary>From this width of the office side the channel and All agents stand side by side; narrower, one above the other.</summary>
+    private const double ChannelBesideFrom = 520, AgentListBesideWidth = 240;
+
+    /// <summary>
+    /// The project's channel under the office: on the left, with All agents at the bottom right, when there's room; else
+    /// All agents goes under it. Without it, All agents takes the whole width.
+    /// </summary>
+    private void PlaceChannel()
+    {
+        var channel = (_vm?.ShowOffice ?? false) && (_vm?.ShowChannel ?? false);
+        var side = channel && OfficePane.ActualWidth >= ChannelBesideFrom;
+        ChannelCard.Visibility = channel ? Visibility.Visible : Visibility.Collapsed;
+        Grid.SetColumn(AgentListCard, side ? 1 : 0);
+        Grid.SetColumnSpan(AgentListCard, side ? 1 : 2);
+        Grid.SetRow(AgentListCard, channel && !side ? 1 : 0);
+        Grid.SetColumnSpan(ChannelCard, side ? 1 : 2);
+        AgentListCard.Width = side ? AgentListBesideWidth : double.NaN;
+        AgentListCard.Margin = side ? new Thickness(10, 0, 0, 0) : channel ? new Thickness(0, 10, 0, 0) : new Thickness(0);
+        AgentListCard.VerticalAlignment = side ? VerticalAlignment.Bottom : VerticalAlignment.Top;
     }
 
     /// <summary>The divider was dragged: the office's new share of the width is kept.</summary>

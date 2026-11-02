@@ -2,6 +2,7 @@
 
 ## 0.1.37
 
+- **The project's channel under the office.** **Channel** in the office's header (Agents view) shows the project's channel under the office (the studio's, else the project's own) with its last messages and a box to write in, and moves **All agents** to its bottom right. With all projects it shows the channel you last had open in Chat; ProJict remembers whether it's on.
 - **Chat's list folds.** Click a heading in Chat's list (**Channels**, **Other channels**, **Private messages**, or another ProJict's) to fold it away, and again to unfold it. A folded heading still shows the channel you have open and any with something new, says how many more it hides ("3 more"), and stays folded the next time you open Chat.
 
 ## 0.1.36 (2026-11-02)

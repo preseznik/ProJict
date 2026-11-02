@@ -60,8 +60,17 @@ public sealed partial class AgentActivityViewModel : ObservableObject, IStudioHi
         };
         state.Chat.Changed += channel =>
         {
-            if (!channel.Direct) return;
+            if (!channel.Direct)
+            {
+                // The channel under the office: its new messages, or one of the project's that turned up.
+                if (ShowChannel && (channel == _officeChannel || _officeChannel == null)) RefreshChannel();
+                return;
+            }
             foreach (var card in Live.Where(c => c.IsFocused)) card.RefreshConversation();
+        };
+        state.Chat.Removed += channel =>
+        {
+            if (channel == _officeChannel) RefreshChannel();
         };
         // Agents connected to another ProJict came, went away or left.
         main.Agents.PresenceChanged += VisitorsChanged;
@@ -525,6 +534,7 @@ public sealed partial class AgentActivityViewModel : ObservableObject, IStudioHi
             .Where(e => e.Agent)];
         OnPropertyChanged(nameof(Subtitle));
         foreach (var name in new[] { nameof(CanSetUpStudio), nameof(ShowsStudio), nameof(OfficeTitle) }) OnPropertyChanged(name);
+        RefreshChannel();
         BuildHistory();
     }
 
@@ -704,6 +714,7 @@ public sealed partial class AgentActivityViewModel : ObservableObject, IStudioHi
         foreach (var name in new[] { nameof(CanSetUpStudio), nameof(ShowsStudio), nameof(OfficeTitle) }) OnPropertyChanged(name);
         foreach (var card in Live) card.Refresh();
         UpdateOffice();
+        RefreshChannel();
     }
 
     /// <summary>The agent's role in the shown project's studio, for its card.</summary>

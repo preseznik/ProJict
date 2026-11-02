@@ -26,6 +26,8 @@ public sealed class AgentsViewSettings
     public bool ShowOffice { get; set; } = true;
     /// <summary>The list of all agents under the office is open.</summary>
     public bool AgentListOpen { get; set; }
+    /// <summary>The project's channel under the office, with the list of all agents beside it.</summary>
+    public bool ShowChannel { get; set; }
     /// <summary>How much of the view's width the office side gets beside the page (the divider).</summary>
     public double OfficeShare { get; set; } = DefaultOfficeShare;
     public const double DefaultOfficeShare = 0.42;
