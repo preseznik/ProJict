@@ -214,7 +214,8 @@ public partial class SettingsWindow : Window
     public static string ToolsSummaryOf(IReadOnlyList<ProJict.Core.Tools.ExternalTool> tools) =>
         tools.Count == 0 ? "None yet"
             : $"{tools.Count} {(tools.Count == 1 ? "tool" : "tools")} · " + string.Join(", ", tools.Select(t =>
-                t.Access == ProJict.Core.Tools.ToolAccess.Api ? $"{t.Name} (API{(t.HasKey ? ", key set" : ", no key yet")})" : t.Name));
+                t.Access == ProJict.Core.Tools.ToolAccess.Api ? $"{t.Name} (API{(t.HasKey ? ", key set" : ", no key yet")})"
+                : t.Access == ProJict.Core.Tools.ToolAccess.ComfyUI ? $"{t.Name} (ComfyUI)" : t.Name));
 
     /// <summary>How to add ProJict to one AI agent: what to run or paste, and where.</summary>
     public sealed record AgentSetup(string Client, string Text, string Where);

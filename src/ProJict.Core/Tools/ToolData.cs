@@ -3,8 +3,11 @@ using ProJict.Core.Storage;
 
 namespace ProJict.Core.Tools;
 
-/// <summary>How agents reach a tool: through its API, with a key you set, or on its website in the browser.</summary>
-public enum ToolAccess { Api, Browser }
+/// <summary>
+/// How agents reach a tool: through its API, with a key you set; on its website in the browser; or a ComfyUI server of
+/// yours, where ProJict runs workflows from the library.
+/// </summary>
+public enum ToolAccess { Api, Browser, ComfyUI }
 
 /// <summary>
 /// An outside tool agents may use for your work, such as ElevenLabs for voices or Suno for music: what it's for, where
@@ -35,15 +38,31 @@ public sealed class ExternalTool
     public List<Guid> Projects { get; set; } = [];
     /// <summary>Agents you let have the key without asking each time, by name.</summary>
     public List<string> AlwaysAllowed { get; set; } = [];
+    /// <summary>For a ComfyUI tool: the servers it runs workflows on (addresses are per computer, like keys).</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<ComfyEndpoint>? Endpoints { get; set; }
+    /// <summary>For a ComfyUI tool: agents may not run its workflows (they can still read them).</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool RunsOff { get; set; }
 
     [JsonIgnore] public bool HasKey => ProtectedKey != null;
-    /// <summary>Whether an agent can use it now: a browser tool always, an API tool once its key is set.</summary>
-    [JsonIgnore] public bool Ready => Access == ToolAccess.Browser || HasKey;
+    /// <summary>Whether an agent can use it now: a browser tool always, an API tool once its key is set, ComfyUI with an endpoint.</summary>
+    [JsonIgnore] public bool Ready => Access switch
+    {
+        ToolAccess.Browser => true,
+        ToolAccess.ComfyUI => Endpoints is { Count: > 0 },
+        _ => HasKey,
+    };
+
+    /// <summary>The endpoint a name means (case doesn't count), or with none named the first.</summary>
+    public ComfyEndpoint? Endpoint(string? name) =>
+        string.IsNullOrWhiteSpace(name) ? Endpoints?.FirstOrDefault()
+        : Endpoints?.FirstOrDefault(e => string.Equals(e.Name, name.Trim(), StringComparison.OrdinalIgnoreCase));
 
     public bool IsAlwaysAllowed(string agent) => AlwaysAllowed.Any(a => string.Equals(a, agent.Trim(), StringComparison.OrdinalIgnoreCase));
 
     /// <summary>"API" or "in the browser", for people.</summary>
-    public string AccessText => Access == ToolAccess.Api ? "API" : "in the browser";
+    public string AccessText => Access switch { ToolAccess.Api => "API", ToolAccess.ComfyUI => "ComfyUI", _ => "in the browser" };
 }
 
 /// <summary>

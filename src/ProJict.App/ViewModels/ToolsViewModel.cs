@@ -91,14 +91,27 @@ public sealed partial class ToolEditorViewModel(ExternalTool tool, MainViewModel
             NameProblem = Service.Data.NameProblem(value, tool);
             OnPropertyChanged(nameof(NameProblem));
             if (NameProblem != null || value == tool.Name) return;
+            // Its workflows go by its name: they come along.
+            foreach (var workflow in main.Workflows.Of(tool.Name).ToList())
+            {
+                workflow.Tool = value;
+                main.Workflows.Save(workflow);
+            }
             tool.Name = value;
             Changed(nameof(Name), nameof(AllowedHint));
         }
     }
     public string? NameProblem { get; private set; }
 
-    /// <summary>"API · key set", "API · no key yet", "in the browser".</summary>
-    public string Subtitle => tool.Access == ToolAccess.Browser ? "in the browser" : tool.HasKey ? "API · key set" : "API · no key yet";
+    /// <summary>"API · key set", "API · no key yet", "in the browser", "ComfyUI · 2 workflows".</summary>
+    public string Subtitle => tool.Access switch
+    {
+        ToolAccess.Browser => "in the browser",
+        ToolAccess.ComfyUI => $"ComfyUI · {Count(main.Workflows.Of(tool.Name).Count(), "workflow")}",
+        _ => tool.HasKey ? "API · key set" : "API · no key yet",
+    };
+
+    private static string Count(int n, string what) => n == 1 ? $"1 {what}" : $"{n} {what}s";
 
     public string Purpose
     {
@@ -144,7 +157,7 @@ public sealed partial class ToolEditorViewModel(ExternalTool tool, MainViewModel
         {
             if (!value || tool.Access == ToolAccess.Api) return;
             tool.Access = ToolAccess.Api;
-            Changed(nameof(IsApi), nameof(IsBrowser));
+            Changed(nameof(IsApi), nameof(IsBrowser), nameof(IsComfy));
         }
     }
 
@@ -155,7 +168,7 @@ public sealed partial class ToolEditorViewModel(ExternalTool tool, MainViewModel
         {
             if (!value || tool.Access == ToolAccess.Browser) return;
             tool.Access = ToolAccess.Browser;
-            Changed(nameof(IsApi), nameof(IsBrowser));
+            Changed(nameof(IsApi), nameof(IsBrowser), nameof(IsComfy));
         }
     }
 
@@ -170,7 +183,7 @@ public sealed partial class ToolEditorViewModel(ExternalTool tool, MainViewModel
         if (string.IsNullOrWhiteSpace(key)) return;
         Service.SetKey(tool, key);
         if (tool.Access != ToolAccess.Api) tool.Access = ToolAccess.Api;
-        Changed(nameof(KeyText), nameof(HasKey), nameof(IsApi), nameof(IsBrowser));
+        Changed(nameof(KeyText), nameof(HasKey), nameof(IsApi), nameof(IsBrowser), nameof(IsComfy));
         main.State.StatusText = $"Saved the {tool.Name} API key.";
     }
 

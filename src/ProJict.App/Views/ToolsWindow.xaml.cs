@@ -23,5 +23,14 @@ public partial class ToolsWindow : Window
         KeyBox.Clear();
     }
 
+    /// <summary>A workflow file exported from ComfyUI (Workflow › Export (API)) goes into the tool's library.</summary>
+    private void AddWorkflow_Click(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel.Selected is not { } tool) return;
+        var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "ComfyUI workflow (API format)|*.json", Title = $"Add a workflow to {tool.Name}", Multiselect = true };
+        if (dialog.ShowDialog(this) != true) return;
+        foreach (var file in dialog.FileNames) tool.AddWorkflowFile(file);
+    }
+
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
 }

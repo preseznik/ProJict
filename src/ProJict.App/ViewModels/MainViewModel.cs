@@ -106,6 +106,7 @@ public sealed partial class MainViewModel : ObservableObject
         Issues = new Services.IssueSyncService(state, this);
         Sharing = new Services.Sharing.SharingStore(state.PersistsSettings ? ProJict.Core.Sharing.SharingData.DefaultPath : null);
         Tools = new Services.ToolService(state.PersistsSettings ? ProJict.Core.Tools.ToolData.DefaultPath : null);
+        Workflows = new ProJict.Core.Tools.WorkflowLibrary(System.IO.Path.Combine(state.Store.DataRoot, "workflows"));
         Tools.Changed += () =>
         {
             OnPropertyChanged(nameof(PendingToolKey));
@@ -366,6 +367,8 @@ public sealed partial class MainViewModel : ObservableObject
 
     /// <summary>The outside tools agents may use (Settings › Tools), and their requests for API keys.</summary>
     public Services.ToolService Tools { get; }
+    /// <summary>The ComfyUI workflows of the tools (in the data folder, so they're on every computer).</summary>
+    public ProJict.Core.Tools.WorkflowLibrary Workflows { get; }
 
     /// <summary>An agent asks for a tool's API key: the bar at the bottom asks you.</summary>
     public Services.ToolKeyRequest? PendingToolKey => Tools.Waiting.FirstOrDefault();

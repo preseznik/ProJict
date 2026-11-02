@@ -38,7 +38,12 @@ public sealed partial class ProjectViewModel
 public sealed class ProjectToolChoice(ExternalTool tool, Guid projectId, ToolService service) : ObservableObject
 {
     public string Name => tool.Name;
-    public string ToolTip => (tool.Purpose.Length > 0 ? tool.Purpose + "\n" : "") + (tool.Access == ToolAccess.Api ? tool.HasKey ? "API, key set" : "API, no key yet" : "In the browser");
+    public string ToolTip => (tool.Purpose.Length > 0 ? tool.Purpose + "\n" : "") + tool.Access switch
+    {
+        ToolAccess.Api => tool.HasKey ? "API, key set" : "API, no key yet",
+        ToolAccess.ComfyUI => $"ComfyUI, {tool.Endpoints?.Count ?? 0} endpoint(s)",
+        _ => "In the browser",
+    };
 
     public bool IsChecked
     {

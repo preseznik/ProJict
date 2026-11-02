@@ -55,6 +55,8 @@ public sealed partial class AgentTools
             lines.Add($"You reach ProJict through \"ProJict.exe --mcp\", which a ProJict update cuts off (you'd lose ProJict until your client " +
                       $"reconnects). Ask the user to add ProJict to your client again with \"{bridge}\" --mcp instead (ProJict's Settings › AI agents " +
                       "has the exact command): it stays connected through updates and keeps your name.");
+        foreach (var (key, line) in ComfyRunLines(session))
+            if (session.Noticed.Add(key)) lines.Add(line);
         foreach (var (key, line) in UsageLines(session))
             if (session.Noticed.Add(key)) lines.Add(line);
         foreach (var (key, line) in ToolKeyLines(session))

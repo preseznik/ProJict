@@ -1,0 +1,123 @@
+using System.IO;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Text;
+using System.Text.Json.Nodes;
+using ProJict.Core.Tools;
+
+namespace ProJict.App.Services;
+
+/// <summary>How a ComfyUI server is doing: reachable or not, how many runs it has, and its graphics card.</summary>
+public sealed record ComfyStatus(bool Reachable, int Running, int Pending, string? Device, string? Problem)
+{
+    public string Describe() => !Reachable ? $"Not reachable{(Problem != null ? $": {Problem}" : "")}"
+        : $"Reachable · {(Running + Pending == 0 ? "nothing queued" : $"{Running} running, {Pending} waiting")}{(Device != null ? $" · {Device}" : "")}";
+}
+
+/// <summary>A file a workflow made, as ComfyUI keeps it.</summary>
+public sealed record ComfyOutput(string FileName, string Subfolder, string Type);
+
+/// <summary>
+/// Talks to a ComfyUI server over its HTTP API: checks it (/queue, /system_stats), uploads a picture for a workflow's
+/// LoadImage (/upload/image), queues a workflow (/prompt), waits for it (/history) and fetches what it made (/view).
+/// </summary>
+public sealed class ComfyClient
+{
+    private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(60) };
+    /// <summary>How often a run is looked at while it waits.</summary>
+    public TimeSpan PollEvery { get; set; } = TimeSpan.FromSeconds(1);
+    /// <summary>A run that hasn't finished by then is given up on.</summary>
+    public TimeSpan GiveUpAfter { get; set; } = TimeSpan.FromMinutes(30);
+
+    private static string Url(ComfyEndpoint endpoint, string path) => endpoint.Address.TrimEnd('/') + path;
+
+    public async Task<ComfyStatus> CheckAsync(ComfyEndpoint endpoint, CancellationToken stop = default)
+    {
+        try
+        {
+            using var quick = CancellationTokenSource.CreateLinkedTokenSource(stop);
+            quick.CancelAfter(TimeSpan.FromSeconds(4));
+            var queue = JsonNode.Parse(await Http.GetStringAsync(Url(endpoint, "/queue"), quick.Token));
+            string? device = null;
+            try
+            {
+                var stats = JsonNode.Parse(await Http.GetStringAsync(Url(endpoint, "/system_stats"), quick.Token));
+                device = (string?)stats?["devices"]?[0]?["name"];
+            }
+            catch (Exception) { /* older servers: the queue is enough */ }
+            return new ComfyStatus(true, (queue?["queue_running"] as JsonArray)?.Count ?? 0, (queue?["queue_pending"] as JsonArray)?.Count ?? 0, device, null);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException or UriFormatException or InvalidOperationException)
+        {
+            return new ComfyStatus(false, 0, 0, null, ex is TaskCanceledException ? "no answer" : ex.Message);
+        }
+    }
+
+    /// <summary>Uploads a picture for a LoadImage input; returns the name ComfyUI knows it by.</summary>
+    public async Task<string> UploadImageAsync(ComfyEndpoint endpoint, string path, CancellationToken stop = default)
+    {
+        using var form = new MultipartFormDataContent();
+        var file = new ByteArrayContent(await File.ReadAllBytesAsync(path, stop));
+        file.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+        form.Add(file, "image", Path.GetFileName(path));
+        form.Add(new StringContent("true"), "overwrite");
+        using var response = await Http.PostAsync(Url(endpoint, "/upload/image"), form, stop);
+        var body = await response.Content.ReadAsStringAsync(stop);
+        if (!response.IsSuccessStatusCode) throw new InvalidOperationException($"ComfyUI didn't take the picture ({(int)response.StatusCode}): {Short(body)}");
+        var answer = JsonNode.Parse(body);
+        var name = (string?)answer?["name"] ?? throw new InvalidOperationException("ComfyUI didn't say what it called the picture.");
+        return (string?)answer?["subfolder"] is { Length: > 0 } sub ? $"{sub}/{name}" : name;
+    }
+
+    /// <summary>Queues a workflow; returns its prompt id. ComfyUI's own complaint (a node it doesn't know, say) is thrown.</summary>
+    public async Task<string> QueueAsync(ComfyEndpoint endpoint, JsonObject graph, CancellationToken stop = default)
+    {
+        var request = new JsonObject { ["prompt"] = graph.DeepClone(), ["client_id"] = "projict-" + Guid.NewGuid().ToString("N") };
+        using var response = await Http.PostAsync(Url(endpoint, "/prompt"), new StringContent(request.ToJsonString(), Encoding.UTF8, "application/json"), stop);
+        var body = await response.Content.ReadAsStringAsync(stop);
+        if (!response.IsSuccessStatusCode)
+        {
+            var problem = JsonNode.Parse(body) is JsonObject error ? (string?)error["error"]?["message"] ?? Short(body) : Short(body);
+            throw new InvalidOperationException($"ComfyUI refused the workflow: {problem}");
+        }
+        return (string?)JsonNode.Parse(body)?["prompt_id"] ?? throw new InvalidOperationException("ComfyUI didn't give the run an id.");
+    }
+
+    /// <summary>Waits for a queued run to finish; returns the files it made. A run ComfyUI says failed is thrown.</summary>
+    public async Task<List<ComfyOutput>> WaitAsync(ComfyEndpoint endpoint, string promptId, CancellationToken stop = default)
+    {
+        var until = DateTime.Now + GiveUpAfter;
+        while (DateTime.Now < until)
+        {
+            stop.ThrowIfCancellationRequested();
+            var history = JsonNode.Parse(await Http.GetStringAsync(Url(endpoint, "/history/" + Uri.EscapeDataString(promptId)), stop));
+            if (history?[promptId] is JsonObject run)
+            {
+                if ((string?)run["status"]?["status_str"] == "error")
+                {
+                    var why = (run["status"]?["messages"] as JsonArray)?.OfType<JsonArray>().Where(m => (string?)m[0] == "execution_error")
+                        .Select(m => (string?)m[1]?["exception_message"]).FirstOrDefault(m => m != null);
+                    throw new InvalidOperationException($"The workflow failed in ComfyUI{(why != null ? ": " + why.Trim() : "")}.");
+                }
+                if (run["outputs"] is JsonObject outputs)
+                {
+                    var files = new List<ComfyOutput>();
+                    foreach (var (_, output) in outputs)
+                        foreach (var kind in new[] { "images", "gifs", "videos", "audio" })
+                            foreach (var file in (output?[kind] as JsonArray ?? []).OfType<JsonObject>())
+                                if ((string?)file["filename"] is { } name)
+                                    files.Add(new ComfyOutput(name, (string?)file["subfolder"] ?? "", (string?)file["type"] ?? "output"));
+                    if ((bool?)run["status"]?["completed"] != false) return files;
+                }
+            }
+            await Task.Delay(PollEvery, stop);
+        }
+        throw new TimeoutException($"The workflow hadn't finished after {GiveUpAfter.TotalMinutes:0} minutes.");
+    }
+
+    public async Task<byte[]> FetchAsync(ComfyEndpoint endpoint, ComfyOutput output, CancellationToken stop = default) =>
+        await Http.GetByteArrayAsync(Url(endpoint,
+            $"/view?filename={Uri.EscapeDataString(output.FileName)}&subfolder={Uri.EscapeDataString(output.Subfolder)}&type={Uri.EscapeDataString(output.Type)}"), stop);
+
+    private static string Short(string text) => text.Length > 300 ? text[..300] + "…" : text;
+}

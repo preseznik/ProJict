@@ -35,7 +35,7 @@ public sealed partial class AgentTools
     {
         ["tool"] = tool.Name,
         ["purpose"] = tool.Purpose.Length > 0 ? tool.Purpose : null,
-        ["access"] = tool.Access == ToolAccess.Api ? "api" : "browser",
+        ["access"] = tool.Access switch { ToolAccess.Api => "api", ToolAccess.ComfyUI => "comfyui", _ => "browser" },
         ["website"] = tool.Website,
         ["keySet"] = tool.Access == ToolAccess.Api ? tool.HasKey : null,
         ["signedInAs"] = tool.Access == ToolAccess.Browser ? tool.SignIn : null,
@@ -44,9 +44,14 @@ public sealed partial class AgentTools
         ["projects"] = tool.Projects.Count > 0
             ? new JsonArray(tool.Projects.Select(id => LocalProjects.FirstOrDefault(p => p.Id == id)?.Name).OfType<string>().Select(n => (JsonNode)n).ToArray())
             : null,
-        ["howToUse"] = tool.Access == ToolAccess.Browser
-            ? $"On its website{(tool.Website != null ? $" ({tool.Website})" : "")}, with your own browser tools; the user signs in there themself."
-            : tool.HasKey ? "Through its API: get the key with use_tool_key." : "Through its API, once the user sets its key in Settings › Tools (ask them).",
+        ["howToUse"] = tool.Access switch
+        {
+            ToolAccess.Browser => $"On its website{(tool.Website != null ? $" ({tool.Website})" : "")}, with your own browser tools; the user signs in there themself.",
+            ToolAccess.ComfyUI => tool.RunsOff ? "Read its workflows with get_workflow; the user doesn't let agents run them."
+                : "Run one of its workflows with run_workflow (ProJict queues it and attaches what it makes to an item), or get one with get_workflow and call ComfyUI yourself.",
+            _ => tool.HasKey ? "Through its API: get the key with use_tool_key." : "Through its API, once the user sets its key in Settings › Tools (ask them).",
+        },
+        ["comfyui"] = tool.Access == ToolAccess.ComfyUI ? ComfyJson(tool) : null,
     };
 
     private string ListTools(McpSession session, Args args, List<Attachment> files)
@@ -71,6 +76,8 @@ public sealed partial class AgentTools
         var tool = ToolBox.Data.Find(name) ?? throw new McpToolException(
             $"No tool “{name}”. " + (ToolBox.Tools.Count > 0 ? $"Tools: {string.Join(", ", ToolBox.Tools.Select(t => t.Name))}." : "The user hasn't set up any (Settings › Tools)."),
             ToolProblem.NotFound);
+        if (tool.Access == ToolAccess.ComfyUI)
+            throw new McpToolException($"{tool.Name} is a ComfyUI server of the user's: it needs no key. Use run_workflow (or get_workflow).");
         if (tool.Access == ToolAccess.Browser)
             throw new McpToolException($"{tool.Name} is used in the browser, without a key: {(tool.Website != null ? $"open {tool.Website} " : "open its website ")}" +
                                        "with your own browser tools; the user signs in there themself.");

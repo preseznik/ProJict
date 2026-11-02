@@ -71,7 +71,8 @@
                     <TextBlock Text="Agents reach it" Style="{StaticResource Label}" />
                     <StackPanel Orientation="Horizontal">
                         <RadioButton x:Name="ByApi" Content="Through its API, with a key" IsChecked="{Binding IsApi}" Margin="0,0,18,0" />
-                        <RadioButton x:Name="ByBrowser" Content="In the browser" IsChecked="{Binding IsBrowser}" />
+                        <RadioButton x:Name="ByBrowser" Content="In the browser" IsChecked="{Binding IsBrowser}" Margin="0,0,18,0" />
+                        <RadioButton x:Name="ByComfy" Content="ComfyUI (your own server)" IsChecked="{Binding IsComfy}" />
                     </StackPanel>
 
                     <!-- API: the key -->
@@ -90,6 +91,56 @@
                     <StackPanel Visibility="{Binding IsBrowser, Converter={StaticResource BoolToVis}}">
                         <TextBlock Text="How you're signed in there (agents are told; you sign in yourself)" Style="{StaticResource Label}" />
                         <TextBox Text="{Binding SignIn, UpdateSourceTrigger=LostFocus}" AutomationProperties.Name="How you're signed in" />
+                    </StackPanel>
+
+                    <!-- ComfyUI: its servers and its workflow library -->
+                    <StackPanel x:Name="ComfySection" Visibility="{Binding IsComfy, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Text="Endpoints (ComfyUI servers: this computer, or a PC on your network)" Style="{StaticResource Label}" />
+                        <ItemsControl ItemsSource="{Binding Endpoints}" Focusable="False">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:ComfyEndpointRow}">
+                                    <StackPanel Margin="0,0,0,6">
+                                        <DockPanel>
+                                            <Button DockPanel.Dock="Right" Style="{StaticResource SubtleButton}" Content="Remove" Command="{Binding RemoveCommand}" Margin="6,0,0,0" />
+                                            <Button DockPanel.Dock="Right" Content="Check" Command="{Binding CheckCommand}" Margin="8,0,0,0" ToolTip="Asks the server whether it answers, and what it's running" />
+                                            <TextBox DockPanel.Dock="Left" Width="150" Text="{Binding Name, UpdateSourceTrigger=LostFocus}" AutomationProperties.Name="Endpoint name" Margin="0,0,8,0" />
+                                            <TextBox Text="{Binding Address, UpdateSourceTrigger=LostFocus}" AutomationProperties.Name="Endpoint address" />
+                                        </DockPanel>
+                                        <TextBlock Text="{Binding Status}" Style="{StaticResource MutedText}" FontSize="12" Margin="2,2,0,0" TextWrapping="Wrap"
+                                                   Visibility="{Binding Status, Converter={StaticResource EmptyToVis}}" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <Button Content="Add an endpoint" Command="{Binding AddEndpointCommand}" HorizontalAlignment="Left" />
+                        <CheckBox x:Name="AllowRuns" Content="Agents may run its workflows (run__workflow)" IsChecked="{Binding AllowRuns}" Margin="0,10,0,0"
+                                  ToolTip="Off: agents can still read the workflows (get_workflow), not run them" />
+
+                        <TextBlock Text="Workflows (in ComfyUI: Workflow › Export (API); kept in the data folder, on every computer)" Style="{StaticResource Label}" />
+                        <TextBlock Text="None yet." Style="{StaticResource MutedText}" FontSize="12" Margin="2,0,0,4"
+                                   Visibility="{Binding HasWorkflows, Converter={StaticResource InvBoolToVis}}" />
+                        <ItemsControl x:Name="WorkflowList" ItemsSource="{Binding Workflows}" Focusable="False">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:WorkflowRow}">
+                                    <Border Style="{StaticResource Card}" Padding="10,8" Margin="0,0,0,6">
+                                        <StackPanel>
+                                            <DockPanel>
+                                                <Button DockPanel.Dock="Right" Style="{StaticResource SubtleButton}" Content="Remove" Command="{Binding RemoveCommand}" Margin="8,0,0,0" />
+                                                <TextBox Text="{Binding Name, UpdateSourceTrigger=LostFocus}" FontWeight="SemiBold" AutomationProperties.Name="Workflow name" />
+                                            </DockPanel>
+                                            <Grid Margin="0,6,0,0">
+                                                <TextBox x:Name="PurposeBox" Text="{Binding Purpose, UpdateSourceTrigger=LostFocus}" AutomationProperties.Name="What it makes" />
+                                                <TextBlock Text="What it makes (agents read it to pick the right one)" Style="{StaticResource MutedText}" Margin="12,0,0,0" VerticalAlignment="Center"
+                                                           IsHitTestVisible="False" Visibility="{Binding Text, ElementName=PurposeBox, Converter={StaticResource InvEmptyToVis}}" />
+                                            </Grid>
+                                            <TextBlock Text="{Binding InputsText}" Style="{StaticResource MutedText}" FontSize="12" Margin="2,4,0,0" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <Button x:Name="AddWorkflow" Content="Add a workflow…" Click="AddWorkflow_Click" HorizontalAlignment="Left" />
+                        <TextBlock Text="{Binding WorkflowProblem}" Style="{StaticResource Problem}" Visibility="{Binding WorkflowProblem, Converter={StaticResource EmptyToVis}}" />
                     </StackPanel>
 
                     <TextBlock Text="Budget (agents are told it; ProJict doesn't count what's used)" Style="{StaticResource Label}" />

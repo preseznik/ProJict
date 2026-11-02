@@ -179,6 +179,7 @@ public sealed partial class AgentTools : IMcpToolHost
         AddToolTools();
         AddWorkTools();
         AddUsageTools();
+        AddComfyTools();
         AddCleanupTools();
         AddPublishTools();
         AddMediaTools();
@@ -289,7 +290,8 @@ public sealed partial class AgentTools : IMcpToolHost
         "When a project shows a studio (a game or film studio), the user hires agents to its roles: if you have one, work as it expects, and agree with the " +
         "team in the studio's channel who takes what, volunteering for what suits your model and tools. If you're its lead and the user lets the lead " +
         "review wiki pages, you're told which pages wait for you: accept them or send them back with review_wiki. " +
-        "Outside tools the user set up for agents (such as ElevenLabs or Suno) are in list_tools; use_tool_key gets one's API key once the user allows it. " +
+        "Outside tools the user set up for agents (such as ElevenLabs or Suno) are in list_tools; use_tool_key gets one's API key once the user allows it, " +
+        "and run_workflow runs a workflow on the user's ComfyUI server, attaching what it makes to an item. " +
         "If you can tell how much of your usage you've used, say so with report_usage. " +
         "When a project shows a cleanupRequest, the user wants its repo folder cleaned up: read it with cleanup_request, scan the folder and post your plan " +
         "with plan_cleanup; ProJict moves what they approve to the Recycle Bin, so never remove files yourself, and do no other work there until it's decided. " +
@@ -508,6 +510,9 @@ public sealed partial class AgentTools : IMcpToolHost
             "complete_item" => $"Finished {what}",
             "log_work" => $"Logged work on {what}",
             "report_usage" => "Reported its usage",
+            "run_workflow" => $"Ran the ComfyUI workflow “{args.String("workflow")}”",
+            "get_workflow" => $"Read the ComfyUI workflow “{args.String("workflow")}”",
+            "workflow_run" => "Checked a ComfyUI run",
             "add_item" => $"Added “{Short(args.String("text") ?? "")}”",
             "update_item" => args.String("state") == "todo" ? $"Put back {what}" : $"Changed {what}",
             "attach_file" => $"Attached files to {what}",
@@ -573,7 +578,7 @@ public sealed partial class AgentTools : IMcpToolHost
         if (ProjectToolsJson(match.Project) is { } tools)
         {
             json["tools"] = tools;
-            json["toolsNote"] = "Outside tools set up for this project; list_tools says how to reach each (and use_tool_key gets an API key, with the user's OK).";
+            json["toolsNote"] = "Outside tools set up for this project; list_tools says how to reach each (use_tool_key gets an API key, with the user's OK; run_workflow runs a ComfyUI workflow).";
         }
         if (!string.IsNullOrWhiteSpace(match.Project.PromptPreamble)) json["instructions"] = match.Project.PromptPreamble.Trim();
         json["agentsMayWorkOn"] = (AgentAccess.Describe(RulesFor(match.Project).Allowed) ?? "no items at the moment (you can still read, comment and add items)") +
