@@ -211,6 +211,7 @@ public partial class OfficeView : UserControl
         private readonly Dispatcher _dispatcher;
         private readonly TranslateTransform _mover;
         private readonly ScaleTransform _body, _label, _initials, _zzz;
+        private readonly TranslateTransform _hop;
         private bool _attached, _retargetQueued;
         private double _x, _y, _scale;
         // The walk under way.
@@ -228,6 +229,7 @@ public partial class OfficeView : UserControl
             _label = Part<ScaleTransform>("LabelScale");
             _initials = Part<ScaleTransform>("InitialsFlip");
             _zzz = Part<ScaleTransform>("ZzzFlip");
+            _hop = Part<TranslateTransform>("Hop");
             Snap();
         }
 
@@ -236,6 +238,7 @@ public partial class OfficeView : UserControl
             if (_attached) return;
             _attached = true;
             _agent.PropertyChanged += OnChanged;
+            _agent.Poked += OnPoked;
             Snap();
         }
 
@@ -244,6 +247,7 @@ public partial class OfficeView : UserControl
             if (!_attached) return;
             _attached = false;
             _agent.PropertyChanged -= OnChanged;
+            _agent.Poked -= OnPoked;
             StopWalking();
             Snap();
         }
@@ -305,6 +309,19 @@ public partial class OfficeView : UserControl
             _walking = false;
             _agent.Walking = false;
             CompositionTarget.Rendering -= OnFrame;
+        }
+
+        /// <summary>Poked: a hop when it giggles, a quick shake when it's cross (nothing when Windows' animations are off).</summary>
+        private void OnPoked(bool happy)
+        {
+            if (!SystemParameters.ClientAreaAnimation) return;
+            var ease = new System.Windows.Media.Animation.QuadraticEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut };
+            if (happy)
+                _hop.BeginAnimation(TranslateTransform.YProperty, new System.Windows.Media.Animation.DoubleAnimation(0, -14, TimeSpan.FromMilliseconds(160))
+                    { AutoReverse = true, EasingFunction = ease, RepeatBehavior = new System.Windows.Media.Animation.RepeatBehavior(2) });
+            else
+                _hop.BeginAnimation(TranslateTransform.XProperty, new System.Windows.Media.Animation.DoubleAnimation(-3, 3, TimeSpan.FromMilliseconds(45))
+                    { AutoReverse = true, RepeatBehavior = new System.Windows.Media.Animation.RepeatBehavior(4), FillBehavior = System.Windows.Media.Animation.FillBehavior.Stop });
         }
 
         private void Snap() => Apply(_agent.X, _agent.Y, _agent.Scale, _agent.FacingRight);

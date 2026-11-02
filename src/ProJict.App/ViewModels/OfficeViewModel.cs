@@ -235,6 +235,7 @@ public sealed partial class OfficeViewModel : ObservableObject
             if (!_agents.TryGetValue(card.Session, out var agent))
             {
                 agent = new OfficeAgentViewModel(card, BringToFront);
+                agent.Feel(Temperature);
                 _agents[card.Session] = agent;
                 Agents.Add(agent);
                 Scene.Add(agent);
@@ -532,7 +533,7 @@ public sealed partial class OfficeAgentViewModel(AgentCardViewModel card, Action
         };
         var hears = hearsChat && activity != OfficeActivity.Listening ? "Hears Chat right away (headphones): a chat watcher runs for it\n" : "";
         var role = !InStudio ? "" : RoleName != null ? $"{RoleName} in this studio\n" : "Waiting in the lobby: right-click › Hire as… to give it a role\n";
-        ToolTip = $"{Session.FullName}\n{role}{doing}\n{hears}{Card.Where}\nClick to show its card · right-click to write to it" + (InStudio ? ", hire, fire or swap it" : "");
+        ToolTip = $"{Session.FullName}\n{role}{doing}\n{hears}{Card.Where}\nClick to show its card · Shift+click to poke it · right-click to write to it" + (InStudio ? ", hire, fire or swap it" : "");
     }
 
     private static readonly Typeface LabelFont = new(SystemFonts.MessageFontFamily, FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);

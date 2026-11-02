@@ -451,10 +451,12 @@
                 </Canvas.RenderTransform>
                 <Canvas.InputBindings>
                     <MouseBinding MouseAction="LeftClick" Command="{Binding ShowCardCommand}" />
+                    <MouseBinding Gesture="Shift+LeftClick" Command="{Binding PokeCommand}" />
                 </Canvas.InputBindings>
                 <Canvas.ContextMenu>
                     <ContextMenu>
                         <MenuItem Header="Show its card" Command="{Binding ShowCardCommand}" />
+                        <MenuItem Header="Poke it (Shift+click)" Command="{Binding PokeCommand}" ToolTip="Just for fun: it hops and says something; the agent never knows" />
                         <MenuItem Header="Private message" Command="{Binding Card.PrivateMessageCommand}" />
                         <Separator Visibility="{Binding InStudio, Converter={StaticResource BoolToVis}}" />
                         <MenuItem Header="Hire as" ItemsSource="{Binding HireChoices}" DisplayMemberPath="Text" Click="StudioChoice_Click"
@@ -466,7 +468,12 @@
                 </Canvas.ContextMenu>
                 <Canvas>
                     <Canvas.RenderTransform>
-                        <ScaleTransform x:Name="BodyScale" />
+                        <TransformGroup>
+                            <ScaleTransform x:Name="BodyScale" />
+                            <!-- A hop when poked, a shiver in the cold -->
+                            <TranslateTransform x:Name="Hop" />
+                            <TranslateTransform x:Name="Shiver" />
+                        </TransformGroup>
                     </Canvas.RenderTransform>
                     <!-- Hit area -->
                     <Rectangle Canvas.Left="-22" Canvas.Top="-80" Width="44" Height="104" Fill="Transparent" />
@@ -531,6 +538,11 @@
                                 <ScaleTransform x:Name="Talk" CenterY="0.8" />
                             </Rectangle.RenderTransform>
                         </Rectangle>
+                        <!-- Sweat, when the thermostat's turned up -->
+                        <Canvas Visibility="{Binding Sweating, Converter={StaticResource BoolToVis}}">
+                            <Path Fill="#7DD3FC" Stroke="#0284C7" StrokeThickness="0.6" Data="M 21,-66 C 19,-62 18,-60 18,-58.5 A 3,3 0 0 0 24,-58.5 C 24,-60 23,-62 21,-66 Z" />
+                            <Path Fill="#7DD3FC" Stroke="#0284C7" StrokeThickness="0.6" Data="M -22,-60 C -23.5,-57 -24.5,-55.5 -24.5,-54.5 A 2.4,2.4 0 0 0 -19.7,-54.5 C -19.7,-55.5 -20.5,-57 -22,-60 Z" />
+                        </Canvas>
                         <!-- Headphones: it hears Chat right away -->
                         <Canvas Visibility="{Binding HearsChat, Converter={StaticResource BoolToVis}}">
                             <Path Data="M -20,-48 C -20,-75 20,-75 20,-48" Stroke="#374151" StrokeThickness="3" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
@@ -561,6 +573,11 @@
                                 <TranslateTransform Y="{Binding LeaderTop}" />
                             </Grid.RenderTransform>
                             <StackPanel VerticalAlignment="Bottom">
+                                <!-- What it says when poked, for a moment -->
+                                <Border x:Name="ReactionBubble" HorizontalAlignment="Center" MaxWidth="170" Padding="8,3,8,4" CornerRadius="9" Background="#FEF3C7" BorderBrush="#F59E0B"
+                                        BorderThickness="1" Margin="0,0,0,3" Visibility="{Binding HasReaction, Converter={StaticResource BoolToVis}}">
+                                    <TextBlock Text="{Binding Reaction}" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource Ink}" TextWrapping="Wrap" />
+                                </Border>
                                 <Border x:Name="Bubble" HorizontalAlignment="Center" MaxWidth="150" Padding="8,3,8,4" CornerRadius="9" Background="White" BorderBrush="#CBD5E1"
                                         BorderThickness="1" Margin="0,0,0,3" Visibility="Collapsed">
                                     <TextBlock Text="{Binding Bubble}" FontSize="14" Foreground="{StaticResource Ink}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="38" />
@@ -574,6 +591,20 @@
                 </Canvas>
             </Canvas>
             <DataTemplate.Triggers>
+                <!-- Cold: it shivers. -->
+                <DataTrigger Binding="{Binding Shivering}" Value="True">
+                    <DataTrigger.EnterActions>
+                        <BeginStoryboard x:Name="ShiverStory">
+                            <Storyboard>
+                                <DoubleAnimation Storyboard.TargetName="Shiver" Storyboard.TargetProperty="X" From="-0.9" To="0.9" Duration="0:0:0.05"
+                                                 AutoReverse="True" RepeatBehavior="Forever" />
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </DataTrigger.EnterActions>
+                    <DataTrigger.ExitActions>
+                        <StopStoryboard BeginStoryboardName="ShiverStory" />
+                    </DataTrigger.ExitActions>
+                </DataTrigger>
                 <!-- Eyes blink now and then. -->
                 <EventTrigger SourceName="Root" RoutedEvent="Loaded">
                     <BeginStoryboard>
@@ -880,6 +911,18 @@
                         <Rectangle Canvas.Left="340" Canvas.Top="289" Width="4" Height="11" Fill="{StaticResource Metal}" />
                         <Rectangle Canvas.Left="464" Canvas.Top="289" Width="4" Height="11" Fill="{StaticResource Metal}" />
                     </Canvas>
+                    <!-- How warm it is: a tint over the room, and the thermostat (only for fun) -->
+                    <Rectangle Width="800" Height="520" Fill="{Binding RoomTint}" IsHitTestVisible="False" />
+                    <Border x:Name="Thermostat" Canvas.Left="228" Canvas.Top="204" Width="24" Height="32" CornerRadius="4" Background="#F8FAFC" BorderBrush="#94A3B8"
+                            BorderThickness="1.2" Cursor="Hand" ToolTip="{Binding ThermostatToolTip}" AutomationProperties.Name="Thermostat">
+                        <Border.InputBindings>
+                            <MouseBinding MouseAction="LeftClick" Command="{Binding TurnThermostatCommand}" />
+                        </Border.InputBindings>
+                        <StackPanel>
+                            <Ellipse Width="14" Height="14" Margin="0,3,0,1" Fill="{Binding ThermostatDial}" Stroke="#475569" StrokeThickness="1" />
+                            <TextBlock Text="{Binding ThermostatText}" FontSize="7.5" FontWeight="SemiBold" HorizontalAlignment="Center" Foreground="#334155" />
+                        </StackPanel>
+                    </Border>
                     <!-- Desks and agents, back to front -->
                     <ItemsControl ItemsSource="{Binding Scene}" Focusable="False">
                         <ItemsControl.ItemsPanel>

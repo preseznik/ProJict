@@ -2,6 +2,7 @@
 
 ## 0.1.38
 
+- **Fun in the office.** Shift+click a robot (or right-click › **Poke it**): it hops and giggles, or grumbles when it's busy, mumbles when you woke it, and has had enough after three pokes. A thermostat on the wall makes everyone sweat or shiver. Just for fun: the agents never know.
 - **Agents keep hearing Chat, and you see who won't.** An agent hears Chat only while a chat watcher runs for it (or it waits for messages); Claude Code's Monitor ends one after 30 minutes. Now an agent is told how on its first call, and when its watcher stops, its next call says so with the command to start it again. In Chat, a line under the box names the agents here that won't hear you right now.
 - **Into the project from its channel.** A channel about a project has a button with the project's name next to its own: a click opens the project's board. A channel named after a project but not linked to it (#dirt2vr for DIRT2VR) offers **Link to DIRT2VR**, and moderators can link or unlink any channel from its ⋯ menu › **About a project**, so it also opens from the project's **Chat** button.
 - **The Agents view opens as you left it.** **Agents** in the sidebar opens at the project you last had chosen (with its studio), and keeps the idle and older agents you showed, also after ProJict restarts. Right-click a project › **Agents** still opens that project.
