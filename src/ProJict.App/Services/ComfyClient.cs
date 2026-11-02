@@ -8,9 +8,10 @@ using ProJict.Core.Tools;
 namespace ProJict.App.Services;
 
 /// <summary>How a ComfyUI server is doing: reachable or not, how many runs it has, and its graphics card.</summary>
-public sealed record ComfyStatus(bool Reachable, int Running, int Pending, string? Device, string? Problem)
+public sealed record ComfyStatus(bool Reachable, int Running, int Pending, string? Device, string? Problem, bool Answers = false)
 {
-    public string Describe() => !Reachable ? $"Not reachable{(Problem != null ? $": {Problem}" : "")}"
+    /// <summary>Something answers at the address, but not as ComfyUI does (a 404): the Problem says so.</summary>
+    public string Describe() => Answers ? Problem ?? "" : !Reachable ? $"Not reachable{(Problem != null ? $": {Problem}" : "")}"
         : $"Reachable · {(Running + Pending == 0 ? "nothing queued" : $"{Running} running, {Pending} waiting")}{(Device != null ? $" · {Device}" : "")}";
 }
 
@@ -47,10 +48,26 @@ public sealed class ComfyClient
             catch (Exception) { /* older servers: the queue is enough */ }
             return new ComfyStatus(true, (queue?["queue_running"] as JsonArray)?.Count ?? 0, (queue?["queue_pending"] as JsonArray)?.Count ?? 0, device, null);
         }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            return new ComfyStatus(false, 0, 0, null, NotThere(endpoint, "/queue"), Answers: true);
+        }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException or UriFormatException or InvalidOperationException)
         {
             return new ComfyStatus(false, 0, 0, null, ex is TaskCanceledException ? "no answer" : ex.Message);
         }
+    }
+
+    /// <summary>What a 404 means here: something answers at the address, but ComfyUI's API isn't there.</summary>
+    private static string NotThere(ComfyEndpoint endpoint, string path) =>
+        $"Something answers at {endpoint.Address}, but not as ComfyUI does (404 for {path}). Give the ComfyUI server's own address, e.g. http://127.0.0.1:8188.";
+
+    private static async Task<string> GetAsync(ComfyEndpoint endpoint, string path, CancellationToken stop)
+    {
+        using var response = await Http.GetAsync(Url(endpoint, path), stop);
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound) throw new InvalidOperationException(NotThere(endpoint, path));
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadAsStringAsync(stop);
     }
 
     /// <summary>Uploads a picture for a LoadImage input; returns the name ComfyUI knows it by.</summary>
@@ -63,6 +80,7 @@ public sealed class ComfyClient
         form.Add(new StringContent("true"), "overwrite");
         using var response = await Http.PostAsync(Url(endpoint, "/upload/image"), form, stop);
         var body = await response.Content.ReadAsStringAsync(stop);
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound) throw new InvalidOperationException(NotThere(endpoint, "/upload/image"));
         if (!response.IsSuccessStatusCode) throw new InvalidOperationException($"ComfyUI didn't take the picture ({(int)response.StatusCode}): {Short(body)}");
         var answer = JsonNode.Parse(body);
         var name = (string?)answer?["name"] ?? throw new InvalidOperationException("ComfyUI didn't say what it called the picture.");
@@ -75,6 +93,7 @@ public sealed class ComfyClient
         var request = new JsonObject { ["prompt"] = graph.DeepClone(), ["client_id"] = "projict-" + Guid.NewGuid().ToString("N") };
         using var response = await Http.PostAsync(Url(endpoint, "/prompt"), new StringContent(request.ToJsonString(), Encoding.UTF8, "application/json"), stop);
         var body = await response.Content.ReadAsStringAsync(stop);
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound) throw new InvalidOperationException(NotThere(endpoint, "/prompt"));
         if (!response.IsSuccessStatusCode)
         {
             var problem = JsonNode.Parse(body) is JsonObject error ? (string?)error["error"]?["message"] ?? Short(body) : Short(body);
@@ -90,7 +109,7 @@ public sealed class ComfyClient
         while (DateTime.Now < until)
         {
             stop.ThrowIfCancellationRequested();
-            var history = JsonNode.Parse(await Http.GetStringAsync(Url(endpoint, "/history/" + Uri.EscapeDataString(promptId)), stop));
+            var history = JsonNode.Parse(await GetAsync(endpoint, "/history/" + Uri.EscapeDataString(promptId), stop));
             if (history?[promptId] is JsonObject run)
             {
                 if ((string?)run["status"]?["status_str"] == "error")

@@ -124,13 +124,15 @@ public sealed partial class ComfyEndpointRow(ComfyEndpoint endpoint, ToolEditorV
         get => endpoint.Address;
         set
         {
-            var text = (value ?? "").Trim();
-            if (text.Length > 0 && !text.Contains("://", StringComparison.Ordinal)) text = "http://" + text;
-            if (text == endpoint.Address) return;
-            endpoint.Address = text.TrimEnd('/');
-            owner.SaveTools();
+            // Cut back to the server's own address (a pasted …/prompt goes), shown as kept.
+            var address = ComfyEndpoint.ServerAddress(value);
+            if (address != endpoint.Address)
+            {
+                endpoint.Address = address;
+                owner.SaveTools();
+                Status = "";
+            }
             OnPropertyChanged();
-            Status = "";
         }
     }
 

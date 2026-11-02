@@ -10,7 +10,42 @@ public sealed class ComfyEndpoint
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Name { get; set; } = "";
-    public string Address { get; set; } = "";
+
+    /// <summary>The server's own address, however it was typed or pasted (see <see cref="ServerAddress"/>).</summary>
+    public string Address
+    {
+        get;
+        set => field = ServerAddress(value);
+    } = "";
+
+    /// <summary>ComfyUI's own endpoints: an address pasted with one of these on the end means the server before it.</summary>
+    private static readonly string[] ApiPaths = ["/prompt", "/queue", "/history", "/system_stats", "/object_info", "/upload/image", "/view", "/ws", "/api"];
+
+    /// <summary>
+    /// "192.168.1.173:9696/prompt" → "http://192.168.1.173:9696": http:// when it has no scheme, and without ComfyUI's
+    /// endpoint paths, a query, a # or a trailing slash, since ProJict adds the paths itself. A base path a proxy puts
+    /// ComfyUI under ("https://gpu.example/comfy") stays.
+    /// </summary>
+    public static string ServerAddress(string? text)
+    {
+        text = (text ?? "").Trim();
+        if (text.Length == 0) return "";
+        if (!text.Contains("://", StringComparison.Ordinal)) text = "http://" + text;
+        // Not an address yet ("http://" while it's being typed): kept as it is.
+        if (!Uri.TryCreate(text, UriKind.Absolute, out var uri) || uri.Host.Length == 0) return text;
+        var path = uri.AbsolutePath.TrimEnd('/');
+        for (var cut = true; cut;)
+        {
+            cut = false;
+            foreach (var api in ApiPaths)
+                if (path.EndsWith(api, StringComparison.OrdinalIgnoreCase))
+                {
+                    path = path[..^api.Length].TrimEnd('/');
+                    cut = true;
+                }
+        }
+        return uri.GetLeftPart(UriPartial.Authority) + path;
+    }
 }
 
 /// <summary>What a workflow's input takes: text (a prompt), a number (seed, size) or a picture (uploaded to ComfyUI first).</summary>
