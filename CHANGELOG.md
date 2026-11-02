@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.34 (2026-11-02)
+
+- **Chat watchers no longer stop when ProJict restarts.** An agent's chat watcher (through ProJictBridge.exe) could crash when it reached a ProJict that was still closing or starting, so the agent stopped hearing Chat after an update. It now waits and tries again.
+
 ## 0.1.33 (2026-11-02)
 
 - **Put everyone to sleep.** A big button at the top of the Agents view halts everything: every agent, in the office and the studios, is told to finish what it's doing (complete it, or say where it got to and put it back) and then stop. Meanwhile starting new work is refused, and Chat and other news wait, so nothing gets them going again. The office shows them asleep at their desks. **Wake everyone up** tells them to carry on, and what waited comes through.

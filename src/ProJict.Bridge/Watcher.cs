@@ -31,6 +31,7 @@ internal static class Watcher
         }
 
         var first = true;
+        var gone = false;
         while (true)
         {
             var (pipe, problem) = first
@@ -46,28 +47,37 @@ internal static class Watcher
                 await Task.Delay(1000);
                 continue;
             }
-            await using (pipe)
+            var heard = false;
+            // A ProJict on its way out (or still starting) can take the connection and drop it: then it's tried again.
+            try
             {
-                var hello = new JsonObject { ["projictWatch"] = 1, ["as"] = options.Agent.Trim(), ["bridge"] = McpRelay.Version };
-                await pipe.WriteAsync(Utf8.GetBytes(hello.ToJsonString() + "\n"));
-                await pipe.FlushAsync();
-                // Back after a restart: one line instead of ProJict's "Watching …" introduction again.
-                var again = !first;
-                if (again && !await Print($"[ProJict] ProJict is back (it restarted, perhaps for an update); still watching Chat for {options.Agent.Trim()}."))
-                    return 0;
-                using var reader = new StreamReader(pipe, Utf8);
-                try
+                await using (pipe)
                 {
+                    var hello = new JsonObject { ["projictWatch"] = 1, ["as"] = options.Agent.Trim(), ["bridge"] = McpRelay.Version };
+                    await pipe.WriteAsync(Utf8.GetBytes(hello.ToJsonString() + "\n"));
+                    await pipe.FlushAsync();
+                    using var reader = new StreamReader(pipe, Utf8);
                     while (await reader.ReadLineAsync() is { } line)
                     {
-                        if (again && line.StartsWith("Watching ProJict Chat for", StringComparison.Ordinal)) continue;
-                        again = false;
+                        // Back after a restart (once it answers): one line instead of ProJict's "Watching …" introduction again.
+                        if (!heard && gone)
+                        {
+                            gone = false;
+                            if (!await Print($"[ProJict] ProJict is back (it restarted, perhaps for an update); still watching Chat for {options.Agent.Trim()}."))
+                                return 0;
+                            heard = true;
+                            if (line.StartsWith("Watching ProJict Chat for", StringComparison.Ordinal)) continue;
+                        }
+                        heard = true;
                         if (!await Print(line)) return 0;
                     }
                 }
-                catch (IOException) { }
             }
+            catch (IOException) { }
             first = false;
+            if (!heard) await Task.Delay(1000);
+            if (gone) continue;
+            gone = true;
             if (!await Print("[ProJict] ProJict went away (restarting, perhaps for an update); waiting for it to come back.")) return 0;
         }
     }
