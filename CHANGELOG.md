@@ -2,6 +2,7 @@
 
 ## 0.1.37
 
+- **ComfyUI runs keep the 3D models they make, and say why one is refused.** A run kept only pictures, video and sound, so a 3D workflow gave the item ten preview pictures and not the model it saved. Now a run keeps what the workflow saves, models included (.glb), and keeps its previews only when it saves nothing. When ComfyUI refuses a workflow, the agent and the item's history get its reason per node (a missing LoRA, say), not just "Prompt outputs failed validation".
 - **More of a ComfyUI workflow can be filled in.** ProJict found prompts only in CLIP Text Encode nodes, so a video workflow with its prompt in a **Text (Multiline)** node offered agents just a seed. Now a text node that feeds a prompt is the prompt, a prompt typed into the node that uses it counts too, and number nodes (Float, Int) are inputs named by their title, such as "duration" for **Float (duration)**, which takes decimals. Every seed can be "random", not just the first.
 - **Wiki History stays on as you go from page to page.** Turn on **History** and every page you open shows its own versions, until you turn it off or start editing.
 - **The dashboard's Table reads in the dark theme.** Its rows were painted white with white text, so the dark theme showed blank white rows. They now take the page's colours, and so do the rows in the import wizard's list of files.
