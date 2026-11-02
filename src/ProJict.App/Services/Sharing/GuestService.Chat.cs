@@ -17,6 +17,8 @@ public sealed partial class HostConnection
     internal List<(string Agent, string Why)> AgentRefusals { get; } = [];
     /// <summary>Who's online or away in the host's ProJict, as it last said; everyone else there is offline.</summary>
     public IReadOnlyDictionary<string, PresenceState> Presence { get; internal set; } = new Dictionary<string, PresenceState>();
+    /// <summary>Which of those are AI agents (the host's own, and those of everyone connected to it).</summary>
+    public IReadOnlySet<string> AgentsThere { get; internal set; } = new HashSet<string>();
     /// <summary>Whether you're away and which agents are here, as the host last heard it.</summary>
     internal string? PresenceSent { get; set; }
 }
@@ -71,9 +73,10 @@ public sealed partial class GuestService
     private void DropChat(HostConnection connection)
     {
         connection.PresenceSent = null;
-        if (connection.Presence.Count > 0)
+        if (connection.Presence.Count > 0 || connection.AgentsThere.Count > 0)
         {
             connection.Presence = new Dictionary<string, PresenceState>();
+            connection.AgentsThere = new HashSet<string>();
             PresenceChanged?.Invoke(connection);
         }
         if (connection.Chat is not { } room) return;
@@ -86,6 +89,8 @@ public sealed partial class GuestService
     private void TakePresence(HostConnection connection, JsonObject message)
     {
         connection.Presence = Presence.FromJson(message["people"]);
+        connection.AgentsThere = (message["agents"] as JsonArray ?? []).Select(n => n is JsonValue v && v.TryGetValue<string>(out var s) ? s.Trim() : "")
+            .Where(s => s.Length is > 0 and <= 200).Take(200).ToHashSet(StringComparer.OrdinalIgnoreCase);
         PresenceChanged?.Invoke(connection);
     }
 

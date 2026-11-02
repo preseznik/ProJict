@@ -555,11 +555,21 @@ public sealed partial class ChatViewModel : ObservableObject
             var place = Here;
             bool Out(string n) => ChatRoom.Member(channel, n) == null && !string.Equals(n, place.Me.Name, StringComparison.OrdinalIgnoreCase);
             if (place.Host is { } host)
-                choices = host.Chat!.Channels.SelectMany(c => c.Members).Select(m => m.Name).Append(host.HostName)
-                    .Distinct(StringComparer.OrdinalIgnoreCase).Where(Out).Order(StringComparer.CurrentCultureIgnoreCase).Select(n => new InviteChoice(n, n)).ToList();
+            {
+                // Everyone connected there first (agents said as such), then the others its channels have.
+                var here = host.Presence.Keys.Where(Out).Order(StringComparer.CurrentCultureIgnoreCase).ToList();
+                choices =
+                [
+                    .. here.Select(n => new InviteChoice(n, host.AgentsThere.Contains(n) ? $"{n} · AI agent, connected" : $"{n} · connected")),
+                    .. host.Chat!.Channels.SelectMany(c => c.Members).Select(m => m.Name).Append(host.HostName)
+                        .Distinct(StringComparer.OrdinalIgnoreCase).Where(n => Out(n) && !here.Contains(n, StringComparer.OrdinalIgnoreCase))
+                        .Order(StringComparer.CurrentCultureIgnoreCase).Select(n => new InviteChoice(n, n)),
+                ];
+            }
             else
             {
                 var liveAgents = _main.Agents.Sessions.Select(s => s.AgentName).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var remote = _main.Agents.RemoteAgents().ToDictionary(a => a.Name, a => a.Through, StringComparer.OrdinalIgnoreCase);
                 var connected = _main.Host.Sessions.Select(s => s.Account.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
                 var agents = _main.AgentTools.KnownAgentNames().Where(Out).ToList();
                 // A private project's channels stay on this computer: nobody you share with is offered.
@@ -569,8 +579,11 @@ public sealed partial class ChatViewModel : ObservableObject
                 choices =
                 [
                     .. agents.Where(liveAgents.Contains).Select(n => new InviteChoice(n, n)),
+                    // Agents in the ProJicts of people you share with, connected now; never to a private project's channel.
+                    .. (isPrivate ? [] : agents.Where(n => !liveAgents.Contains(n) && remote.ContainsKey(n))
+                        .Select(n => new InviteChoice(n, $"{n} · AI agent in {remote[n]}'s ProJict"))),
                     .. guests.Where(connected.Contains).Select(n => new InviteChoice(n, $"{n} · guest")),
-                    .. agents.Where(n => !liveAgents.Contains(n)).Select(n => new InviteChoice(n, n)),
+                    .. agents.Where(n => !liveAgents.Contains(n) && !remote.ContainsKey(n)).Select(n => new InviteChoice(n, n)),
                     .. guests.Where(n => !connected.Contains(n)).Select(n => new InviteChoice(n, $"{n} · guest, not connected")),
                 ];
             }

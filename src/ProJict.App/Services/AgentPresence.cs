@@ -121,6 +121,18 @@ public sealed class AgentPresence
     /// <summary>Whether someone in this ProJict's Chat is online, away or offline.</summary>
     public PresenceState StateOf(string name) => Everyone().TryGetValue(name, out var state) ? state : PresenceState.Offline;
 
+    /// <summary>An agent connected to another ProJict that's connected here: the name it signs with here, online or away, and whose ProJict it's in.</summary>
+    public sealed record RemoteAgent(string Name, PresenceState State, string Through);
+
+    /// <summary>
+    /// The agents connected to the ProJicts connected here (people you share with), by the names they sign with here
+    /// ("Hermes (via alice)", or "Hermes" from a ProJict linked as you), one per name, the more present one first.
+    /// </summary>
+    public IReadOnlyList<RemoteAgent> RemoteAgents() =>
+        _people.Values.SelectMany(p => (p.Agents ?? new Dictionary<string, PresenceState>()).Select(a => new RemoteAgent(a.Key, a.Value, p.Name)))
+            .GroupBy(a => a.Name, StringComparer.OrdinalIgnoreCase).Select(g => g.MaxBy(a => a.State)!)
+            .OrderBy(a => a.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
+
     /// <summary>The agents connected here, online or away, by name (what this ProJict tells the ones it's connected to).</summary>
     public Dictionary<string, PresenceState> AgentsHere()
     {

@@ -82,11 +82,14 @@ public sealed partial class HostService
     {
         if (_sessions.Count == 0) return;
         var everyone = _main.Agents.Everyone();
-        var signature = Presence.Signature(everyone);
+        // Which of them are agents (yours, and those of everyone connected), so guests can show and invite them as agents.
+        var agents = _main.Agents.AgentsHere().Keys.Concat(_main.Agents.RemoteAgents().Select(a => a.Name))
+            .Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase).ToList();
+        var signature = Presence.Signature(everyone) + "|" + string.Join("|", agents);
         foreach (var session in _sessions.Where(s => s.PresenceSent != signature))
         {
             session.PresenceSent = signature;
-            session.Send(Wire.Message("presence", ("people", Presence.ToJson(everyone))));
+            session.Send(Wire.Message("presence", ("people", Presence.ToJson(everyone)), ("agents", new JsonArray(agents.Select(a => (JsonNode)a).ToArray()))));
         }
     }
 

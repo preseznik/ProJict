@@ -578,6 +578,8 @@ public sealed partial class AgentTools
         if (Chat.IsOwner(name)) return false;
         lock (_live)
             if (_live.Any(s => string.Equals(s.AgentName, name, StringComparison.OrdinalIgnoreCase))) return true;
+        // An agent connected to another ProJict that's connected here ("Hermes (via alice)").
+        if (_main.Agents.RemoteAgents().Any(a => string.Equals(a.Name, name, StringComparison.OrdinalIgnoreCase))) return true;
         return Chat.Channels.SelectMany(c => c.Members).Any(m => m.Agent && string.Equals(m.Name, name, StringComparison.OrdinalIgnoreCase)) ||
                _state.Projects.Any(p => p.Walk().Any(l => (l.Item.Activity ?? []).Any(a => a.Agent && string.Equals(a.By, name, StringComparison.OrdinalIgnoreCase))));
     }
@@ -587,6 +589,8 @@ public sealed partial class AgentTools
     {
         List<string> live;
         lock (_live) live = _live.Select(s => s.AgentName).Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.CurrentCultureIgnoreCase).ToList();
+        // Agents connected through the people connected here count as connected too.
+        live = [.. live, .. _main.Agents.RemoteAgents().Select(a => a.Name).Where(n => !live.Contains(n, StringComparer.OrdinalIgnoreCase))];
         var earlier = Chat.Channels.SelectMany(c => c.Members).Where(m => m.Agent).Select(m => m.Name)
             .Concat(_state.Projects.SelectMany(p => p.Walk()).SelectMany(l => l.Item.Activity ?? []).Where(a => a.Agent).Select(a => AgentNaming.Identity(a.By)))
             .Distinct(StringComparer.OrdinalIgnoreCase).Where(n => !live.Contains(n, StringComparer.OrdinalIgnoreCase))
