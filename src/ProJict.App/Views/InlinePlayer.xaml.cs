@@ -26,6 +26,8 @@ public partial class InlinePlayer : UserControl
         DependencyProperty.Register(nameof(Poster), typeof(ImageSource), typeof(InlinePlayer), new PropertyMetadata(null, (d, _) => ((InlinePlayer)d).Reset()));
     public static readonly DependencyProperty OpenCommandProperty =
         DependencyProperty.Register(nameof(OpenCommand), typeof(ICommand), typeof(InlinePlayer));
+    public static readonly DependencyProperty FillProperty =
+        DependencyProperty.Register(nameof(Fill), typeof(bool), typeof(InlinePlayer), new PropertyMetadata(false, (d, _) => ((InlinePlayer)d).Reset()));
 
     public string? Path { get => (string?)GetValue(PathProperty); set => SetValue(PathProperty, value); }
     public MediaKind Kind { get => (MediaKind)GetValue(KindProperty); set => SetValue(KindProperty, value); }
@@ -34,6 +36,8 @@ public partial class InlinePlayer : UserControl
     public ImageSource? Poster { get => (ImageSource?)GetValue(PosterProperty); set => SetValue(PosterProperty, value); }
     /// <summary>Opens the file in its own app.</summary>
     public ICommand? OpenCommand { get => (ICommand?)GetValue(OpenCommandProperty); set => SetValue(OpenCommandProperty, value); }
+    /// <summary>As wide as it's given (a wiki page sizes it), a video as tall as that makes it, instead of its own size.</summary>
+    public bool Fill { get => (bool)GetValue(FillProperty); set => SetValue(FillProperty, value); }
 
     /// <summary>The one playing now: another one starting pauses it.</summary>
     private static InlinePlayer? _playing;
@@ -118,7 +122,8 @@ public partial class InlinePlayer : UserControl
         ProblemText.Visibility = Visibility.Collapsed;
         Controls.Visibility = Visibility.Visible;
         Screen.Visibility = Visibility.Visible;
-        Frame.Width = IsVideo ? 340 : 300;
+        Frame.Width = Fill ? double.NaN : IsVideo ? 340 : 300;
+        Screen.MaxHeight = Fill ? double.PositiveInfinity : 260;
         // Audio keeps the (empty) screen in the layout: a collapsed MediaElement doesn't play.
         Screen.Height = IsVideo ? double.NaN : 0;
         Screen.MinHeight = IsVideo ? 120 : 0;

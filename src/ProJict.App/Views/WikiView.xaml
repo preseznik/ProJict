@@ -22,7 +22,7 @@
                         </StackPanel>
                     </Button>
                     <Button Style="{StaticResource SubtleIconButton}" Content="&#xE8C8;" FontSize="11" Padding="4,2" Command="{Binding InsertCommand}"
-                            ToolTip="Put a link to it in the page (pictures show)" AutomationProperties.Name="Insert a link to the file"
+                            ToolTip="Put it in the page where you're writing (pictures show, videos and sounds play)" AutomationProperties.Name="Insert a link to the file"
                             Visibility="{Binding DataContext.Page.CanEdit, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVis}}" />
                     <Button Style="{StaticResource SubtleIconButton}" Content="&#xE711;" FontSize="10" Padding="4,2" Command="{Binding RemoveCommand}"
                             ToolTip="Remove from the page" AutomationProperties.Name="Remove the file" Visibility="{Binding CanRemove, Converter={StaticResource BoolToVis}}" />

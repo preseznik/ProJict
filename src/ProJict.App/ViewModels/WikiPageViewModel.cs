@@ -257,12 +257,12 @@ public sealed partial class WikiPageViewModel : ObservableObject
     public bool IsReading => !IsEditing && !IsHistory;
 
     /// <summary>The page drawn (rebuilt when it changes).</summary>
-    public FlowDocument Document => _document ??= Render(Model.Text);
+    public FlowDocument Document => _document ??= Render(Model.Text, editing: false);
 
     public IReadOnlyList<WikiLinkChip> LinkedFrom => WikiText.LinksTo(Book, Model).Select(p => new WikiLinkChip(_owner, p, Host)).ToList();
     public bool HasLinkedFrom => LinkedFrom.Count > 0;
 
-    private FlowDocument Render(string text) => WikiRenderer.Render(text, new WikiRenderContext
+    private FlowDocument Render(string text, bool editing) => WikiRenderer.Render(text, new WikiRenderContext
     {
         ResolvePage = target => Book.Resolve(target, Model),
         FindItem = token => State.Projects.SelectMany(p => p.Walk()).FirstOrDefault(l => l.Item.Id.ToString().StartsWith(token, StringComparison.OrdinalIgnoreCase)) is { Item: { } item }
@@ -284,6 +284,7 @@ public sealed partial class WikiPageViewModel : ObservableObject
             if ((Host?.Chat ?? State.Chat).Find(name) is { } channel) Main.ShowChannel(channel);
         },
         OpenLink = OpenFile,
+        Format = editing ? FormatMedia : null,
     });
 
     // ───────────── Editing ─────────────
@@ -304,7 +305,7 @@ public sealed partial class WikiPageViewModel : ObservableObject
     private FlowDocument? _preview;
 
     /// <summary>The live preview beside the editor, drawn again a moment after you stop typing.</summary>
-    public FlowDocument Preview => _preview ??= Render(EditText);
+    public FlowDocument Preview => _preview ??= Render(EditText, editing: true);
 
     /// <summary>Someone saved the page while you're editing it: your save will be merged with theirs.</summary>
     public string? EditNotice => IsEditing && Model.Version != _baseVersion
@@ -584,7 +585,7 @@ public sealed partial class WikiPageViewModel : ObservableObject
 
     /// <summary>
     /// Adds files (dropped, pasted or picked) to the page; while editing, a link to each goes in where you're typing
-    /// (pictures as ![](name), so they show).
+    /// (pictures, videos and sounds as ![](name), so they show or play there).
     /// </summary>
     public async Task AddFilesAsync(IReadOnlyList<string> paths, bool insert, byte[]? png = null)
     {
@@ -622,8 +623,12 @@ public sealed partial class WikiPageViewModel : ObservableObject
     private static string LinkFor(string fileName)
     {
         var target = fileName.Contains(' ') || fileName.Contains(')') ? $"<{fileName}>" : fileName;
-        return new Attachment { FileName = fileName }.IsImage ? $"![]({target})" : $"[{fileName}]({target})";
+        return ShowsInPlace(fileName) ? $"![]({target})" : $"[{fileName}]({target})";
     }
+
+    /// <summary>Pictures show on the page, and videos and sounds play there; other files are links.</summary>
+    internal static bool ShowsInPlace(string fileName) =>
+        new Attachment { FileName = fileName }.IsImage || MediaLinks.KindOf(fileName) is MediaKind.Video or MediaKind.Audio;
 
     internal void InsertFileLink(Attachment attachment)
     {
@@ -637,6 +642,18 @@ public sealed partial class WikiPageViewModel : ObservableObject
 
     /// <summary>Asks the view to put text where the caret is (the view does it, so undo in the box keeps working).</summary>
     public event Action<string>? InsertRequested;
+
+    /// <summary>Asks the view to write text in place of part of it (start, length), as typing would.</summary>
+    public event Action<int, int, string>? ReplaceRequested;
+
+    /// <summary>A picture or player right-clicked in the preview: it's written with its new size, place or caption.</summary>
+    private void FormatMedia(MdImage image, int occurrence, MediaLayout layout, string caption)
+    {
+        if (!IsEditing || WikiMedia.Reformat(EditText, image.Url, occurrence, layout, caption) is not { } change) return;
+        var (start, length, text) = change;
+        if (ReplaceRequested != null) ReplaceRequested(start, length, text);
+        else EditText = EditText[..start] + text + EditText[(start + length)..];
+    }
 
     private void InsertText(string text)
     {

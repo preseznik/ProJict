@@ -447,9 +447,10 @@ public sealed partial class WikiFileViewModel(WikiPageViewModel owner, Attachmen
     /// <summary>Audio or video on this ProJict's own page: it plays in place (another ProJict's files open as before).</summary>
     public MediaKind MediaKind => MediaLinks.KindOf(attachment.FileName);
     public string? PlayPath => owner.LocalFilePath(attachment);
-    public bool Plays => MediaKind is MediaKind.Audio or MediaKind.Video && PlayPath != null;
+    /// <summary>It plays here, under the page, unless the page already shows it (![](clip.mp4)) where it's written.</summary>
+    public bool Plays => MediaKind is MediaKind.Audio or MediaKind.Video && PlayPath != null && !WikiMedia.Shows(owner.Model.Text, FileName);
     public string SizeText => AttachmentViewModel.FormatSize(attachment.Size);
-    public string ToolTip => $"{FileName} · {SizeText}\nClick to open · {(attachment.IsImage ? "![](" : "[" + FileName + "](")}{FileName}) shows it on the page";
+    public string ToolTip => $"{FileName} · {SizeText}\nClick to open · {(WikiPageViewModel.ShowsInPlace(FileName) ? "![](" : "[" + FileName + "](")}{FileName}) shows it on the page";
     public bool CanRemove => owner.IsOwn;
 
     [RelayCommand] private void Open() => owner.OpenFile(attachment.FileName);
