@@ -115,6 +115,19 @@
                                 </StackPanel>
                             </Border>
                         </Button>
+                        <!-- No priority yet: the same chip, empty and dashed (brighter while you point at the row); a click gives it one. -->
+                        <Button x:Name="NoPriority" Style="{StaticResource SubtleButton}" Padding="0" Margin="0,5,4,0" VerticalAlignment="Top" Click="PriorityChip_Click"
+                                Opacity="0.45" ToolTip="No priority yet: click to give it one (or Alt+1 urgent … Alt+4 low, Alt+5 on hold)"
+                                AutomationProperties.Name="Give it a priority"
+                                Visibility="{Binding ShowPriorityButton, Converter={StaticResource BoolToVis}}">
+                            <Grid>
+                                <Rectangle RadiusX="4" RadiusY="4" StrokeThickness="1" StrokeDashArray="2 2" Stroke="{DynamicResource TextFillColorSecondaryBrush}" />
+                                <StackPanel Orientation="Horizontal" Margin="6,1,7,2">
+                                    <Ellipse Width="7" Height="7" StrokeThickness="1" Stroke="{DynamicResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
+                                    <TextBlock Text="priority" FontSize="10.5" Margin="4,0,0,0" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                </StackPanel>
+                            </Grid>
+                        </Button>
                         <Border Style="{StaticResource TagChip}" Background="{Binding Tag, Converter={StaticResource TagToBrush}}"
                                 Visibility="{Binding HasTag, Converter={StaticResource BoolToVis}}" VerticalAlignment="Top" Margin="0,6,4,0">
                             <TextBlock Text="{Binding Tag}" Style="{StaticResource ChipText}" />
@@ -235,6 +248,7 @@
                     <Setter TargetName="AttentionDot" Property="Opacity" Value="0" />
                     <Setter TargetName="RowMore" Property="Opacity" Value="1" />
                     <Setter TargetName="RowChat" Property="Opacity" Value="1" />
+                    <Setter TargetName="NoPriority" Property="Opacity" Value="1" />
                 </Trigger>
                 <DataTrigger Binding="{Binding InDoneSection}" Value="True">
                     <Setter TargetName="RowText" Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />

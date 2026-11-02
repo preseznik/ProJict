@@ -2,6 +2,7 @@
 
 ## 0.1.37
 
+- **A priority button on items without one.** An open item without a priority shows a faint dashed **priority** chip where the priority goes (brighter when you point at the item); a click picks one from the same menu as the priority chip, so the right-click menu isn't the only way.
 - **Agents choose a priority for everything they add.** An item an agent adds (`add_item`, also through the API) now needs a priority picked on purpose: urgent, high, medium, low, hold, or none to leave it to you (for a sub-item, none means it follows its parent's). Without one ProJict refuses it and tells the agent the choices and which priorities you let agents work on, so new items no longer arrive without a word on how pressing they are.
 - **Stats by year.** The Feed and the Agents view's earlier work group **By year** too, with each year's **Stats**: a chart of its months, its busiest month and how many months had activity. Picking By year goes back all the way (All time in the Feed, All in the Agents view), since a year of a week says little.
 - **The project's channel under the office.** **Channel** in the office's header (Agents view) shows the project's channel under the office (the studio's, else the project's own) with its last messages and a box to write in, and moves **All agents** to its bottom right. With all projects it shows the channel you last had open in Chat; ProJict remembers whether it's on.
