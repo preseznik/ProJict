@@ -249,13 +249,41 @@ public sealed class ProjectStore
     }
 
     /// <summary>Where ProJict keeps its copy of an attached file: attachments/&lt;id&gt;/&lt;original file name&gt;.</summary>
-    public string AttachmentPath(Attachment attachment) =>
-        Path.Combine(AttachmentsDir, attachment.Id.ToString(), attachment.FileName);
+    /// <summary>Where private conversations' files are kept (outside the data folder, cleaned out after some days); set by the app.</summary>
+    public string? CacheRoot { get; set; }
+
+    /// <summary>Where an attachment's file is: the data folder, or the cache (by a safe name there, as it may come from another ProJict).</summary>
+    public string AttachmentPath(Attachment attachment) => attachment.Cached && CacheRoot != null
+        ? Path.Combine(CacheRoot, attachment.Id.ToString(), SafeFileName(attachment.FileName))
+        : Path.Combine(AttachmentsDir, attachment.Id.ToString(), attachment.FileName);
+
+    /// <summary>
+    /// Moves a stored file into the cache for private conversations' files, in a folder of its own dated now (which
+    /// cleaning out goes by). It stays where it is if it can't be moved.
+    /// </summary>
+    public void MoveToCache(Attachment attachment)
+    {
+        if (attachment.Cached || CacheRoot == null) return;
+        var from = AttachmentPath(attachment);
+        if (!File.Exists(from)) return;
+        var to = Path.Combine(CacheRoot, attachment.Id.ToString(), SafeFileName(attachment.FileName));
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(to)!);
+            File.Move(from, to, overwrite: true);
+            attachment.Cached = true;
+            Directory.Delete(Path.GetDirectoryName(from)!);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+    }
 
     /// <summary>Copies a file into the data folder; the original is only read.</summary>
-    public Attachment ImportAttachment(string sourcePath)
+    public Attachment ImportAttachment(string sourcePath) => ImportAttachment(sourcePath, cached: false);
+
+    /// <summary>Copies a file into the data folder (or, <paramref name="cached"/>, the cache for private conversations' files); the original is only read.</summary>
+    public Attachment ImportAttachment(string sourcePath, bool cached)
     {
-        var attachment = new Attachment { FileName = SafeFileName(Path.GetFileName(sourcePath)) };
+        var attachment = new Attachment { FileName = SafeFileName(Path.GetFileName(sourcePath)), Cached = cached && CacheRoot != null };
         var target = AttachmentPath(attachment);
         Directory.CreateDirectory(Path.GetDirectoryName(target)!);
         File.Copy(sourcePath, target);
@@ -272,9 +300,12 @@ public sealed class ProjectStore
     }
 
     /// <summary>Stores new content (e.g. a pasted screenshot) as an attachment.</summary>
-    public Attachment WriteAttachment(string fileName, byte[] content)
+    public Attachment WriteAttachment(string fileName, byte[] content) => WriteAttachment(fileName, content, cached: false);
+
+    /// <summary>Stores new content as an attachment (in the cache for private conversations' files, <paramref name="cached"/>).</summary>
+    public Attachment WriteAttachment(string fileName, byte[] content, bool cached)
     {
-        var attachment = new Attachment { FileName = SafeFileName(fileName), Size = content.Length };
+        var attachment = new Attachment { FileName = SafeFileName(fileName), Size = content.Length, Cached = cached && CacheRoot != null };
         var target = AttachmentPath(attachment);
         Directory.CreateDirectory(Path.GetDirectoryName(target)!);
         File.WriteAllBytes(target, content);

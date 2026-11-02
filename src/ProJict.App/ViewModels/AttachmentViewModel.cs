@@ -57,7 +57,9 @@ public sealed partial class AttachmentViewModel : IPlayable
     public string FileName => Model.FileName;
     public ImageSource? Thumbnail => Model.IsImage ? LoadThumbnail() : null;
     public bool ShowsThumbnail => Thumbnail != null;
-    public string SizeText => FormatSize(Model.Size);
+    public string SizeText => CleanedOut ? "cleaned out" : FormatSize(Model.Size);
+    /// <summary>A private conversation's file that was cleaned out of their cache here (Settings › Chat).</summary>
+    public bool CleanedOut => Model.Cached && _owner.Project.Remote == null && !File.Exists(Path);
     /// <summary>Audio or video: it plays in place.</summary>
     public MediaKind MediaKind => MediaLinks.KindOf(FileName);
     public bool Plays => MediaKind is MediaKind.Audio or MediaKind.Video;
@@ -72,7 +74,9 @@ public sealed partial class AttachmentViewModel : IPlayable
             return poster;
         }
     }
-    public string ToolTip => $"{FileName} · {SizeText}\nClick to open · right-click for more";
+    public string ToolTip => CleanedOut
+        ? $"{FileName} · {FormatSize(Model.Size)}\nCleaned out: private conversations' files are kept for a while, then deleted (Settings › Chat)"
+        : $"{FileName} · {SizeText}\nClick to open · right-click for more";
     /// <summary>For comments, which have no right-click menu on their files.</summary>
     public string ShortToolTip => $"{FileName} · {SizeText}\nClick to open";
 

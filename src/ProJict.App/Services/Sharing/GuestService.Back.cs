@@ -138,10 +138,21 @@ public sealed partial class GuestService
                     var files = new List<Attachment>();
                     foreach (var f in (message["files"] as JsonArray ?? []).OfType<JsonObject>())
                     {
+                        // Sent first in pieces (backPutFile), by its id: only one this host sent, never another file of yours.
+                        if (f["data"] == null)
+                        {
+                            if (!Guid.TryParse((string?)f["id"], out var fileId) || !connection.BackPuts.Remove(fileId)) continue;
+                            var put = new Attachment { Id = fileId, FileName = ProjectStore.SafeFileName((string?)f["name"] ?? "file") };
+                            var path = _state.Store.AttachmentPath(put);
+                            if (!File.Exists(path)) continue;
+                            put.Size = new FileInfo(path).Length;
+                            files.Add(put);
+                            continue;
+                        }
                         try
                         {
                             var data = Convert.FromBase64String((string?)f["data"] ?? "");
-                            if (data.Length is > 0 and <= MaxFileBytes)
+                            if (data.Length is > 0 and <= (int)WireFiles.WholeLimit)
                                 files.Add(_state.Store.WriteAttachment(ProjectStore.SafeFileName((string?)f["name"] ?? "file"), data));
                         }
                         catch (FormatException) { }
@@ -155,7 +166,7 @@ public sealed partial class GuestService
         }
     }
 
-    /// <summary>A file of a message in a channel the host gets, for it to keep and show.</summary>
+    /// <summary>A file of a message in a channel the host gets, for it to keep and show (in pieces when it's big).</summary>
     private void SendBackFile(HostConnection connection, JsonObject message)
     {
         if (!Guid.TryParse((string?)message["id"], out var id)) return;
@@ -163,11 +174,24 @@ public sealed partial class GuestService
             .SelectMany(m => m.Attachments ?? []).FirstOrDefault(a => a.Id == id);
         if (attachment == null) return;
         var path = _state.Store.AttachmentPath(attachment);
+        if (File.Exists(path)) _ = connection.SendFileAsync(Wire.Message("backFile", ("id", id.ToString())), new OutgoingFile(attachment.FileName, Path: path));
+    }
+
+    /// <summary>
+    /// A file the host sends in pieces for its message in one of your channels (which then refers to it): kept as a new
+    /// file of yours, never over one there.
+    /// </summary>
+    private void StoreBackPut(HostConnection connection, JsonObject message)
+    {
+        if (!connection.SharesChatBack || !Guid.TryParse((string?)message["id"], out var id)) return;
+        var path = _state.Store.AttachmentPath(new Attachment { Id = id, FileName = ProjectStore.SafeFileName((string?)message["name"] ?? "file") });
+        if (WireFiles.Starts(message) ? File.Exists(path) || Directory.Exists(Path.GetDirectoryName(path)) : !connection.BackPuts.Contains(id)) return;
+        connection.BackPuts.Add(id);
         try
         {
-            if (!File.Exists(path) || new FileInfo(path).Length > MaxFileBytes) return;
-            connection.Send(Wire.Message("backFile", ("id", id.ToString()), ("data", Convert.ToBase64String(File.ReadAllBytes(path)))));
+            if (WireFiles.Receive(message, path, Math.Max(WireFiles.WholeLimit, Math.Max(_state.Settings.ChatFileLimitBytes, _state.Settings.CommentFileLimitBytes))) == FileArrival.Failed)
+                connection.BackPuts.Remove(id);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { connection.BackPuts.Remove(id); }
     }
 }

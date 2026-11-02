@@ -53,6 +53,17 @@ public sealed class GuestSession(GuestAccount account, Wire wire, string address
     internal string? PresenceSent { get; set; }
     /// <summary>The guest's own channels, when it shares them back.</summary>
     public BackChat? Back { get; internal set; }
+    /// <summary>The guest takes files in pieces, so bigger than 15 MB (its hello says; ProJict 0.1.40 and newer).</summary>
+    internal bool TakesPieces { get; init; }
+    /// <summary>Files the guest is sending in pieces (putFile), so its later pieces go to them only.</summary>
+    internal HashSet<Guid> Puts { get; } = [];
+
+    /// <summary>A file to the guest as <paramref name="message"/>: whole, or in pieces when it takes them. False when it's too big for it or didn't go.</summary>
+    internal async Task<bool> SendFileAsync(JsonObject message, OutgoingFile file)
+    {
+        try { return await WireFiles.SendAsync(message, file, TakesPieces, SendAsync, Cts.Token).ConfigureAwait(false); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or OperationCanceledException or ObjectDisposedException) { return false; }
+    }
 
     internal void Send(JsonObject message) => _ = SendAsync(message);
 
@@ -78,7 +89,6 @@ public sealed partial class HostService
     private const int KeptRevisions = 50;
     private static readonly TimeSpan BroadcastDelay = TimeSpan.FromMilliseconds(300);
     private static readonly TimeSpan Silence = TimeSpan.FromSeconds(100);
-    private const int MaxFileBytes = 15 * 1024 * 1024;
 
     private readonly AppState _state;
     private readonly MainViewModel _main;
@@ -389,7 +399,7 @@ public sealed partial class HostService
                     return;
             }
 
-            session = new GuestSession(account, wire, address, cts);
+            session = new GuestSession(account, wire, address, cts) { TakesPieces = (bool?)first["pieces"] == true };
             await Ui(() =>
             {
                 _sessions.Add(session);
@@ -466,6 +476,7 @@ public sealed partial class HostService
             ("projectIds", new JsonArray(projects.Select(p => (JsonNode)p.Id.ToString()).ToArray())));
         if (token != null) welcome["token"] = token;
         if (session.Account.Self) welcome["self"] = true;
+        welcome["pieces"] = true;
         AddAgentRules(welcome, session.Account);
         session.RulesSent = AgentRulesSignature(session.Account);
         var messages = new List<JsonObject> { welcome };
@@ -557,19 +568,24 @@ public sealed partial class HostService
         return Wire.Message("rejected", ("projectId", project.Id.ToString()), ("reason", reason), ("revision", revision), ("project", ForGuest(json)));
     }
 
-    /// <summary>A file for an attachment a guest added (stored before its save arrives, which then refers to it).</summary>
+    /// <summary>
+    /// A file for an attachment a guest added, whole or a piece of it (stored before its save or message arrives, which
+    /// then refers to it). Up to the larger of the sizes you let files in Chat and comments be (15 MB at least, as before).
+    /// </summary>
     private JsonObject? StoreFile(GuestSession session, JsonObject message)
     {
         // Commenters send files with comments and chat messages; what refers to them is checked when it arrives.
         if (!GuestAccess.CanComment(RoleOf(session.Account))) return null;
         if (!Guid.TryParse((string?)message["id"], out var id)) return null;
-        var data = Convert.FromBase64String((string?)message["data"] ?? "");
-        if (data.Length > MaxFileBytes) return null;
-        var attachment = new Attachment { Id = id, FileName = ProjectStore.SafeFileName((string?)message["name"] ?? "file"), Size = data.Length };
-        var path = _state.Store.AttachmentPath(attachment);
-        if (File.Exists(path) || Directory.Exists(Path.GetDirectoryName(path))) return null; // never overwrite
-        try { _state.Store.StoreAttachment(attachment, data); }
-        catch (IOException) { }
+        var path = _state.Store.AttachmentPath(new Attachment { Id = id, FileName = ProjectStore.SafeFileName((string?)message["name"] ?? "file") });
+        // Never overwrite: a new file of its own, and its later pieces only to the one it started.
+        if (WireFiles.Starts(message) ? File.Exists(path) || Directory.Exists(Path.GetDirectoryName(path)) : !session.Puts.Contains(id)) return null;
+        session.Puts.Add(id);
+        try
+        {
+            if (WireFiles.Receive(message, path, Math.Max(WireFiles.WholeLimit, Math.Max(_state.Settings.ChatFileLimitBytes, _state.Settings.CommentFileLimitBytes))) != FileArrival.More) session.Puts.Remove(id);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { session.Puts.Remove(id); }
         return null;
     }
 
@@ -579,17 +595,8 @@ public sealed partial class HostService
         var attachment = Visible(session.Account).SelectMany(p => p.Attachments()).FirstOrDefault(a => a.Id == id) ?? ChatAttachment(session, id) ?? WikiAttachment(session, id);
         if (attachment == null) return;
         var path = _state.Store.AttachmentPath(attachment);
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                var info = new FileInfo(path);
-                if (!info.Exists || info.Length > MaxFileBytes) return;
-                var data = await File.ReadAllBytesAsync(path).ConfigureAwait(false);
-                await session.SendAsync(Wire.Message("file", ("id", id.ToString()), ("data", Convert.ToBase64String(data)))).ConfigureAwait(false);
-            }
-            catch (IOException) { }
-        });
+        // Off the UI thread; a big one in pieces, each sent before the next is read.
+        if (File.Exists(path)) _ = Task.Run(() => session.SendFileAsync(Wire.Message("file", ("id", id.ToString())), new OutgoingFile(attachment.FileName, Path: path)));
     }
 
     // ───────────── Keeping guests up to date ─────────────

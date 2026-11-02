@@ -32,6 +32,12 @@ public sealed partial class AppState : ObservableObject
         _saveTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _saveTimer.Tick += (_, _) => SaveNow();
         Chat = new ChatRoom(store.LoadChannels(), () => UserName);
+        store.CacheRoot = PrivateFilesRoot;
+        // A private conversation's files go to their cache, out of the data folder (the composer puts them there itself).
+        Chat.Posted += (channel, message) =>
+        {
+            if (channel.Direct) foreach (var file in message.Attachments ?? []) Store.MoveToCache(file);
+        };
         Chat.Changed += channel =>
         {
             _dirtyChannels.Add(channel);
@@ -183,6 +189,44 @@ public sealed partial class AppState : ObservableObject
     public event Action<Project>? RemoteProjectChanged;
 
     /// <summary>Where pictures and files of other ProJicts' projects are kept once fetched.</summary>
+    /// <summary>Where private conversations' files are kept: Settings › Chat, else %LocalAppData%\ProJict\Chat files (by the data folder when testing).</summary>
+    public string PrivateFilesRoot => AppSettings.PrivateFilesFolder is { Length: > 0 } folder ? folder : DefaultPrivateFilesRoot;
+    public string DefaultPrivateFilesRoot => _persistAppSettings
+        ? Path.Combine(Path.GetDirectoryName(AppSettings.DefaultPath)!, "Chat files")
+        : Path.Combine(Store.DataRoot, ".chat-files");
+
+    /// <summary>Uses another folder for private conversations' files, moving what's there; null for the usual one.</summary>
+    public void MovePrivateFiles(string? folder)
+    {
+        var from = PrivateFilesRoot;
+        AppSettings.PrivateFilesFolder = string.IsNullOrWhiteSpace(folder) ? null : folder.Trim();
+        Store.CacheRoot = PrivateFilesRoot;
+        try { PrivateFiles.MoveAll(from, PrivateFilesRoot); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { StatusText = ex.Message; }
+    }
+
+    private DispatcherTimer? _cleanOutTimer;
+
+    /// <summary>
+    /// Deletes private conversations' files older than the days you keep them (Settings › Chat), off the UI thread: when
+    /// ProJict starts, then every six hours.
+    /// </summary>
+    public void CleanOutPrivateFiles()
+    {
+        if (_cleanOutTimer == null && _persistAppSettings)
+        {
+            _cleanOutTimer = new DispatcherTimer { Interval = TimeSpan.FromHours(6) };
+            _cleanOutTimer.Tick += (_, _) => CleanOutPrivateFiles();
+            _cleanOutTimer.Start();
+        }
+        var (root, days) = (PrivateFilesRoot, AppSettings.PrivateFilesDays);
+        Task.Run(() =>
+        {
+            try { PrivateFiles.CleanOut(root, days, DateTime.Now); }
+            catch (Exception) { /* the next round tries again */ }
+        });
+    }
+
     public string RemoteCacheRoot => _persistAppSettings
         ? Path.Combine(Path.GetDirectoryName(AppSettings.DefaultPath)!, "remote")
         : Path.Combine(Store.DataRoot, ".remote-cache");
@@ -198,7 +242,8 @@ public sealed partial class AppState : ObservableObject
     /// <summary>The local file of an attachment: in the data folder, or for another ProJict's project in the cache (null until fetched).</summary>
     public string AttachmentPath(Project? project, Attachment attachment)
     {
-        if (project?.Remote is not { } remote) return Store.AttachmentPath(attachment);
+        // A private conversation's file, also one fetched from another ProJict, is in the cache for them.
+        if (project?.Remote is not { } remote || attachment.Cached) return Store.AttachmentPath(attachment);
         var cached = Path.Combine(RemoteCacheRoot, ProjectStore.SafeFileName(remote.HostKey), attachment.Id.ToString("N"), ProjectStore.SafeFileName(attachment.FileName));
         // Files you add to such a project are copied into your own data folder first, then sent.
         var own = Store.AttachmentPath(attachment);

@@ -60,6 +60,10 @@ public sealed class AppSettings
     public bool AllowAgents { get; set; } = true;
     /// <summary>Let AI agents read and post in Chat (Settings › AI agents).</summary>
     public bool AgentsUseChat { get; set; } = true;
+    /// <summary>How many days private conversations' files are kept in their cache on this computer (0 keeps them; Settings › Chat).</summary>
+    public int PrivateFilesDays { get; set; } = ProJict.Core.Features.PrivateFiles.DefaultDays;
+    /// <summary>Where that cache is; null for %LocalAppData%\ProJict\Chat files.</summary>
+    public string? PrivateFilesFolder { get; set; }
     /// <summary>Read-only API tokens may still use Chat fully: post, start channels, invite (Settings › API).</summary>
     public bool ReadOnlyTokensUseChat { get; set; } = true;
     /// <summary>Chat lists the agents' private conversations with each other (the toggle in its header).</summary>
@@ -181,6 +185,12 @@ public sealed class WorkspaceSettings
     public int CommentFileLimitMb { get; set; } = DefaultCommentFileLimitMb;
     public const int DefaultCommentFileLimitMb = 10;
     [System.Text.Json.Serialization.JsonIgnore] public long CommentFileLimitBytes => (long)Math.Max(1, CommentFileLimitMb) * 1024 * 1024;
+    /// <summary>The largest file you, a guest or an agent may post in Chat, in MB (Settings › Chat).</summary>
+    public int ChatFileLimitMb { get; set; } = DefaultChatFileLimitMb;
+    public const int DefaultChatFileLimitMb = 500;
+    /// <summary>The most either file limit can be set to, in MB.</summary>
+    public const int MaxFileLimitMb = 2048;
+    [System.Text.Json.Serialization.JsonIgnore] public long ChatFileLimitBytes => (long)Math.Clamp(ChatFileLimitMb, 1, MaxFileLimitMb) * 1024 * 1024;
 
     /// <summary>The files posted in the groups' discussions (kept here, not in a project).</summary>
     public IEnumerable<Attachment> GroupAttachments() => (GroupComments ?? []).Values.SelectMany(threads => threads.Attachments());

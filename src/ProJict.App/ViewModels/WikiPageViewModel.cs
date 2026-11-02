@@ -7,6 +7,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ProJict.App.Services;
 using ProJict.App.Services.Sharing;
+using ProJict.Core.Sharing;
 using ProJict.App.Views;
 using ProJict.Core.Features;
 using ProJict.Core.Model;
@@ -567,7 +568,7 @@ public sealed partial class WikiPageViewModel : ObservableObject
     {
         if (Host != null)
         {
-            Main.Guest.WikiAttach(Host, Model, [(fileName, png)]);
+            Main.Guest.WikiAttach(Host, Model, [new OutgoingFile(fileName, png)]);
             return fileName;
         }
         var copy = State.Store.WriteAttachment(fileName, png);
@@ -593,15 +594,16 @@ public sealed partial class WikiPageViewModel : ObservableObject
         var added = new List<Attachment>();
         if (Host != null)
         {
-            var files = new List<(string, byte[])>();
-            if (png != null) files.Add(($"screenshot-{DateTime.Now:yyyyMMdd-HHmmss}.png", png));
+            // Sent from where they are (a big one in pieces); the host keeps them.
+            var files = new List<OutgoingFile>();
+            if (png != null) files.Add(new OutgoingFile($"screenshot-{DateTime.Now:yyyyMMdd-HHmmss}.png", png));
             foreach (var path in paths)
             {
-                try { files.Add((Path.GetFileName(path), await File.ReadAllBytesAsync(path))); }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { State.StatusText = ex.Message; }
+                if (File.Exists(path)) files.Add(new OutgoingFile(Path.GetFileName(path), Path: path));
+                else State.StatusText = $"{path} isn't there.";
             }
             Main.Guest.WikiAttach(Host, Model, files);
-            if (insert) foreach (var (name, _) in files) InsertText(LinkFor(name));
+            if (insert) foreach (var file in files) InsertText(LinkFor(file.Name));
             return;
         }
         try

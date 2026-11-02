@@ -66,11 +66,23 @@ public sealed partial class HostConnection(KnownHost host) : ObservableObject
             .Select(n => Enum.TryParse<Priority>((string?)n, true, out var p) ? p : (Priority?)null).OfType<Priority>().ToList();
     }
     internal HashSet<Guid> Requested { get; } = [];
+    /// <summary>The host takes files in pieces, so bigger than 15 MB (its welcome says; ProJict 0.1.40 and newer).</summary>
+    internal bool TakesPieces { get; set; }
+    /// <summary>Files the host is sending in pieces for your channels (backPutFile), so its later pieces go to them only.</summary>
+    internal HashSet<Guid> BackPuts { get; } = [];
 
     internal void Send(JsonObject message)
     {
         if (Wire is not { } wire || Cts is not { } cts) return;
         _ = SendAsync(wire, message, cts);
+    }
+
+    /// <summary>A file to the host as <paramref name="message"/>: whole, or in pieces when it takes them. False when it's too big for it or didn't go.</summary>
+    internal async Task<bool> SendFileAsync(JsonObject message, OutgoingFile file)
+    {
+        if (Wire is not { } wire || Cts is not { } cts) return false;
+        try { return await WireFiles.SendAsync(message, file, TakesPieces, m => SendAsync(wire, m, cts), cts.Token); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or OperationCanceledException or ObjectDisposedException) { return false; }
     }
 
     private static async Task SendAsync(Wire wire, JsonObject message, CancellationTokenSource cts)
@@ -109,8 +121,6 @@ public sealed partial class GuestService
     private static readonly TimeSpan SaveDelay = TimeSpan.FromMilliseconds(400);
     private static readonly TimeSpan PingEvery = TimeSpan.FromSeconds(30);
     private static readonly int[] RetrySeconds = [2, 5, 10, 30, 60];
-    private const int MaxFileBytes = 15 * 1024 * 1024;
-
     private readonly AppState _state;
     private readonly MainViewModel _main;
     private readonly SharingStore _store;
@@ -249,8 +259,8 @@ public sealed partial class GuestService
                 connection.Wire = wire;
                 var token = invite == null ? _store.Token(connection.Host) : null;
                 await wire.SendAsync(token != null
-                    ? Wire.Message("hello", ("version", Wire.Version), ("name", _state.UserName), ("token", token))
-                    : Wire.Message("join", ("version", Wire.Version), ("name", _state.UserName), ("invite", invite), ("device", Environment.MachineName)), ct).ConfigureAwait(false);
+                    ? Wire.Message("hello", ("version", Wire.Version), ("name", _state.UserName), ("token", token), ("pieces", true))
+                    : Wire.Message("join", ("version", Wire.Version), ("name", _state.UserName), ("invite", invite), ("device", Environment.MachineName), ("pieces", true)), ct).ConfigureAwait(false);
                 using var pinger = new Timer(_ => connection.Send(Wire.Message("ping")), null, PingEvery, PingEvery);
                 while (true)
                 {
@@ -413,6 +423,9 @@ public sealed partial class GuestService
             case "backGetFile":
                 SendBackFile(connection, message);
                 break;
+            case "backPutFile":
+                StoreBackPut(connection, message);
+                break;
         }
     }
 
@@ -423,6 +436,7 @@ public sealed partial class GuestService
         connection.Role = Enum.TryParse<GuestRole>((string?)message["role"], out var role) ? role : GuestRole.Viewer;
         connection.MyName = (string?)message["name"] ?? connection.MyName;
         connection.IsSelf = (bool?)message["self"] == true;
+        connection.TakesPieces = (bool?)message["pieces"] == true;
         connection.TakeAgentRules(message);
         host.HostName = connection.HostName;
         if (Guid.TryParse((string?)message["guestId"], out var guestId)) host.GuestId = guestId;
@@ -540,22 +554,21 @@ public sealed partial class GuestService
         if (ProjectMerge.Normalized(copy.Project) == copy.BaseNormalized) return;
         // Files you attached go first, so the host has them when the save refers to them.
         var known = Json.Deserialize<Project>(copy.BaseJson)!.Attachments().Select(a => a.Id).ToHashSet();
-        foreach (var attachment in copy.Project.Attachments().Where(a => !known.Contains(a.Id)))
-        {
-            var path = _state.AttachmentPath(copy.Project, attachment);
-            try
-            {
-                var info = new FileInfo(path);
-                if (!info.Exists || info.Length > MaxFileBytes) continue;
-                connection.Send(Wire.Message("putFile", ("id", attachment.Id.ToString()), ("name", attachment.FileName),
-                    ("data", Convert.ToBase64String(File.ReadAllBytes(path)))));
-            }
-            catch (IOException) { }
-        }
+        var files = copy.Project.Attachments().Where(a => !known.Contains(a.Id))
+            .Select(a => (Attachment: a, Path: _state.AttachmentPath(copy.Project, a))).Where(f => File.Exists(f.Path)).ToList();
         copy.InFlight = true;
         copy.SentNormalized = ProjectMerge.Normalized(copy.Project);
-        connection.Send(Wire.Message("save", ("projectId", copy.Project.Id.ToString()), ("base", copy.Revision),
-            ("project", JsonNode.Parse(Json.Serialize(copy.Project)))));
+        var save = Wire.Message("save", ("projectId", copy.Project.Id.ToString()), ("base", copy.Revision),
+            ("project", JsonNode.Parse(Json.Serialize(copy.Project))));
+        if (files.Count == 0) connection.Send(save);
+        else _ = SendSaveAsync(connection, files, save);
+    }
+
+    private static async Task SendSaveAsync(HostConnection connection, List<(Attachment Attachment, string Path)> files, JsonObject save)
+    {
+        foreach (var (attachment, path) in files)
+            await connection.SendFileAsync(Wire.Message("putFile", ("id", attachment.Id.ToString()), ("name", attachment.FileName)), new OutgoingFile(attachment.FileName, Path: path));
+        connection.Send(save);
     }
 
     // ───────────── Files ─────────────
@@ -569,30 +582,37 @@ public sealed partial class GuestService
         connection.Send(Wire.Message("getFile", ("id", attachment.Id.ToString())));
     }
 
+    /// <summary>A file you asked for (getFile), whole or a piece of it: a project's attachment, or a chat message's or wiki page's file.</summary>
     private void StoreFile(HostConnection connection, JsonObject message)
     {
         if (!Guid.TryParse((string?)message["id"], out var id)) return;
-        var copy = connection.Copies.Values.FirstOrDefault(c => c.Project.Attachments().Any(a => a.Id == id));
-        if (copy == null)
+        string path;
+        Action arrived;
+        if (connection.Copies.Values.FirstOrDefault(c => c.Project.Attachments().Any(a => a.Id == id)) is { } copy)
         {
-            try
-            {
-                var data = Convert.FromBase64String((string?)message["data"] ?? "");
-                if (!StoreChatFile(connection, id, data)) StoreWikiFile(connection, id, data);
-            }
-            catch (Exception ex) when (ex is IOException or FormatException or UnauthorizedAccessException) { connection.Requested.Remove(id); }
-            return;
+            path = _state.AttachmentPath(copy.Project, copy.Project.Attachments().First(a => a.Id == id));
+            arrived = () => _main.GetProjectViewModel(copy.Project).RebuildAll();
         }
-        var attachment = copy?.Project.Attachments().First(a => a.Id == id);
-        if (copy == null || attachment == null) return;
+        else if (ChatAttachment(connection, id) is { } chat)
+        {
+            path = ChatFilePath(connection, chat);
+            arrived = () => ChatChanged?.Invoke(connection);
+        }
+        else if (WikiAttachment(connection, id) is { } wiki)
+        {
+            path = WikiFilePath(connection, wiki);
+            arrived = () => WikiChanged?.Invoke(connection);
+        }
+        else return;
         try
         {
-            var path = _state.AttachmentPath(copy.Project, attachment);
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            File.WriteAllBytes(path, Convert.FromBase64String((string?)message["data"] ?? ""));
-            _main.GetProjectViewModel(copy.Project).RebuildAll();
+            switch (WireFiles.Receive(message, path, WireFiles.MaxBytes))
+            {
+                case FileArrival.Done: arrived(); break;
+                case FileArrival.Failed: connection.Requested.Remove(id); break;
+            }
         }
-        catch (Exception ex) when (ex is IOException or FormatException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             connection.Requested.Remove(id);
         }

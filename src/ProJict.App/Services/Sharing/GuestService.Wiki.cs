@@ -81,16 +81,11 @@ public sealed partial class GuestService
     }
 
     /// <summary>Adds files to a host's page: the files go first, so the host has them when the page refers to them.</summary>
-    public void WikiAttach(HostConnection connection, WikiPage page, IReadOnlyList<(string Name, byte[] Data)> files)
+    public void WikiAttach(HostConnection connection, WikiPage page, IReadOnlyList<OutgoingFile> files) => _ = WikiAttachAsync(connection, page, files);
+
+    private async Task WikiAttachAsync(HostConnection connection, WikiPage page, IReadOnlyList<OutgoingFile> files)
     {
-        var sent = new JsonArray();
-        foreach (var (name, data) in files)
-        {
-            if (data.Length > MaxFileBytes) continue;
-            var id = Guid.NewGuid();
-            connection.Send(Wire.Message("putFile", ("id", id.ToString()), ("name", name), ("data", Convert.ToBase64String(data))));
-            sent.Add(new JsonObject { ["id"] = id.ToString(), ["name"] = name, ["size"] = data.Length });
-        }
+        var sent = await PutFilesAsync(connection, files);
         if (sent.Count > 0) WikiOp(connection, "attach", null, ("page", page.Id.ToString()), ("files", sent));
     }
 
@@ -105,15 +100,7 @@ public sealed partial class GuestService
         connection.Send(Wire.Message("getFile", ("id", attachment.Id.ToString())));
     }
 
-    /// <summary>A fetched file that belongs to a wiki page; false when it's not one.</summary>
-    private bool StoreWikiFile(HostConnection connection, Guid id, byte[] data)
-    {
-        var attachment = connection.Wiki?.Pages.SelectMany(p => p.Attachments ?? []).FirstOrDefault(a => a.Id == id);
-        if (attachment == null) return false;
-        var path = WikiFilePath(connection, attachment);
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        File.WriteAllBytes(path, data);
-        WikiChanged?.Invoke(connection);
-        return true;
-    }
+    /// <summary>The file of a page in the host's wiki, if the id is one.</summary>
+    private static Attachment? WikiAttachment(HostConnection connection, Guid id) =>
+        connection.Wiki?.Pages.SelectMany(p => p.Attachments ?? []).FirstOrDefault(a => a.Id == id);
 }

@@ -1318,7 +1318,9 @@ public sealed partial class ProjectViewModel : ObservableObject
     private bool AttachmentExists(AttachmentViewModel attachment)
     {
         if (File.Exists(attachment.Path)) return true;
-        _state.StatusText = $"{attachment.FileName} is missing from the data folder.";
+        _state.StatusText = attachment.CleanedOut
+            ? $"{attachment.FileName} was cleaned out: private conversations' files are kept {_state.AppSettings.PrivateFilesDays} days (Settings › Chat)."
+            : $"{attachment.FileName} is missing from the data folder.";
         return false;
     }
 

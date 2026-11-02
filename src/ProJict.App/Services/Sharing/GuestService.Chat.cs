@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.Json.Nodes;
+using ProJict.App.ViewModels;
 using ProJict.Core.Chat;
 using ProJict.Core.Model;
 using ProJict.Core.Sharing;
@@ -133,22 +134,47 @@ public sealed partial class GuestService
         connection.Send(message);
     }
 
-    /// <summary>Writes in a host's channel; its files go first, so the host has them when the message refers to them.</summary>
-    public void ChatPost(HostConnection connection, ChatChannel channel, string text, Guid? replyTo, IReadOnlyList<(string Name, byte[] Data)> files)
+    /// <summary>
+    /// Writes in a host's channel (as one of your agents, with <paramref name="agent"/>); its files go first, so the host
+    /// has them when the message refers to them.
+    /// </summary>
+    public void ChatPost(HostConnection connection, ChatChannel channel, string text, Guid? replyTo, IReadOnlyList<OutgoingFile> files, string? agent = null)
     {
-        var sent = new JsonArray();
-        foreach (var (name, data) in files)
-        {
-            if (data.Length > MaxFileBytes) continue;
-            var id = Guid.NewGuid();
-            connection.Send(Wire.Message("putFile", ("id", id.ToString()), ("name", name), ("data", Convert.ToBase64String(data))));
-            sent.Add(new JsonObject { ["id"] = id.ToString(), ["name"] = name, ["size"] = data.Length });
-        }
-        ChatOp(connection, "post", ("channel", channel.Id.ToString()), ("text", text), ("replyTo", replyTo?.ToString()), ("files", sent));
+        if (files.Count == 0) ChatOp(connection, "post", ("channel", channel.Id.ToString()), ("text", text), ("replyTo", replyTo?.ToString()), ("files", new JsonArray()), ("as", agent));
+        else _ = ChatPostAsync(connection, channel, text, replyTo, files, agent);
     }
 
-    /// <summary>Where a file from a host's chat is kept once fetched (with the host's other files).</summary>
-    public string ChatFilePath(HostConnection connection, Attachment attachment) =>
+    private async Task ChatPostAsync(HostConnection connection, ChatChannel channel, string text, Guid? replyTo, IReadOnlyList<OutgoingFile> files, string? agent)
+    {
+        var sent = await PutFilesAsync(connection, files);
+        ChatOp(connection, "post", ("channel", channel.Id.ToString()), ("text", text), ("replyTo", replyTo?.ToString()), ("files", sent), ("as", agent));
+    }
+
+    /// <summary>Sends files to the host (putFile), one after the other; what went, for the message or page that refers to them.</summary>
+    private async Task<JsonArray> PutFilesAsync(HostConnection connection, IReadOnlyList<OutgoingFile> files)
+    {
+        var sent = new JsonArray();
+        foreach (var file in files)
+        {
+            var id = Guid.NewGuid();
+            long size;
+            try { size = file.Size; }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { continue; }
+            if (size > WireFiles.LimitFor(connection.TakesPieces))
+            {
+                _state.StatusText = $"{file.Name} is {AttachmentViewModel.FormatSize(size)}: {connection.HostName}'s ProJict takes files up to " +
+                                    $"{AttachmentViewModel.FormatSize(WireFiles.LimitFor(connection.TakesPieces))} (it's an older one), so it didn't go.";
+                continue;
+            }
+            if (size > WireFiles.PieceBytes) _state.StatusText = $"Sending {file.Name} ({AttachmentViewModel.FormatSize(size)}) to {connection.HostName}'s ProJict…";
+            if (await connection.SendFileAsync(Wire.Message("putFile", ("id", id.ToString()), ("name", file.Name)), file))
+                sent.Add(new JsonObject { ["id"] = id.ToString(), ["name"] = file.Name, ["size"] = size });
+        }
+        return sent;
+    }
+
+    /// <summary>Where a file from a host's chat is kept once fetched: with the host's other files, a private conversation's in the cache for them.</summary>
+    public string ChatFilePath(HostConnection connection, Attachment attachment) => attachment.Cached ? _state.Store.AttachmentPath(attachment) :
         Path.Combine(_state.RemoteCacheRoot, ProjectStore.SafeFileName(connection.Address), attachment.Id.ToString("N"), ProjectStore.SafeFileName(attachment.FileName));
 
     /// <summary>Asks the host for a chat file (once) when it isn't here yet.</summary>
@@ -158,15 +184,7 @@ public sealed partial class GuestService
         connection.Send(Wire.Message("getFile", ("id", attachment.Id.ToString())));
     }
 
-    /// <summary>A fetched file that belongs to a chat message; false when it's not one.</summary>
-    private bool StoreChatFile(HostConnection connection, Guid id, byte[] data)
-    {
-        var attachment = connection.Chat?.Channels.SelectMany(c => c.Messages).SelectMany(m => m.Attachments ?? []).FirstOrDefault(a => a.Id == id);
-        if (attachment == null) return false;
-        var path = ChatFilePath(connection, attachment);
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        File.WriteAllBytes(path, data);
-        ChatChanged?.Invoke(connection);
-        return true;
-    }
+    /// <summary>The file of a message in the host's chat, if the id is one.</summary>
+    private static Attachment? ChatAttachment(HostConnection connection, Guid id) =>
+        connection.Chat?.Channels.SelectMany(c => c.Messages).SelectMany(m => m.Attachments ?? []).FirstOrDefault(a => a.Id == id);
 }

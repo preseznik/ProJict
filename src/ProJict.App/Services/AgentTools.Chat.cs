@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using ProJict.App.ViewModels;
 using ProJict.Core.Agents;
 using ProJict.Core.Chat;
 using ProJict.Core.Model;
@@ -52,7 +53,8 @@ public sealed partial class AgentTools
             "conversation starts with your first message). @name in the text mentions someone (they're notified), @everyone everyone in the channel, #name links a channel, " +
             "# and an item's 8-character id links the item. At most 20 messages a minute. " + ChatStyle,
             Schema(ChannelArg, ("text", "string", "The message.", true), ("reply_to", "string", "Id of the message you answer; it's quoted.", false),
-                ("attachments", "string[]", "Files to post with it, e.g. a screenshot (absolute paths or relative to your working directory).", false)),
+                ("attachments", "string[]", "Files to post with it, e.g. a screenshot or a build (absolute paths or relative to your working directory), " +
+                 "each up to the user's limit for Chat (500 MB unless they changed it).", false)),
             PostMessage, filesArgument: "attachments");
         Add("edit_message", "Edit or delete a chat message",
             "Changes the text of your own message, or deletes it (moderators can delete anyone's).",
@@ -228,6 +230,10 @@ public sealed partial class AgentTools
         Guid? replyTo = args.String("reply_to") is { } r
             ? (ChatRoom.FindMessage(channel, r.Trim()) ?? throw new McpToolException($"No message {r} in #{channel.Name}.", ToolProblem.NotFound)).Id
             : null;
+        var limit = _state.Settings.ChatFileLimitBytes;
+        if (files.FirstOrDefault(f => f.Size > limit) is { } big)
+            throw new McpToolException($"{big.FileName} is {AttachmentViewModel.FormatSize(big.Size)}; files in Chat can be up to {AttachmentViewModel.FormatSize(limit)} " +
+                                       "(the user's setting, Settings › Chat). Send a smaller file, or say where it is.");
         var text = args.String("text") ?? "";
         var message = Chatting(() => Chat.Post(channel, ActorOf(session), text, replyTo, files));
         session.Noticed.Add($"chat:{message.Id}");

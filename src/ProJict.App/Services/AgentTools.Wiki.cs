@@ -4,6 +4,7 @@ using ProJict.App.Services.Sharing;
 using ProJict.Core.Agents;
 using ProJict.Core.Features;
 using ProJict.Core.Model;
+using ProJict.Core.Sharing;
 using ProJict.Core.Wiki;
 
 namespace ProJict.App.Services;
@@ -422,7 +423,7 @@ public sealed partial class AgentTools
                                        "so you can read their wiki, not write it (only editors do).", ToolProblem.Forbidden);
         _main.Guest.WikiOp(host, "save", session.AgentName, ("page", page.Id.ToString()), ("text", text), ("base", version));
         if (files.Count > 0)
-            _main.Guest.WikiAttach(host, page, files.Select(f => (f.FileName, File.ReadAllBytes(_state.Store.AttachmentPath(f)))).ToList());
+            _main.Guest.WikiAttach(host, page, files.Select(f => new OutgoingFile(f.FileName, Path: _state.Store.AttachmentPath(f))).ToList());
         return Json(new JsonObject
         {
             ["page"] = SharedPageName(host, page),

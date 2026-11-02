@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json.Nodes;
 using ProJict.App.Services.Sharing;
+using ProJict.App.ViewModels;
 using ProJict.Core.Agents;
 using ProJict.Core.Chat;
 using ProJict.Core.Sharing;
@@ -128,21 +129,22 @@ public sealed partial class AgentTools
             throw new McpToolException($"{host.HostName} doesn't let guests' AI agents take part (or runs an older ProJict): you can read {SharedName(host, channel)}, not post.", ToolProblem.Forbidden);
         if (!GuestAccess.CanComment(host.Role))
             throw new McpToolException($"You take part in {host.HostName}'s ProJict through {host.MyName}, who is a viewer there: you can read, not post.", ToolProblem.Forbidden);
-        if (files.Count > 0)
-            throw new McpToolException("Files can't go to another ProJict's channel from an agent yet; attach them to the item instead (attach_file) and link it.");
         var text = (args.String("text") ?? "").Trim();
         if (text.Length == 0) throw new McpToolException("The message is empty.");
         if (text.Length > ChatRoom.MaxText) throw new McpToolException($"Messages can be up to {ChatRoom.MaxText} characters.");
         Guid? replyTo = args.String("reply_to") is { } r
             ? (ChatRoom.FindMessage(channel, r.Trim()) ?? throw new McpToolException($"No message {r} in {SharedName(host, channel)}.", ToolProblem.NotFound)).Id
             : null;
-        _main.Guest.ChatOp(host, "post", ("channel", channel.Id.ToString()), ("text", text), ("replyTo", replyTo?.ToString()), ("as", session.AgentName));
+        if (files.FirstOrDefault(f => f.Size > WireFiles.LimitFor(host.TakesPieces)) is { } big)
+            throw new McpToolException($"{big.FileName} is {AttachmentViewModel.FormatSize(big.Size)}: {host.HostName}'s ProJict takes files up to " +
+                                       $"{AttachmentViewModel.FormatSize(WireFiles.LimitFor(host.TakesPieces))} (it's an older one). Send a smaller file, or say where it is.");
+        _main.Guest.ChatPost(host, channel, text, replyTo, files.Select(f => new OutgoingFile(f.FileName, Path: _state.Store.AttachmentPath(f))).ToList(), session.AgentName);
         var result = new JsonObject
         {
             ["channel"] = SharedName(host, channel),
             ["sent"] = true,
             ["as"] = ViaIn(session, host),
-            ["note"] = $"Sent to {host.HostName}'s ProJict; it shows in read_channel once it's there.",
+            ["note"] = $"Sent to {host.HostName}'s ProJict; it shows in read_channel once it's there" + (files.Count > 0 ? " (a big file takes a while to get there)." : "."),
         };
         if (IsWallOfText(text))
             result["note"] += " That was long for a chat channel: keep messages short and conversational, and put details in the item's discussion.";

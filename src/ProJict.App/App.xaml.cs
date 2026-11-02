@@ -80,6 +80,7 @@ public partial class App : Application
         // One snapshot per launch, before anything is written.
         State.BackupNow();
         State.CleanUpAttachments();
+        State.CleanOutPrivateFiles();
 
         MainVm = new MainViewModel(State);
         var main = new MainWindow(MainVm);

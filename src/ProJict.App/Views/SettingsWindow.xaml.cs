@@ -8,6 +8,7 @@ using ProJict.App.Services;
 using ProJict.App.ViewModels;
 using ProJict.Core.Agents;
 using ProJict.Core.Export;
+using ProJict.Core.Features;
 using ProJict.Core.Model;
 using ProJict.Core.Storage;
 
@@ -48,6 +49,10 @@ public partial class SettingsWindow : Window
         AgentInstructions.Text = s.AgentInstructions ?? "";
         UserName.Text = state.UserName;
         CommentFileLimit.Text = s.CommentFileLimitMb.ToString();
+        ChatFileLimit.Text = s.ChatFileLimitMb.ToString();
+        PrivateFilesDays.Text = state.AppSettings.PrivateFilesDays.ToString();
+        PrivateFilesFolder.Text = state.PrivateFilesRoot;
+        ShowPrivateFiles();
         var notifications = state.AppSettings.Notifications;
         NotifyEnabled.IsChecked = notifications.Enabled;
         foreach (var box in NotifyKinds.Children.OfType<CheckBox>())
@@ -114,6 +119,8 @@ public partial class SettingsWindow : Window
                             (MarkInProgress.IsChecked == true ? " · copying a prompt marks items in progress" : "");
         CommentsSummary.Text = "You sign as " + (string.IsNullOrWhiteSpace(UserName.Text) ? Environment.UserName : UserName.Text.Trim()) +
                                $" · files in comments up to {CommentFileLimit.Text.Trim()} MB";
+        ChatSummary.Text = $"Files up to {ChatFileLimit.Text.Trim()} MB · private conversations' files " +
+                           (int.TryParse(PrivateFilesDays.Text, out var days) && days > 0 ? $"kept {days} day{(days == 1 ? "" : "s")}" : "kept");
         CaptureSummary.Text = (string.IsNullOrEmpty(Hotkey.Text) ? "No hotkey" : "Hotkey " + Hotkey.Text) + " · " +
                               (CloseToTray.IsChecked == true ? "closing keeps it in the tray" : "closing quits");
         GitHubSummary.Text = string.IsNullOrWhiteSpace(GitHubAccount.Text) ? "No account"
@@ -356,6 +363,35 @@ public partial class SettingsWindow : Window
 
     private void BrowseData_Click(object sender, RoutedEventArgs e) => BrowseFolder(DataRoot, "ProJict data folder");
     private void BrowseMirror_Click(object sender, RoutedEventArgs e) => BrowseFolder(MirrorFolder, "TXT mirror folder");
+    private void BrowsePrivateFiles_Click(object sender, RoutedEventArgs e) => BrowseFolder(PrivateFilesFolder, "Folder for private conversations' files");
+
+    private void OpenPrivateFiles_Click(object sender, RoutedEventArgs e)
+    {
+        Directory.CreateDirectory(_state.PrivateFilesRoot);
+        ShellLauncher.OpenFolder(_state.PrivateFilesRoot);
+    }
+
+    /// <summary>How much the cache for private conversations' files holds.</summary>
+    private void ShowPrivateFiles()
+    {
+        var (files, bytes) = PrivateFiles.Measure(_state.PrivateFilesRoot);
+        PrivateFilesHolds.Text = files == 0 ? "It's empty." : $"It holds {files} file{(files == 1 ? "" : "s")}, {AttachmentViewModel.FormatSize(bytes)}.";
+        CleanOutPrivate.IsEnabled = files > 0;
+        CleanOutPrivate.Content = "Clean out now";
+    }
+
+    /// <summary>Clean out now: the first click asks again; the second deletes every file there.</summary>
+    private void CleanOutPrivate_Click(object sender, RoutedEventArgs e)
+    {
+        if ((string)CleanOutPrivate.Content == "Clean out now")
+        {
+            CleanOutPrivate.Content = "Click again to delete them all";
+            return;
+        }
+        var (files, bytes) = PrivateFiles.CleanOut(_state.PrivateFilesRoot, null, DateTime.Now);
+        _state.StatusText = $"Cleaned out {files} file{(files == 1 ? "" : "s")} ({AttachmentViewModel.FormatSize(bytes)}) of private conversations.";
+        ShowPrivateFiles();
+    }
 
     private void BrowseFolder(TextBox target, string title)
     {
@@ -379,9 +415,24 @@ public partial class SettingsWindow : Window
             ShowError("Stale days must be a whole number (0 turns it off).", BoardSection);
             return;
         }
-        if (!int.TryParse(CommentFileLimit.Text, out var fileLimit) || fileLimit is < 1 or > 100)
+        if (!int.TryParse(CommentFileLimit.Text, out var fileLimit) || fileLimit is < 1 or > WorkspaceSettings.MaxFileLimitMb)
         {
-            ShowError("Files in comments can be limited to 1 to 100 MB.", CommentsSection);
+            ShowError($"Files in comments can be limited to 1 to {WorkspaceSettings.MaxFileLimitMb} MB.", CommentsSection);
+            return;
+        }
+        if (!int.TryParse(ChatFileLimit.Text, out var chatLimit) || chatLimit is < 1 or > WorkspaceSettings.MaxFileLimitMb)
+        {
+            ShowError($"Files in Chat can be limited to 1 to {WorkspaceSettings.MaxFileLimitMb} MB.", ChatSection);
+            return;
+        }
+        if (!int.TryParse(PrivateFilesDays.Text, out var privateDays) || privateDays is < 0 or > PrivateFiles.MaxDays)
+        {
+            ShowError("Keep private conversations' files for a number of days (0 keeps them).", ChatSection);
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(PrivateFilesFolder.Text))
+        {
+            ShowError("Choose a folder for private conversations' files.", ChatSection);
             return;
         }
         var mirrorOn = MirrorEnabled.IsChecked == true;
@@ -399,6 +450,12 @@ public partial class SettingsWindow : Window
         s.MarkCopiedInProgress = MarkInProgress.IsChecked == true;
         s.StaleDays = stale;
         s.CommentFileLimitMb = fileLimit;
+        s.ChatFileLimitMb = chatLimit;
+        _state.AppSettings.PrivateFilesDays = privateDays;
+        var privateFolder = PrivateFilesFolder.Text.Trim();
+        if (!string.Equals(privateFolder, _state.PrivateFilesRoot, StringComparison.OrdinalIgnoreCase))
+            _state.MovePrivateFiles(string.Equals(privateFolder, _state.DefaultPrivateFilesRoot, StringComparison.OrdinalIgnoreCase) ? null : privateFolder);
+        _state.CleanOutPrivateFiles();
         var notify = _state.AppSettings.Notifications;
         notify.Enabled = NotifyEnabled.IsChecked == true;
         foreach (var box in NotifyKinds.Children.OfType<CheckBox>())

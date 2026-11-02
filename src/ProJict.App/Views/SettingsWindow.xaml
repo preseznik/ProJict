@@ -240,10 +240,56 @@
                     <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="0,8,0,0">
                         <TextBlock Text="up to" VerticalAlignment="Center" Margin="0,0,8,0" />
                         <TextBox x:Name="CommentFileLimit" Width="70" AutomationProperties.Name="Largest file in a comment, MB"
-                                 ToolTip="The largest file you, people you share with or AI agents may post in a discussion" />
+                                 ToolTip="The largest file you, people you share with or AI agents may post in a discussion (up to 2048 MB)" />
                         <TextBlock Text="MB each" VerticalAlignment="Center" Margin="8,0,0,0" />
                     </StackPanel>
                 </Grid>
+            </StackPanel>
+        </Expander>
+
+        <Expander x:Name="ChatSection" Tag="Chat" Style="{StaticResource Section}">
+            <Expander.Header>
+                <StackPanel>
+                    <TextBlock Text="Chat" Style="{StaticResource SectionName}" />
+                    <TextBlock x:Name="ChatSummary" Style="{StaticResource Summary}" />
+                </StackPanel>
+            </Expander.Header>
+            <StackPanel Style="{StaticResource Body}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="170" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Text="Files in Chat" VerticalAlignment="Center" />
+                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                        <TextBlock Text="up to" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <TextBox x:Name="ChatFileLimit" Width="70" AutomationProperties.Name="Largest file in Chat, MB"
+                                 ToolTip="The largest file you, people you share with or AI agents may post in Chat (up to 2048 MB)" />
+                        <TextBlock Text="MB each" VerticalAlignment="Center" Margin="8,0,0,0" />
+                    </StackPanel>
+                    <TextBlock Grid.Row="1" Text="Private conversations" VerticalAlignment="Center" Margin="0,8,0,0" />
+                    <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="0,8,0,0">
+                        <TextBlock Text="keep their files" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <TextBox x:Name="PrivateFilesDays" Width="50" AutomationProperties.Name="Days to keep private conversations' files"
+                                 ToolTip="After this many days, a file sent in a private conversation is deleted from this computer" />
+                        <TextBlock Text="days (0 keeps them)" VerticalAlignment="Center" Margin="8,0,0,0" />
+                    </StackPanel>
+                </Grid>
+                <DockPanel Margin="0,8,0,0">
+                    <Button DockPanel.Dock="Right" Content="Open" Margin="8,0,0,0" Click="OpenPrivateFiles_Click" />
+                    <Button DockPanel.Dock="Right" Content="Browse…" Margin="8,0,0,0" Click="BrowsePrivateFiles_Click" />
+                    <TextBox x:Name="PrivateFilesFolder" AutomationProperties.Name="Folder for private conversations' files" />
+                </DockPanel>
+                <DockPanel Margin="0,6,0,0">
+                    <Button x:Name="CleanOutPrivate" DockPanel.Dock="Right" Content="Clean out now" Margin="8,0,0,0" Click="CleanOutPrivate_Click" />
+                    <TextBlock x:Name="PrivateFilesHolds" Style="{StaticResource MutedText}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                </DockPanel>
+                <TextBlock Style="{StaticResource MutedText}" Margin="2,6,0,0" TextWrapping="Wrap"
+                           Text="Files sent in private conversations are kept in this folder on this computer, not in the data folder, so they aren't backed up or mirrored; once cleaned out, the conversation says so. Files in channels stay with your other files." />
             </StackPanel>
         </Expander>
 

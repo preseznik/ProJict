@@ -231,6 +231,12 @@ public sealed class Attachment
     public string FileName { get; set; } = "";
     public long Size { get; set; }
     public DateTime AddedAt { get; set; } = DateTime.Now;
+    /// <summary>
+    /// A private conversation's file, kept in the cache for them (Settings › Chat) rather than the data folder, so it
+    /// isn't mirrored or backed up; it's cleaned out after some days.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Cached { get; set; }
 
     [JsonIgnore] public bool IsImage => ImageExtensions.Contains(Path.GetExtension(FileName));
 }

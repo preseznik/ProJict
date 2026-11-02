@@ -766,9 +766,9 @@ public sealed partial class ChatViewModel : ObservableObject
             // To another ProJict: the files' contents go along, it keeps them.
             try
             {
-                var data = Pending.Select(f => (f.Name, f.Data ?? File.ReadAllBytes(f.Path!))).ToList();
-                if (host is HostConnection connection) _main.Guest.ChatPost(connection, channel, text, ReplyTo?.Model.Id, data);
-                else if (host is BackChat back) _main.Host.BackPost(back, channel, text, ReplyTo?.Model.Id, data);
+                var outgoing = Pending.Select(f => new OutgoingFile(f.Name, f.Data, f.Path)).ToList();
+                if (host is HostConnection connection) _main.Guest.ChatPost(connection, channel, text, ReplyTo?.Model.Id, outgoing);
+                else if (host is BackChat back) _main.Host.BackPost(back, channel, text, ReplyTo?.Model.Id, outgoing);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
@@ -783,8 +783,9 @@ public sealed partial class ChatViewModel : ObservableObject
         var files = new List<Attachment>();
         try
         {
-            // Copied into the data folder (as for comments); the originals are only read.
-            files = Pending.Select(f => f.Stored ?? (f.Data != null ? _state.Store.WriteAttachment(f.Name, f.Data) : _state.Store.ImportAttachment(f.Path!))).ToList();
+            // Copied into the data folder (as for comments), a private conversation's into the cache for them; the originals are only read.
+            var cached = channel.Direct;
+            files = Pending.Select(f => f.Stored ?? (f.Data != null ? _state.Store.WriteAttachment(f.Name, f.Data, cached) : _state.Store.ImportAttachment(f.Path!, cached))).ToList();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -864,9 +865,9 @@ public sealed partial class ChatViewModel : ObservableObject
 
     private bool TooBig(string name, long size)
     {
-        var limit = _state.Settings.CommentFileLimitBytes;
+        var limit = _state.Settings.ChatFileLimitBytes;
         if (size <= limit) return false;
-        _state.StatusText = $"{name} is {AttachmentViewModel.FormatSize(size)}; files in chat can be up to {AttachmentViewModel.FormatSize(limit)} (Settings › Comments & history).";
+        _state.StatusText = $"{name} is {AttachmentViewModel.FormatSize(size)}; files in Chat can be up to {AttachmentViewModel.FormatSize(limit)} (Settings › Chat).";
         return true;
     }
 

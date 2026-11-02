@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.Json.Nodes;
+using ProJict.App.ViewModels;
 using ProJict.Core.Chat;
 using ProJict.Core.Model;
 using ProJict.Core.Sharing;
@@ -115,12 +116,41 @@ public sealed partial class HostService
         back.Session.Send(message);
     }
 
-    /// <summary>Writes in a guest's shared-back channel, with the files' contents (its ProJict keeps them).</summary>
-    public void BackPost(BackChat back, ChatChannel channel, string text, Guid? replyTo, IReadOnlyList<(string Name, byte[] Data)> files)
+    /// <summary>
+    /// Writes in a guest's shared-back channel, with the files (its ProJict keeps them): sent first in pieces when it
+    /// takes them, else in the message itself, up to 15 MB each.
+    /// </summary>
+    public void BackPost(BackChat back, ChatChannel channel, string text, Guid? replyTo, IReadOnlyList<OutgoingFile> files)
+    {
+        if (!back.IsConnected) return;
+        if (back.Session.TakesPieces && files.Count > 0)
+        {
+            _ = BackPostAsync(back, channel, text, replyTo, files);
+            return;
+        }
+        var sent = new JsonArray();
+        foreach (var file in files)
+        {
+            try
+            {
+                if (file.Size <= WireFiles.WholeLimit)
+                    sent.Add(new JsonObject { ["name"] = file.Name, ["data"] = Convert.ToBase64String(file.Data ?? File.ReadAllBytes(file.Path!)) });
+                else _state.StatusText = $"{file.Name} is {AttachmentViewModel.FormatSize(file.Size)}: {back.OwnerName}'s ProJict takes files up to 15 MB (it's an older one), so it didn't go.";
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+        }
+        BackOp(back, "post", ("channel", channel.Id.ToString()), ("text", text), ("replyTo", replyTo?.ToString()), ("files", sent));
+    }
+
+    private async Task BackPostAsync(BackChat back, ChatChannel channel, string text, Guid? replyTo, IReadOnlyList<OutgoingFile> files)
     {
         var sent = new JsonArray();
-        foreach (var (name, data) in files.Where(f => f.Data.Length <= MaxFileBytes))
-            sent.Add(new JsonObject { ["name"] = name, ["data"] = Convert.ToBase64String(data) });
+        foreach (var file in files)
+        {
+            var id = Guid.NewGuid();
+            if (await back.Session.SendFileAsync(Wire.Message("backPutFile", ("id", id.ToString()), ("name", file.Name)), file))
+                sent.Add(new JsonObject { ["id"] = id.ToString(), ["name"] = file.Name });
+        }
         BackOp(back, "post", ("channel", channel.Id.ToString()), ("text", text), ("replyTo", replyTo?.ToString()), ("files", sent));
     }
 
@@ -135,21 +165,21 @@ public sealed partial class HostService
                 back.Session.Send(Wire.Message("backGetFile", ("id", attachment.Id.ToString())));
     }
 
+    /// <summary>A file you asked the guest for (backGetFile), whole or a piece of it.</summary>
     private void StoreBackFile(GuestSession session, JsonObject message)
     {
-        if (session.Back is not { } back || !Guid.TryParse((string?)message["id"], out var id)) return;
+        if (session.Back is not { } back || !Guid.TryParse((string?)message["id"], out var id) || !back.Requested.Contains(id)) return;
         var attachment = back.Chat.Channels.SelectMany(c => c.Messages).SelectMany(m => m.Attachments ?? []).FirstOrDefault(a => a.Id == id);
-        if (attachment == null || (string?)message["data"] is not { } data) return;
+        if (attachment == null) return;
         try
         {
-            var bytes = Convert.FromBase64String(data);
-            if (bytes.Length > MaxFileBytes) return;
-            var path = _state.Store.AttachmentPath(attachment);
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            File.WriteAllBytes(path, bytes);
-            BackChatChanged?.Invoke(back);
+            switch (WireFiles.Receive(message, _state.Store.AttachmentPath(attachment), WireFiles.MaxBytes))
+            {
+                case FileArrival.Done: BackChatChanged?.Invoke(back); break;
+                case FileArrival.Failed: back.Requested.Remove(id); break;
+            }
         }
-        catch (Exception ex) when (ex is FormatException or IOException or UnauthorizedAccessException) { }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { back.Requested.Remove(id); }
     }
 
     /// <summary>The guest left: its channels go with it.</summary>
