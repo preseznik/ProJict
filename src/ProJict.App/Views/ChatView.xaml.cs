@@ -22,6 +22,14 @@ public partial class ChatView : UserControl
     public ChatView()
     {
         InitializeComponent();
+        // Ctrl+F searches Chat.
+        PreviewKeyDown += (_, e) =>
+        {
+            if (e.Key != Key.F || Keyboard.Modifiers != ModifierKeys.Control) return;
+            SearchBox.Focus();
+            SearchBox.SelectAll();
+            e.Handled = true;
+        };
         DataContextChanged += (_, _) => Attach(DataContext as ChatViewModel);
         Unloaded += (_, _) => Attach(null);
         Loaded += (_, _) => Attach(DataContext as ChatViewModel);
@@ -231,5 +239,21 @@ public partial class ChatView : UserControl
         menu.Items.Add(new MenuItem { Header = member.ModeratorHeader, Command = member.ToggleModeratorCommand });
         menu.Items.Add(new MenuItem { Header = "Remove from the channel", Command = member.KickCommand, ToolTip = "They can't rejoin until invited again" });
         menu.IsOpen = true;
+    }
+
+    /// <summary>Esc clears the search (and the channels come back); Enter opens the first message found.</summary>
+    private void SearchBox_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (_vm == null) return;
+        if (e.Key == Key.Escape && _vm.IsSearching)
+        {
+            _vm.ClearSearchCommand.Execute(null);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Enter && _vm.SearchResults.FirstOrDefault() is { } first)
+        {
+            _vm.OpenSearchResultCommand.Execute(first);
+            e.Handled = true;
+        }
     }
 }

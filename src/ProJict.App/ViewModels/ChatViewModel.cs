@@ -295,6 +295,8 @@ public sealed partial class ChatViewModel : ObservableObject
             _state.AppSettings.ShowAgentChats = value;
             _state.SaveAppSettings();
             OnPropertyChanged();
+            // Searching: their conversations join the results, or leave them.
+            if (IsSearching) RunSearch();
         }
     }
 
@@ -347,6 +349,7 @@ public sealed partial class ChatViewModel : ObservableObject
                      nameof(UnreadToolTip), nameof(BrowseRows), nameof(PrivateChats), nameof(HasPrivateChats), nameof(HostChats), nameof(HasHostChats),
                      nameof(AgentChats), nameof(HasAgentChats), nameof(AgentChatsTitle) })
             OnPropertyChanged(name);
+        if (IsSearching) RunSearch();
         CountsChanged?.Invoke();
     }
 

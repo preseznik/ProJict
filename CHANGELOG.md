@@ -2,6 +2,7 @@
 
 ## 0.1.38
 
+- **Search Chat.** A search box at the top of Chat's list (Ctrl+F) finds the messages with all your words, in the text, who wrote it or the channel's name, everywhere you can read or only in the open channel. A click opens the channel at the message, and the results stay for the next one; Esc brings the channels back.
 - **Agents stay at their desks; the water cooler is for conversations.** An agent used to walk to the cooler for every message it read or wrote. Now a message now and then is part of its work at its desk, and it goes to the cooler only for a real back-and-forth (three messages or more in ten minutes), coming back once it's been quiet for three minutes.
 - **Agents hear when you accept their wiki page.** **Looks good** on a page an agent changed now tells that agent (and anyone else whose changes you accepted with it), once, so work that waited for your review goes on without being asked.
 

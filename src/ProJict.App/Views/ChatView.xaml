@@ -360,7 +360,61 @@
                     </ToggleButton>
                     <TextBlock Text="Chat" FontSize="28" FontWeight="SemiBold" />
                 </DockPanel>
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="-4,12,-4,0">
+                <!-- Search (Ctrl+F): the messages with all the words, instead of the channels while it has any. -->
+                <StackPanel DockPanel.Dock="Top" Margin="0,10,0,0">
+                    <Grid>
+                        <TextBox x:Name="SearchBox" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged, Delay=150}" Padding="8,5,28,5"
+                                 AutomationProperties.Name="Search Chat" PreviewKeyDown="SearchBox_PreviewKeyDown"
+                                 ToolTip="Messages with all these words, in the text, who wrote it or the channel's name (Ctrl+F; Esc clears)" />
+                        <TextBlock Text="Search Chat (Ctrl+F)" Margin="11,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"
+                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}" Visibility="{Binding SearchText, Converter={StaticResource InvEmptyToVis}}" />
+                        <Button Style="{StaticResource SubtleIconButton}" Content="&#xE711;" FontSize="9" Padding="5" HorizontalAlignment="Right" Margin="0,0,3,0"
+                                Command="{Binding ClearSearchCommand}" ToolTip="Clear the search (Esc)" AutomationProperties.Name="Clear the search"
+                                Visibility="{Binding IsSearching, Converter={StaticResource BoolToVis}}" />
+                    </Grid>
+                    <CheckBox x:Name="SearchHereBox" IsChecked="{Binding SearchHere}" Content="{Binding SearchHereText}" Margin="2,6,0,0" MinHeight="0" FontSize="12"
+                              Visibility="{Binding IsSearching, Converter={StaticResource BoolToVis}}" />
+                </StackPanel>
+                <!-- What the search found: where, who and when, and the line with the words; a click opens it. -->
+                <Grid>
+                <ScrollViewer x:Name="SearchResultsPane" VerticalScrollBarVisibility="Auto" Margin="-4,8,-4,0"
+                              Visibility="{Binding IsSearching, Converter={StaticResource BoolToVis}}">
+                    <StackPanel Margin="4,0">
+                        <TextBlock Text="{Binding SearchSummary}" Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap" Margin="2,0,0,6" />
+                        <ItemsControl x:Name="SearchResultList" ItemsSource="{Binding SearchResults}" Focusable="False">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:ChatSearchRow}">
+                                    <Border x:Name="Row" Padding="8,5" Margin="0,0,0,2" CornerRadius="4" Background="Transparent" Cursor="Hand"
+                                            ToolTip="{Binding ToolTip}" AutomationProperties.Name="{Binding Snippet}">
+                                        <Border.InputBindings>
+                                            <MouseBinding MouseAction="LeftClick" Command="{Binding DataContext.OpenSearchResultCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                          CommandParameter="{Binding}" />
+                                        </Border.InputBindings>
+                                        <StackPanel>
+                                            <DockPanel>
+                                                <TextBlock DockPanel.Dock="Right" Text="{Binding When}" FontSize="11" Margin="6,0,0,0" Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                                                <TextBlock FontSize="11" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+                                                    <Run Text="{Binding Where, Mode=OneWay}" /><Run Text=" · " /><Run Text="{Binding Who, Mode=OneWay}" FontWeight="SemiBold" />
+                                                </TextBlock>
+                                            </DockPanel>
+                                            <TextBlock Text="{Binding Snippet}" TextWrapping="Wrap" MaxHeight="40" TextTrimming="CharacterEllipsis" Margin="0,1,0,0" />
+                                        </StackPanel>
+                                    </Border>
+                                    <DataTemplate.Triggers>
+                                        <Trigger SourceName="Row" Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="Row" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                                        </Trigger>
+                                        <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                            <Setter TargetName="Row" Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}" />
+                                        </DataTrigger>
+                                    </DataTemplate.Triggers>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </ScrollViewer>
+                <ScrollViewer x:Name="ChannelListPane" VerticalScrollBarVisibility="Auto" Margin="-4,12,-4,0"
+                              Visibility="{Binding IsSearching, Converter={StaticResource InvBoolToVis}}">
                     <StackPanel Margin="4,0">
                         <TextBlock Text="No channels yet. Start one with + above, or from the right-click menu of a project, category or item."
                                    Style="{StaticResource MutedText}" TextWrapping="Wrap" Visibility="{Binding HasNoChannels, Converter={StaticResource BoolToVis}}" />
@@ -386,6 +440,7 @@
                         </Button>
                     </StackPanel>
                 </ScrollViewer>
+                </Grid>
             </DockPanel>
         </Border>
 
