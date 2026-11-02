@@ -6,6 +6,7 @@ using System.Windows.Input;
 using System.Windows.Threading;
 using ProJict.App.Services;
 using ProJict.App.ViewModels;
+using ProJict.Core.Wiki;
 
 namespace ProJict.App.Views;
 
@@ -55,8 +56,27 @@ public partial class WikiView : UserControl
     {
         if (_wiki != null) _wiki.PropertyChanged -= OnWikiChanged;
         _wiki = wiki;
-        if (_wiki != null) _wiki.PropertyChanged += OnWikiChanged;
+        if (_wiki != null)
+        {
+            _wiki.PropertyChanged += OnWikiChanged;
+            ListColumn.Width = new GridLength(_wiki.ListWidth);
+            EditorColumn.Width = new GridLength(_wiki.EditorShare, GridUnitType.Star);
+            PreviewColumn.Width = new GridLength(1 - _wiki.EditorShare, GridUnitType.Star);
+        }
         AttachPage(_wiki?.Page);
+    }
+
+    /// <summary>The list's edge dragged: it stays that wide, also next time.</summary>
+    private void ListSplitter_DragCompleted(object sender, DragCompletedEventArgs e)
+    {
+        if (_wiki != null && ListColumn.ActualWidth > 0) _wiki.ListWidth = ListColumn.ActualWidth;
+    }
+
+    /// <summary>The line between the editor and the preview dragged: they keep sharing the room so, also next time.</summary>
+    private void EditorSplitter_DragCompleted(object sender, DragCompletedEventArgs e)
+    {
+        var room = EditorColumn.ActualWidth + PreviewColumn.ActualWidth;
+        if (_wiki != null && room > 0) _wiki.EditorShare = EditorColumn.ActualWidth / room;
     }
 
     private void OnWikiChanged(object? sender, PropertyChangedEventArgs e)
@@ -70,6 +90,7 @@ public partial class WikiView : UserControl
         {
             _page.PropertyChanged -= OnPageChanged;
             _page.InsertRequested -= Insert;
+            _page.ReplaceRequested -= Replace;
         }
         _page = page;
         Show(Reader, page?.Document, keepScroll: false);
@@ -77,6 +98,7 @@ public partial class WikiView : UserControl
         if (_page == null) return;
         _page.PropertyChanged += OnPageChanged;
         _page.InsertRequested += Insert;
+        _page.ReplaceRequested += Replace;
         if (_page.IsEditing) FocusEditor(selectTitle: _page.EditText.Length == 0 || _page.Model.Version == 1);
     }
 
@@ -111,7 +133,10 @@ public partial class WikiView : UserControl
         if (Editor.CaretIndex == 0) Editor.CaretIndex = Editor.Text.Length;
     });
 
-    /// <summary>Text (a link to a file) goes where the caret is, as typing would, so Ctrl+Z in the box takes it out again.</summary>
+    /// <summary>
+    /// Text (a link to a file) goes where the caret is, as typing would, so Ctrl+Z in the box takes it out again. A
+    /// picture, video or sound gets a blank line before and after it, so it stands on its own instead of in a paragraph.
+    /// </summary>
     private void Insert(string text)
     {
         if (!Editor.IsVisible)
@@ -120,10 +145,46 @@ public partial class WikiView : UserControl
             return;
         }
         var at = Editor.SelectionStart;
-        var before = at > 0 && Editor.Text[at - 1] != '\n' ? "\n" : "";
-        Editor.SelectedText = before + text + "\n";
-        Editor.CaretIndex = at + before.Length + text.Length + 1;
+        var written = Editor.Text[..at];
+        var alone = text.StartsWith("![", StringComparison.Ordinal);
+        var before = at == 0 || written.EndsWith("\n\n", StringComparison.Ordinal) ? ""
+            : written.EndsWith('\n') ? (alone ? "\n" : "")
+            : alone ? "\n\n" : "\n";
+        var after = alone && !Editor.Text[(at + Editor.SelectionLength)..].StartsWith('\n') ? "\n\n" : "\n";
+        Editor.SelectedText = before + text + after;
+        Editor.CaretIndex = at + before.Length + text.Length + after.Length;
         Editor.Focus();
+    }
+
+    /// <summary>Part of the text written anew for you (a picture's size or place), as typing would, so Ctrl+Z puts it back.</summary>
+    private void Replace(int start, int length, string text)
+    {
+        if (start < 0 || start + length > Editor.Text.Length) return;
+        Editor.Select(start, length);
+        Editor.SelectedText = text;
+        Editor.Select(start + text.Length, 0);
+    }
+
+    private void Diagram_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button) return;
+        var menu = DiagramMenu();
+        menu.PlacementTarget = button;
+        menu.Placement = PlacementMode.Bottom;
+        menu.IsOpen = true;
+    }
+
+    /// <summary>The Diagram menu: a starter of each kind, put where you're writing (Ctrl+Z in the box takes it out again).</summary>
+    internal ContextMenu DiagramMenu()
+    {
+        var menu = new ContextMenu();
+        foreach (var starter in DiagramStarters.All())
+        {
+            var item = new MenuItem { Header = starter.Name };
+            item.Click += (_, _) => Insert(starter.Text);
+            menu.Items.Add(item);
+        }
+        return menu;
     }
 
     private void Editor_SelectionChanged(object sender, RoutedEventArgs e)

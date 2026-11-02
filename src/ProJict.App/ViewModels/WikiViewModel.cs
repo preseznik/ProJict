@@ -43,6 +43,38 @@ public sealed partial class WikiViewModel : ObservableObject
     internal AppState State => _state;
     internal MainViewModel Main => _main;
 
+    // ───────────── Layout ─────────────
+
+    public const double DefaultListWidth = 270, MinListWidth = 180, MaxListWidth = 900;
+
+    /// <summary>How wide the list of pages is, as you last dragged its edge (on this computer).</summary>
+    public double ListWidth
+    {
+        get => _state.AppSettings.WikiListWidth ?? DefaultListWidth;
+        set
+        {
+            value = Math.Clamp(Math.Round(value), MinListWidth, MaxListWidth);
+            if (Math.Abs(ListWidth - value) < 0.5) return;
+            _state.AppSettings.WikiListWidth = value;
+            _state.SaveAppSettings();
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>The editor's share of the room it has with the preview, as you last dragged between them (on this computer).</summary>
+    public double EditorShare
+    {
+        get => _state.AppSettings.WikiEditorShare ?? 0.5;
+        set
+        {
+            value = Math.Round(Math.Clamp(value, 0.15, 0.85), 3);
+            if (Math.Abs(EditorShare - value) < 0.001) return;
+            _state.AppSettings.WikiEditorShare = value;
+            _state.SaveAppSettings();
+            OnPropertyChanged();
+        }
+    }
+
     public ObservableCollection<WikiNodeViewModel> Tree { get; } = [];
     public ObservableCollection<WikiHitViewModel> Results { get; } = [];
 
@@ -447,9 +479,10 @@ public sealed partial class WikiFileViewModel(WikiPageViewModel owner, Attachmen
     /// <summary>Audio or video on this ProJict's own page: it plays in place (another ProJict's files open as before).</summary>
     public MediaKind MediaKind => MediaLinks.KindOf(attachment.FileName);
     public string? PlayPath => owner.LocalFilePath(attachment);
-    public bool Plays => MediaKind is MediaKind.Audio or MediaKind.Video && PlayPath != null;
+    /// <summary>It plays here, under the page, unless the page already shows it (![](clip.mp4)) where it's written.</summary>
+    public bool Plays => MediaKind is MediaKind.Audio or MediaKind.Video && PlayPath != null && !WikiMedia.Shows(owner.Model.Text, FileName);
     public string SizeText => AttachmentViewModel.FormatSize(attachment.Size);
-    public string ToolTip => $"{FileName} · {SizeText}\nClick to open · {(attachment.IsImage ? "![](" : "[" + FileName + "](")}{FileName}) shows it on the page";
+    public string ToolTip => $"{FileName} · {SizeText}\nClick to open · {(WikiPageViewModel.ShowsInPlace(FileName) ? "![](" : "[" + FileName + "](")}{FileName}) shows it on the page";
     public bool CanRemove => owner.IsOwn;
 
     [RelayCommand] private void Open() => owner.OpenFile(attachment.FileName);

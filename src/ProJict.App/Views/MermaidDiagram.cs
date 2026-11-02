@@ -47,11 +47,11 @@ public sealed class MermaidDiagram(DiagramService diagrams) : WikiRenderer.IDiag
             bitmap.CacheOption = BitmapCacheOption.OnLoad;
             bitmap.EndInit();
             bitmap.Freeze();
-            // Drawn at twice the size, for sharpness: shown at its own.
+            // Drawn at twice the size, for sharpness: shown at its own, or smaller where the page is narrower (the preview).
             var image = new Image
             {
-                Source = bitmap, Width = bitmap.PixelWidth / 2.0, Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly,
-                MaxWidth = 1100, HorizontalAlignment = HorizontalAlignment.Left, Cursor = Cursors.Hand, ToolTip = "A diagram · click to open the picture",
+                Source = bitmap, MaxWidth = Math.Min(bitmap.PixelWidth / 2.0, 1100), Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly,
+                HorizontalAlignment = HorizontalAlignment.Left, Cursor = Cursors.Hand, ToolTip = "A diagram · click to open the picture",
             };
             image.MouseLeftButtonUp += (_, e) =>
             {

@@ -40,7 +40,9 @@ public sealed partial class AgentTools
         Add("write_wiki", "Write wiki page",
             "Creates or changes a wiki page, in Markdown: the whole page, or one section by its heading (replaced, or added to with mode=append; a missing section is " +
             "added at the end). Links: [[Page name]] for pages, # and an item's 8-character id for items (#4e84570c), #name for chat channels; files you attach show " +
-            "with ![](file name) or link with [name](file name). Pass the version you read: if someone changed the page since, your change is merged with theirs " +
+            "with ![](file name) (pictures show, videos and sounds play there) or link with [name](file name). Size and place one in braces after it: " +
+            "![](shot.png){medium center}: small, medium, large, full, 320px or 50%; left, center or right; wrap for text beside it ({40% right wrap}). " +
+            "A caption under it goes in quotes: ![](shot.png \"The menu\"). Pass the version you read: if someone changed the page since, your change is merged with theirs " +
             "paragraph by paragraph, and a real clash keeps both versions for the user to pick. Every save is a version signed with your name, and pages you " +
             "change wait for the user's review. Write for people: headings, short paragraphs and lists. Diagrams: a ```mermaid block (flowchart, sequence, class, " +
             "state, ER, gantt, …) is drawn in the page; read_wiki then says if one doesn't draw, and why.",

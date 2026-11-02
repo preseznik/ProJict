@@ -28,16 +28,41 @@
                         <TranslateTransform X="{Binding X}" Y="{Binding Y}" />
                     </TransformGroup>
                 </Canvas.RenderTransform>
-                <!-- Chair -->
-                <Rectangle Canvas.Left="76" Canvas.Top="-10" Width="28" Height="4" RadiusX="2" RadiusY="2" Fill="{StaticResource Metal}" />
-                <Rectangle Canvas.Left="87" Canvas.Top="-34" Width="4" Height="25" Fill="{StaticResource Metal}" />
-                <Rectangle Canvas.Left="100" Canvas.Top="-74" Width="8" Height="42" RadiusX="3" RadiusY="3" Fill="#374151" />
-                <Rectangle Canvas.Left="70" Canvas.Top="-40" Width="38" Height="7" RadiusX="3" RadiusY="3" Fill="#374151" />
-                <!-- Desk -->
-                <Rectangle Canvas.Left="4" Canvas.Top="-56" Width="5" Height="56" Fill="{StaticResource WoodDark}" />
-                <Rectangle Canvas.Left="58" Canvas.Top="-56" Width="5" Height="56" Fill="{StaticResource WoodDark}" />
-                <Rectangle Canvas.Left="6" Canvas.Top="-54" Width="54" Height="22" Fill="{StaticResource WoodDark}" Opacity="0.55" />
-                <Rectangle Canvas.Left="0" Canvas.Top="-62" Width="68" Height="8" RadiusX="2" RadiusY="2" Fill="{StaticResource Wood}" />
+                <Canvas x:Name="ClassicFurniture">
+                    <!-- Chair -->
+                    <Rectangle Canvas.Left="76" Canvas.Top="-10" Width="28" Height="4" RadiusX="2" RadiusY="2" Fill="{StaticResource Metal}" />
+                    <Rectangle Canvas.Left="87" Canvas.Top="-34" Width="4" Height="25" Fill="{StaticResource Metal}" />
+                    <Rectangle Canvas.Left="100" Canvas.Top="-74" Width="8" Height="42" RadiusX="3" RadiusY="3" Fill="#374151" />
+                    <Rectangle Canvas.Left="70" Canvas.Top="-40" Width="38" Height="7" RadiusX="3" RadiusY="3" Fill="#374151" />
+                    <!-- Desk -->
+                    <Rectangle Canvas.Left="4" Canvas.Top="-56" Width="5" Height="56" Fill="{StaticResource WoodDark}" />
+                    <Rectangle Canvas.Left="58" Canvas.Top="-56" Width="5" Height="56" Fill="{StaticResource WoodDark}" />
+                    <Rectangle Canvas.Left="6" Canvas.Top="-54" Width="54" Height="22" Fill="{StaticResource WoodDark}" Opacity="0.55" />
+                    <Rectangle Canvas.Left="0" Canvas.Top="-62" Width="68" Height="8" RadiusX="2" RadiusY="2" Fill="{StaticResource Wood}" />
+                </Canvas>
+                <!-- The drawn look: the desk and its chair as pictures; the monitor and the station's things stay drawn. -->
+                <Canvas x:Name="DrawnFurniture" Visibility="Collapsed">
+                    <!-- Each picture with the room's night tint over it, in its own shape, while the room is dark. -->
+                    <Grid Canvas.Left="64" Canvas.Top="-60" Width="42" Height="60" RenderTransformOrigin="0.5,0.5">
+                        <Grid.RenderTransform>
+                            <ScaleTransform ScaleX="-1" />
+                        </Grid.RenderTransform>
+                        <Image Source="/ProJict;component/Assets/Office/chair.png" Stretch="Fill" />
+                        <Rectangle Fill="#8C0B122E" Visibility="{Binding DataContext.IsDarkRoom, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVis}}">
+                            <Rectangle.OpacityMask>
+                                <ImageBrush ImageSource="/ProJict;component/Assets/Office/chair.png" />
+                            </Rectangle.OpacityMask>
+                        </Rectangle>
+                    </Grid>
+                    <Grid Canvas.Left="-23" Canvas.Top="-78" Width="115" Height="78">
+                        <Image Source="/ProJict;component/Assets/Office/desk.png" Stretch="Fill" />
+                        <Rectangle Fill="#8C0B122E" Visibility="{Binding DataContext.IsDarkRoom, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVis}}">
+                            <Rectangle.OpacityMask>
+                                <ImageBrush ImageSource="/ProJict;component/Assets/Office/desk.png" />
+                            </Rectangle.OpacityMask>
+                        </Rectangle>
+                    </Grid>
+                </Canvas>
                 <!-- In the studio: its role's name plate, on the front of the desk -->
                 <Border x:Name="Plate" Canvas.Left="4" Canvas.Top="-52" Width="58" Height="14" CornerRadius="3" Background="#E61F2937"
                         Visibility="{Binding RoleName, Converter={StaticResource EmptyToVis}}" RenderTransformOrigin="0.5,0.5">
@@ -264,6 +289,10 @@
                 </Grid>
             </Canvas>
             <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding DataContext.IsDrawnLook, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="True">
+                    <Setter TargetName="ClassicFurniture" Property="Visibility" Value="Collapsed" />
+                    <Setter TargetName="DrawnFurniture" Property="Visibility" Value="Visible" />
+                </DataTrigger>
                 <DataTrigger Binding="{Binding Screen}" Value="Building">
                     <Setter TargetName="Code" Property="Visibility" Value="Visible" />
                     <DataTrigger.EnterActions>
@@ -384,6 +413,15 @@
                     </TransformGroup>
                 </Canvas.RenderTransform>
                 <Ellipse Canvas.Left="-27" Canvas.Top="-5" Width="54" Height="10" Fill="Black" Opacity="0.14" />
+                <Grid x:Name="DrawnCooler" Canvas.Left="-22" Canvas.Top="-120" Width="44" Height="122" Visibility="Collapsed">
+                        <Image Source="/ProJict;component/Assets/Office/water-cooler.png" Stretch="Fill" />
+                        <Rectangle Fill="#8C0B122E" Visibility="{Binding DataContext.IsDarkRoom, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVis}}">
+                            <Rectangle.OpacityMask>
+                                <ImageBrush ImageSource="/ProJict;component/Assets/Office/water-cooler.png" />
+                            </Rectangle.OpacityMask>
+                        </Rectangle>
+                </Grid>
+                <Canvas x:Name="ClassicCooler">
                 <!-- Cabinet, taps and drip tray -->
                 <Rectangle Canvas.Left="-20" Canvas.Top="-64" Width="40" Height="64" RadiusX="3" RadiusY="3" Fill="#E5E7EB" Stroke="#9CA3AF" StrokeThickness="1" />
                 <Rectangle Canvas.Left="-20" Canvas.Top="-64" Width="11" Height="64" RadiusX="3" RadiusY="3" Fill="White" Opacity="0.5" />
@@ -398,7 +436,14 @@
                 <Rectangle Canvas.Left="-17" Canvas.Top="-114" Width="34" Height="46" RadiusX="13" RadiusY="13" Fill="#7DD3FC" Opacity="0.9" />
                 <Rectangle Canvas.Left="-17" Canvas.Top="-96" Width="34" Height="2.5" Fill="#38BDF8" Opacity="0.6" />
                 <Rectangle Canvas.Left="-11" Canvas.Top="-108" Width="5" Height="32" RadiusX="2.5" RadiusY="2.5" Fill="White" Opacity="0.55" />
+                </Canvas>
             </Canvas>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding DataContext.IsDrawnLook, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="True">
+                    <Setter TargetName="ClassicCooler" Property="Visibility" Value="Collapsed" />
+                    <Setter TargetName="DrawnCooler" Property="Visibility" Value="Visible" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
         </DataTemplate>
 
         <!-- Behind a focused agent: the rest of the room dimmed. Clicks go through, to another robot or the room. -->
@@ -495,9 +540,21 @@
                         </Canvas>
                     </Canvas>
                     <!-- Body with its initials -->
-                    <Rectangle Canvas.Left="-15" Canvas.Top="-32" Width="30" Height="32" RadiusX="8" RadiusY="8" Fill="{Binding Badge.Background}" />
-                    <Rectangle Canvas.Left="-15" Canvas.Top="-32" Width="30" Height="32" RadiusX="8" RadiusY="8" Fill="Black" Opacity="0.12" />
-                    <TextBlock Canvas.Left="-15" Canvas.Top="-25" Width="30" TextAlignment="Center" Text="{Binding Badge.Initials}" FontSize="10" FontWeight="Bold"
+                    <Canvas x:Name="ClassicBody">
+                        <Rectangle Canvas.Left="-15" Canvas.Top="-32" Width="30" Height="32" RadiusX="8" RadiusY="8" Fill="{Binding Badge.Background}" />
+                        <Rectangle Canvas.Left="-15" Canvas.Top="-32" Width="30" Height="32" RadiusX="8" RadiusY="8" Fill="Black" Opacity="0.12" />
+                    </Canvas>
+                    <!-- The drawn look (concept B): one rounded block in its colour, lit at the top and shaded at the foot, with ear nubs. -->
+                    <Canvas x:Name="DrawnBody" Visibility="Collapsed">
+                        <Rectangle Canvas.Left="-23" Canvas.Top="-54" Width="6" Height="14" RadiusX="3" RadiusY="3" Fill="{Binding Badge.Background}" />
+                        <Rectangle Canvas.Left="17" Canvas.Top="-54" Width="6" Height="14" RadiusX="3" RadiusY="3" Fill="{Binding Badge.Background}" />
+                        <Rectangle Canvas.Left="-23" Canvas.Top="-54" Width="6" Height="14" RadiusX="3" RadiusY="3" Fill="Black" Opacity="0.3" />
+                        <Rectangle Canvas.Left="17" Canvas.Top="-54" Width="6" Height="14" RadiusX="3" RadiusY="3" Fill="Black" Opacity="0.3" />
+                        <Rectangle Canvas.Left="-19" Canvas.Top="-68" Width="38" Height="64" RadiusX="11" RadiusY="11" Fill="{Binding Badge.Background}" />
+                        <Rectangle Canvas.Left="-19" Canvas.Top="-68" Width="38" Height="10" RadiusX="11" RadiusY="11" Fill="White" Opacity="0.22" />
+                        <Rectangle Canvas.Left="-19" Canvas.Top="-14" Width="38" Height="10" RadiusX="6" RadiusY="6" Fill="Black" Opacity="0.14" />
+                    </Canvas>
+                    <TextBlock x:Name="Initials" Canvas.Left="-15" Canvas.Top="-25" Width="30" TextAlignment="Center" Text="{Binding Badge.Initials}" FontSize="10" FontWeight="Bold"
                                Foreground="White" RenderTransformOrigin="0.5,0.5">
                         <TextBlock.RenderTransform>
                             <ScaleTransform x:Name="InitialsFlip" />
@@ -520,18 +577,18 @@
                     <Canvas x:Name="Head">
                         <Line X1="0" Y1="-64" X2="0" Y2="-72" Stroke="{Binding Badge.Background}" StrokeThickness="2" />
                         <Ellipse x:Name="Antenna" Canvas.Left="-3.5" Canvas.Top="-77" Width="7" Height="7" Fill="#FBBF24" />
-                        <Rectangle Canvas.Left="-18" Canvas.Top="-65" Width="36" Height="30" RadiusX="9" RadiusY="9" Fill="{Binding Badge.Background}" />
-                        <Rectangle Canvas.Left="-15" Canvas.Top="-60" Width="27" Height="19" RadiusX="6" RadiusY="6" Fill="#E8F1FF" />
+                        <Rectangle x:Name="HeadPlate" Canvas.Left="-18" Canvas.Top="-65" Width="36" Height="30" RadiusX="9" RadiusY="9" Fill="{Binding Badge.Background}" />
+                        <Rectangle x:Name="Face" Canvas.Left="-15" Canvas.Top="-60" Width="27" Height="19" RadiusX="6" RadiusY="6" Fill="#E8F1FF" />
                         <Canvas x:Name="Eyes">
                             <Canvas.RenderTransform>
                                 <ScaleTransform x:Name="Blink" CenterY="-50" />
                             </Canvas.RenderTransform>
-                            <Ellipse Canvas.Left="-11" Canvas.Top="-54" Width="5" Height="7" Fill="{StaticResource Ink}" />
-                            <Ellipse Canvas.Left="-1" Canvas.Top="-54" Width="5" Height="7" Fill="{StaticResource Ink}" />
+                            <Ellipse x:Name="EyeLeft" Canvas.Left="-11" Canvas.Top="-54" Width="5" Height="7" Fill="{StaticResource Ink}" />
+                            <Ellipse x:Name="EyeRight" Canvas.Left="-1" Canvas.Top="-54" Width="5" Height="7" Fill="{StaticResource Ink}" />
                         </Canvas>
                         <Canvas x:Name="Shut" Visibility="Collapsed">
-                            <Rectangle Canvas.Left="-12" Canvas.Top="-50" Width="7" Height="1.6" Fill="{StaticResource Ink}" />
-                            <Rectangle Canvas.Left="-2" Canvas.Top="-50" Width="7" Height="1.6" Fill="{StaticResource Ink}" />
+                            <Rectangle x:Name="ShutLeft" Canvas.Left="-12" Canvas.Top="-50" Width="7" Height="1.6" Fill="{StaticResource Ink}" />
+                            <Rectangle x:Name="ShutRight" Canvas.Left="-2" Canvas.Top="-50" Width="7" Height="1.6" Fill="{StaticResource Ink}" />
                         </Canvas>
                         <Rectangle x:Name="Mouth" Canvas.Left="-6" Canvas.Top="-45" Width="9" Height="1.6" Fill="{StaticResource Ink}">
                             <Rectangle.RenderTransform>
@@ -604,6 +661,38 @@
                     <DataTrigger.ExitActions>
                         <StopStoryboard BeginStoryboardName="ShiverStory" />
                     </DataTrigger.ExitActions>
+                </DataTrigger>
+                <!-- The drawn look (concept B): the same parts, so it still blinks, talks, types and sleeps; one block, a dark
+                     screen face with cyan eyes, the initials on its chest, dark arms. -->
+                <DataTrigger Binding="{Binding DataContext.IsDrawnLook, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="True">
+                    <Setter TargetName="ClassicBody" Property="Visibility" Value="Collapsed" />
+                    <Setter TargetName="DrawnBody" Property="Visibility" Value="Visible" />
+                    <Setter TargetName="HeadPlate" Property="Visibility" Value="Collapsed" />
+                    <Setter TargetName="Face" Property="Fill" Value="#27303A" />
+                    <Setter TargetName="Face" Property="Canvas.Left" Value="-14" />
+                    <Setter TargetName="Face" Property="Canvas.Top" Value="-61" />
+                    <Setter TargetName="Face" Property="Width" Value="28" />
+                    <Setter TargetName="Face" Property="Height" Value="20" />
+                    <Setter TargetName="EyeLeft" Property="Fill" Value="#67E8F9" />
+                    <Setter TargetName="EyeLeft" Property="Canvas.Left" Value="-9" />
+                    <Setter TargetName="EyeLeft" Property="Canvas.Top" Value="-57" />
+                    <Setter TargetName="EyeLeft" Property="Height" Value="8" />
+                    <Setter TargetName="EyeRight" Property="Fill" Value="#67E8F9" />
+                    <Setter TargetName="EyeRight" Property="Canvas.Left" Value="4" />
+                    <Setter TargetName="EyeRight" Property="Canvas.Top" Value="-57" />
+                    <Setter TargetName="EyeRight" Property="Height" Value="8" />
+                    <Setter TargetName="ShutLeft" Property="Fill" Value="#67E8F9" />
+                    <Setter TargetName="ShutLeft" Property="Canvas.Left" Value="-10" />
+                    <Setter TargetName="ShutRight" Property="Fill" Value="#67E8F9" />
+                    <Setter TargetName="ShutRight" Property="Canvas.Left" Value="3" />
+                    <Setter TargetName="Mouth" Property="Fill" Value="#67E8F9" />
+                    <Setter TargetName="Mouth" Property="Canvas.Left" Value="-4.5" />
+                    <Setter TargetName="Mouth" Property="Canvas.Top" Value="-46" />
+                    <Setter TargetName="Initials" Property="Canvas.Left" Value="-19" />
+                    <Setter TargetName="Initials" Property="Canvas.Top" Value="-36" />
+                    <Setter TargetName="Initials" Property="Width" Value="38" />
+                    <Setter TargetName="Initials" Property="FontSize" Value="11" />
+                    <Setter TargetName="Arm" Property="Fill" Value="#27303A" />
                 </DataTrigger>
                 <!-- Eyes blink now and then. -->
                 <EventTrigger SourceName="Root" RoutedEvent="Loaded">

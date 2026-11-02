@@ -759,7 +759,9 @@ public sealed partial class AgentTools : IMcpToolHost
             _main.ApiStore.Save();
         }
         foreach (var (project, item) in held) Edit(project, item.Id, i => i.ClaimedBy = session.AgentName);
-        Chat.RenameMember(old, session.AgentName);
+        // A name of its own goes with all its channels; the client's default name ("Claude Code") only with those it joined
+        // in this session: other sessions went by that name before (#97eefe11).
+        Chat.RenameMember(old, session.AgentName, former == null ? session.ConnectedAt : null);
         known[session.AgentName] = session.Client;
         _state.MarkSettingsDirty();
         _main.Agents.Renamed();

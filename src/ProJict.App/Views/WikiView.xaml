@@ -22,7 +22,7 @@
                         </StackPanel>
                     </Button>
                     <Button Style="{StaticResource SubtleIconButton}" Content="&#xE8C8;" FontSize="11" Padding="4,2" Command="{Binding InsertCommand}"
-                            ToolTip="Put a link to it in the page (pictures show)" AutomationProperties.Name="Insert a link to the file"
+                            ToolTip="Put it in the page where you're writing (pictures show, videos and sounds play)" AutomationProperties.Name="Insert a link to the file"
                             Visibility="{Binding DataContext.Page.CanEdit, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVis}}" />
                     <Button Style="{StaticResource SubtleIconButton}" Content="&#xE711;" FontSize="10" Padding="4,2" Command="{Binding RemoveCommand}"
                             ToolTip="Remove from the page" AutomationProperties.Name="Remove the file" Visibility="{Binding CanRemove, Converter={StaticResource BoolToVis}}" />
@@ -65,7 +65,8 @@
 
     <Grid>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="270" MinWidth="180" />
+            <!-- As wide as you last dragged it (the view sets it). -->
+            <ColumnDefinition x:Name="ListColumn" Width="270" MinWidth="180" />
             <ColumnDefinition Width="Auto" />
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
@@ -122,7 +123,7 @@
 
         <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Center" VerticalAlignment="Stretch" Background="Transparent"
                       BorderThickness="1,0,0,0" BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}" ResizeBehavior="PreviousAndNext"
-                      ToolTip="Drag to make the list wider or narrower" />
+                      ToolTip="Drag to make the list wider or narrower" DragCompleted="ListSplitter_DragCompleted" />
 
         <!-- The open page -->
         <TextBlock Grid.Column="2" Text="Pick a page on the left, or start one with +." Style="{StaticResource MutedText}" Margin="24,28,0,0"
@@ -134,6 +135,12 @@
                 <TextBlock Text="{Binding FolderText}" Style="{StaticResource MutedText}" FontSize="12" Margin="3,0,0,0" />
                 <DockPanel>
                     <StackPanel x:Name="PageButtons" DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                        <!-- While editing: a starter diagram where you're writing (the button has the text font, so its menu reads). -->
+                        <Button x:Name="DiagramButton" Style="{StaticResource SubtleButton}" Click="Diagram_Click" Margin="0,0,6,0" AutomationProperties.Name="Diagram"
+                                ToolTip="Put a diagram where you're writing: a flowchart, a sequence, a Gantt chart… It's text you change, drawn in the preview."
+                                Visibility="{Binding IsEditing, Converter={StaticResource BoolToVis}}">
+                            <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource Icon}" Text="&#xE9D2;" /><TextBlock Text="Diagram" Margin="6,0,0,0" /></StackPanel>
+                        </Button>
                         <Button Style="{StaticResource AccentButtonStyle}" Command="{Binding SaveCommand}" Padding="12,4" Margin="0,0,6,0" ToolTip="Save as a new version (Ctrl+S)"
                                 AutomationProperties.Name="Save" Visibility="{Binding IsEditing, Converter={StaticResource BoolToVis}}">
                             <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource Icon}" Text="&#xE74E;" FontSize="12" VerticalAlignment="Center" /><TextBlock Text="Save" Margin="6,0,0,0" /></StackPanel>
@@ -148,8 +155,10 @@
                                       ToolTip="Every version: who saved it and when, what it changed, and Restore" AutomationProperties.Name="History">
                             <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource Icon}" Text="&#xE81C;" /><TextBlock Text="History" Margin="6,0,0,0" /></StackPanel>
                         </ToggleButton>
-                        <Button x:Name="MoreButton" Style="{StaticResource SubtleIconButton}" Content="&#xE712;" Click="More_Click" ToolTip="Move, copy its link, delete"
+                        <!-- The glyph has the icon font, not the button: its menu would inherit it and show boxes for letters. -->
+                        <Button x:Name="MoreButton" Style="{StaticResource SubtleButton}" Click="More_Click" ToolTip="Move, copy its link, delete"
                                 AutomationProperties.Name="More">
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE712;" FontSize="14" />
                             <Button.ContextMenu>
                                 <ContextMenu>
                                     <MenuItem Header="Copy link to this page" Command="{Binding CopyLinkCommand}" />
@@ -276,16 +285,18 @@
                 <!-- Editing: Markdown on the left, the live preview on the right -->
                 <Grid x:Name="EditorGrid" Visibility="{Binding IsEditing, Converter={StaticResource BoolToVis}}">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
+                        <!-- Shared as you last dragged between them (the view sets it). -->
+                        <ColumnDefinition x:Name="EditorColumn" Width="*" />
                         <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition x:Name="PreviewColumn" Width="*" />
                     </Grid.ColumnDefinitions>
                     <TextBox x:Name="Editor" Text="{Binding EditText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" AcceptsTab="True" TextWrapping="Wrap"
                              VerticalScrollBarVisibility="Auto" FontFamily="{StaticResource MonoFont}" FontSize="13" VerticalContentAlignment="Top"
                              AutomationProperties.Name="Markdown" AllowDrop="True" PreviewDragOver="Editor_PreviewDragOver" PreviewDrop="Editor_PreviewDrop"
                              PreviewKeyDown="Editor_PreviewKeyDown" SelectionChanged="Editor_SelectionChanged"
                              ToolTip="Markdown: # headings, **bold**, - lists, | tables |, ```code```, [[Page name]] links pages, #4e84570c items, #channel channels. Paste or drop pictures and files." />
-                    <GridSplitter Grid.Column="1" Width="8" HorizontalAlignment="Center" VerticalAlignment="Stretch" Background="Transparent" ResizeBehavior="PreviousAndNext" />
+                    <GridSplitter Grid.Column="1" Width="8" HorizontalAlignment="Center" VerticalAlignment="Stretch" Background="Transparent" ResizeBehavior="PreviousAndNext"
+                                  DragCompleted="EditorSplitter_DragCompleted" />
                     <Border Grid.Column="2" BorderThickness="1" CornerRadius="4" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}" Padding="8,6,0,0">
                         <DockPanel>
                             <TextBlock DockPanel.Dock="Top" Text="Preview" Style="{StaticResource MutedText}" FontSize="11" Margin="4,0,0,4" />

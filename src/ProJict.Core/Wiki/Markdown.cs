@@ -50,8 +50,11 @@ public sealed record MdCodeSpan(string Code) : MdInline;
 /// <summary>[text](url): a web link, or the name of a file attached to the page.</summary>
 public sealed record MdLink(string Url, IReadOnlyList<MdInline> Content) : MdInline;
 
-/// <summary>![alt](url): a picture attached to the page (by file name), or one on the web.</summary>
-public sealed record MdImage(string Url, string Alt) : MdInline;
+/// <summary>
+/// ![alt](url "caption"){layout}: a picture, video or sound attached to the page (by file name), or a picture on the
+/// web; the caption shows under it, and the layout (<see cref="MediaLayout"/>) says its size and place.
+/// </summary>
+public sealed record MdImage(string Url, string Alt, string Caption = "", MediaLayout Layout = default) : MdInline;
 
 /// <summary>[[Page name]] or [[Page name|what to show]].</summary>
 public sealed record MdWikiLink(string Target, string Label) : MdInline;
@@ -408,9 +411,9 @@ public static partial class Markdown
                     }
                 }
             }
-            if (c == '!' && i + 1 < text.Length && text[i + 1] == '[' && LinkAt(text, i + 1) is { } image)
+            if (c == '!' && i + 1 < text.Length && text[i + 1] == '[' && ImageAt(text, i) is { } image)
             {
-                Add(new MdImage(image.Url, PlainText(ParseInlines(image.Label, depth + 1))));
+                Add(new MdImage(image.Url, PlainText(ParseInlines(image.Label, depth + 1)), image.Caption, image.Layout));
                 i = image.End;
                 continue;
             }
@@ -471,8 +474,22 @@ public static partial class Markdown
         (text.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || text.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ||
          text.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase)) && !text.Any(char.IsWhiteSpace) && Uri.TryCreate(text, UriKind.Absolute, out _);
 
-    /// <summary>"[label](url "title")" at <paramref name="at"/> (the "["): its label, url and where it ends.</summary>
-    private static (string Label, string Url, int End)? LinkAt(string text, int at)
+    /// <summary>"![label](url "caption"){layout}" at <paramref name="at"/> (the "!"); the layout only when its words are all layout words.</summary>
+    internal static WikiMediaRef? ImageAt(string text, int at)
+    {
+        if (LinkAt(text, at + 1) is not { } link) return null;
+        var end = link.End;
+        var layout = default(MediaLayout);
+        if (end < text.Length && text[end] == '{' && text.IndexOf('}', end) is > 0 and var shut && MediaLayout.Parse(text[(end + 1)..shut]) is { } found)
+        {
+            layout = found;
+            end = shut + 1;
+        }
+        return new WikiMediaRef(at, end, link.Label, link.Target, link.Url, link.Title, layout);
+    }
+
+    /// <summary>"[label](url "title")" at <paramref name="at"/> (the "["): its label, url (and as written, without the title), title and where it ends.</summary>
+    private static (string Label, string Url, string Target, string Title, int End)? LinkAt(string text, int at)
     {
         var depth = 0;
         var close = -1;
@@ -500,10 +517,28 @@ public static partial class Markdown
         }
         if (end < 0) return null;
         var target = text[(close + 2)..end].Trim();
-        // An optional "title" after the url.
-        if (target.Length > 0 && target[^1] is '"' or '\'' && target.IndexOf(' ') is > 0 and var space) target = target[..space];
-        if (target.StartsWith('<') && target.EndsWith('>')) target = target[1..^1];
-        return (text[(at + 1)..close], target.Replace("%20", " "), end + 1);
+        // An optional "title" after the url (also after a <url with spaces>).
+        var title = "";
+        if (target.StartsWith('<') && target.IndexOf('>') is > 0 and var gt && Title(target[(gt + 1)..]) is { } quoted)
+        {
+            title = quoted;
+            target = target[..(gt + 1)];
+        }
+        else if (target.Length > 0 && target[^1] is '"' or '\'' && target.IndexOf(' ') is > 0 and var space && !target.StartsWith('<'))
+        {
+            title = Title(target[space..]) ?? "";
+            target = target[..space];
+        }
+        var url = target.StartsWith('<') && target.EndsWith('>') ? target[1..^1] : target;
+        return (text[(at + 1)..close], url.Replace("%20", " "), target, title, end + 1);
+    }
+
+    /// <summary>A link's "title" (or 'title') after its url; "" for none, null when what's there isn't one.</summary>
+    private static string? Title(string rest)
+    {
+        rest = rest.Trim();
+        if (rest.Length == 0) return "";
+        return rest.Length >= 2 && rest[0] is '"' or '\'' && rest[^1] == rest[0] ? rest[1..^1] : null;
     }
 
     /// <summary>**strong**, __strong__, *emphasis*, _emphasis_ (not inside words) or ~~struck~~ starting at <paramref name="at"/>.</summary>

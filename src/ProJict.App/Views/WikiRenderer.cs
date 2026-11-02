@@ -5,6 +5,9 @@ using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using ProJict.App.Services;
+using ProJict.Core.Features;
+using ProJict.Core.Model;
 using ProJict.Core.Wiki;
 
 namespace ProJict.App.Views;
@@ -24,12 +27,20 @@ public sealed class WikiRenderContext
     public Action<string> OpenChannel { get; init; } = _ => { };
     /// <summary>A web link, or a file attached to the page.</summary>
     public Action<string> OpenLink { get; init; } = _ => { };
+    /// <summary>
+    /// While the page is edited: shows a picture, video or sound with another layout and caption, by changing what's
+    /// written (the number says which of the ones naming its file it is, from 0). Null otherwise: no right-click menu.
+    /// </summary>
+    public Action<MdImage, int, MediaLayout, string>? Format { get; init; }
+    /// <summary>How many pictures and players naming each file were drawn so far, to know which one is right-clicked.</summary>
+    internal Dictionary<string, int> Drawn { get; } = new(StringComparer.OrdinalIgnoreCase);
 }
 
 /// <summary>
 /// Draws a page's Markdown as a FlowDocument: headings, paragraphs, lists and tasks, quotes, code, tables, rules,
-/// pictures, and links to pages, items, channels, files and the web. Diagrams go through <see cref="Diagrams"/>
-/// (Mermaid, see <see cref="MermaidDiagram"/>); one nothing draws (draw.io, for now) shows as its code.
+/// pictures, videos and sounds (sized and placed as their <see cref="MediaLayout"/> says, with a caption), and links to
+/// pages, items, channels, files and the web. Diagrams go through <see cref="Diagrams"/> (Mermaid, see
+/// <see cref="MermaidDiagram"/>); one nothing draws (draw.io, for now) shows as its code.
 /// </summary>
 public static class WikiRenderer
 {
@@ -60,6 +71,7 @@ public static class WikiRenderer
         };
         document.SetResourceReference(TextElement.ForegroundProperty, "TextFillColorPrimaryBrush");
         document.FontFamily = TextFont;
+        context.Drawn.Clear();
         foreach (var block in Markdown.Parse(markdown)) document.Blocks.Add(Block(block, context, nested: false));
         if (document.Blocks.Count == 0)
         {
@@ -90,8 +102,8 @@ public static class WikiRenderer
             case MdParagraph p:
             {
                 var inlines = Markdown.Inlines(p.Text);
-                // A picture on its own line is shown as a block, as wide as fits.
-                if (inlines is [MdImage image] && Picture(image, context, block: true) is { } picture) return new BlockUIContainer(picture) { Margin = new Thickness(0, 4, 0, 10) };
+                // A picture, video or sound on its own line is shown as a block.
+                if (inlines is [MdImage image]) return MediaBlock(image, context);
                 var paragraph = new Paragraph { Margin = new Thickness(0, 0, 0, nested ? 4 : 10) };
                 AddInlines(paragraph.Inlines, inlines, context);
                 return paragraph;
@@ -256,10 +268,14 @@ public static class WikiRenderer
                 return hyperlink;
             }
             case MdImage image:
-                return Picture(image, context, block: false) is { } picture
-                    ? new InlineUIContainer(picture) { BaselineAlignment = BaselineAlignment.Bottom }
-                    : Missing($"[picture: {(image.Alt.Length > 0 ? image.Alt : image.Url)}]", IsWeb(image.Url) ? $"Pictures from the web aren't shown; open it: {image.Url}" : $"No file “{image.Url}” is attached to this page.",
-                        IsWeb(image.Url) ? () => context.OpenLink(image.Url) : null);
+            {
+                var occurrence = Count(image, context);
+                if (Media(image, context, block: false) is not { } media) return MissingMedia(image, context);
+                var framed = Framed(media, image, occurrence, context);
+                if (image.Layout.TextBeside) return Beside(framed, image.Layout);
+                if (image.Layout is { Width: { } width, Percent: false }) framed.Width = width;
+                return new InlineUIContainer(framed) { BaselineAlignment = BaselineAlignment.Bottom };
+            }
             case MdWikiLink w:
             {
                 var page = context.ResolvePage(w.Target);
@@ -311,10 +327,159 @@ public static class WikiRenderer
         return run;
     }
 
-    /// <summary>An attached picture, at most its own size and as wide as the page; a click opens it. Null when it can't be shown.</summary>
-    private static FrameworkElement? Picture(MdImage image, WikiRenderContext context, bool block)
+    // ───────────── Pictures, videos and sounds ─────────────
+
+    /// <summary>Which of the pictures and players naming its file this one is (from 0), counted as the page is drawn.</summary>
+    private static int Count(MdImage image, WikiRenderContext context)
+    {
+        var drawn = context.Drawn.GetValueOrDefault(image.Url);
+        context.Drawn[image.Url] = drawn + 1;
+        return drawn;
+    }
+
+    /// <summary>
+    /// A picture, video or sound on its own line: as wide as its layout says (else its own size, as wide as fits), left,
+    /// in the middle or right, with its caption under it. With text beside it, the paragraphs after it go beside it.
+    /// </summary>
+    private static Block MediaBlock(MdImage image, WikiRenderContext context)
+    {
+        var occurrence = Count(image, context);
+        if (Media(image, context, block: true) is not { } media)
+            return new Paragraph(MissingMedia(image, context)) { Margin = new Thickness(0, 0, 0, 10) };
+        var framed = Framed(media, image, occurrence, context);
+        var layout = image.Layout;
+        if (layout.TextBeside) return new Paragraph(Beside(framed, layout)) { Margin = new Thickness(0) };
+        if (layout.Width is not { } width)
+        {
+            framed.HorizontalAlignment = layout.Place switch
+            {
+                MediaPlace.Center => HorizontalAlignment.Center,
+                MediaPlace.Right => HorizontalAlignment.Right,
+                _ => HorizontalAlignment.Left,
+            };
+            return new BlockUIContainer(framed) { Margin = new Thickness(0, 4, 0, 10) };
+        }
+        // A row as wide as the page: its column takes a share of it (50%), or all it may up to its width (420px, less
+        // where the page is narrower); the columns beside it take the rest, so it sits left, in the middle or right.
+        var row = new Grid();
+        var column = layout.Percent
+            ? new ColumnDefinition { Width = new GridLength(width, GridUnitType.Star) }
+            : new ColumnDefinition { Width = new GridLength(10000, GridUnitType.Star), MaxWidth = width };
+        var rest = layout.Percent ? 100 - width : 1;
+        ColumnDefinition Spare(double share) => new() { Width = new GridLength(Math.Max(share, 0), GridUnitType.Star) };
+        if (layout.Place != MediaPlace.Left) row.ColumnDefinitions.Add(Spare(layout.Place == MediaPlace.Center ? rest / 2 : rest));
+        row.ColumnDefinitions.Add(column);
+        if (layout.Place != MediaPlace.Right) row.ColumnDefinitions.Add(Spare(layout.Place == MediaPlace.Center ? rest / 2 : rest));
+        Grid.SetColumn(framed, layout.Place == MediaPlace.Left ? 0 : 1);
+        framed.HorizontalAlignment = HorizontalAlignment.Stretch;
+        row.Children.Add(framed);
+        return new BlockUIContainer(row) { Margin = new Thickness(0, 4, 0, 10) };
+    }
+
+    /// <summary>
+    /// With text beside it: floated to the left or right of what comes after it, as wide as its layout says (a share of
+    /// the page, or a width); without one, a picture at its own size up to 360 wide, a player at its own.
+    /// </summary>
+    private static Inline Beside(FrameworkElement framed, MediaLayout layout)
+    {
+        var left = layout.Place == MediaPlace.Left;
+        var margin = left ? new Thickness(0, 2, 16, 8) : new Thickness(16, 2, 0, 8);
+        framed.HorizontalAlignment = HorizontalAlignment.Stretch;
+        var content = new BlockUIContainer(framed);
+        if (layout is { Width: { } share, Percent: true })
+            return new Figure(content)
+            {
+                Width = new FigureLength(share / 100, FigureUnitType.Content), HorizontalAnchor = left ? FigureHorizontalAnchor.ContentLeft : FigureHorizontalAnchor.ContentRight,
+                WrapDirection = left ? WrapDirection.Right : WrapDirection.Left, Margin = margin, Padding = new Thickness(0),
+            };
+        var width = layout.Width ?? (framed.Tag as double? ?? 360);
+        return new Floater(content) { Width = width, HorizontalAlignment = left ? HorizontalAlignment.Left : HorizontalAlignment.Right, Margin = margin, Padding = new Thickness(0) };
+    }
+
+    /// <summary>The picture or player with its caption under it, and (while editing) a right-click menu to size and place it.</summary>
+    private static FrameworkElement Framed(FrameworkElement media, MdImage image, int occurrence, WikiRenderContext context)
+    {
+        var framed = new StackPanel { Tag = media.Tag };
+        framed.Children.Add(media);
+        if (image.Caption.Length > 0)
+        {
+            var caption = new TextBlock { Text = image.Caption, FontSize = 12.5, TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center, Margin = new Thickness(0, 4, 0, 0) };
+            caption.SetResourceReference(TextBlock.ForegroundProperty, "TextFillColorSecondaryBrush");
+            // As wide as the picture, not wider.
+            caption.SetBinding(FrameworkElement.WidthProperty, new System.Windows.Data.Binding(nameof(FrameworkElement.ActualWidth)) { Source = media });
+            framed.Children.Add(caption);
+        }
+        if (context.Format is { } format)
+        {
+            framed.ContextMenu = FormatMenu(image, occurrence, format, framed);
+            if (media is Image { ToolTip: string tip }) media.ToolTip = tip + " · right-click to size or place it";
+            else framed.ToolTip = "Right-click to size or place it";
+        }
+        return framed;
+    }
+
+    /// <summary>The right-click menu of a picture or player while editing: its size, its place, text beside it, its caption.</summary>
+    private static ContextMenu FormatMenu(MdImage image, int occurrence, Action<MdImage, int, MediaLayout, string> format, FrameworkElement target)
+    {
+        var menu = new ContextMenu();
+        var layout = image.Layout;
+        void Item(string header, bool isChecked, Action click)
+        {
+            var item = new MenuItem { Header = header, IsCheckable = false, IsChecked = isChecked };
+            item.Click += (_, _) => click();
+            menu.Items.Add(item);
+        }
+        void Choice(string header, bool isChecked, MediaLayout changed) => Item(header, isChecked, () => format(image, occurrence, changed, image.Caption));
+        foreach (var (name, width) in MediaLayout.Sizes)
+            Choice(char.ToUpperInvariant(name[0]) + name[1..], layout.SizeName == name, layout with { Width = width, Percent = false });
+        Choice("Full width", layout.SizeName == "full", layout with { Width = 100, Percent = true });
+        Choice("Its own size", layout.Width == null, layout with { Width = null, Percent = false });
+        menu.Items.Add(new Separator());
+        Choice("Left", layout.Place == MediaPlace.Left, layout with { Place = MediaPlace.Left });
+        Choice("Centre", layout.Place == MediaPlace.Center, layout with { Place = MediaPlace.Center, Wrap = false });
+        Choice("Right", layout.Place == MediaPlace.Right, layout with { Place = MediaPlace.Right });
+        Choice("Text beside it", layout.TextBeside,
+            layout.TextBeside ? layout with { Wrap = false } : layout with { Wrap = true, Place = layout.Place == MediaPlace.Center ? MediaPlace.Left : layout.Place });
+        menu.Items.Add(new Separator());
+        Item(image.Caption.Length > 0 ? "Change the caption…" : "Caption…", false, () =>
+        {
+            if (Window.GetWindow(target) is not { } window) return;
+            if (InputDialog.Ask(window, "Caption", "Shown under it on the page (empty for none):", image.Caption) is { } caption)
+                format(image, occurrence, layout, caption);
+        });
+        return menu;
+    }
+
+    /// <summary>
+    /// The picture, or the player for a video or sound, of a file attached to the page; null when it can't be shown (a
+    /// picture on the web, a missing file, one Windows can't decode). Its Tag is how wide it is of its own.
+    /// </summary>
+    private static FrameworkElement? Media(MdImage image, WikiRenderContext context, bool block)
     {
         if (IsWeb(image.Url) || context.FilePath(image.Url) is not { } path || !File.Exists(path)) return null;
+        var kind = MediaLinks.KindOf(image.Url);
+        if (kind is MediaKind.Video or MediaKind.Audio)
+            return new InlinePlayer
+            {
+                Path = path, Kind = kind, FileName = System.IO.Path.GetFileName(image.Url), Poster = kind == MediaKind.Video ? Poster(path) : null,
+                OpenCommand = new CommunityToolkit.Mvvm.Input.RelayCommand(() => context.OpenLink(image.Url)), Fill = image.Layout.Width != null,
+                HorizontalAlignment = HorizontalAlignment.Left, Tag = kind == MediaKind.Video ? 340.0 : 300.0,
+            };
+        return Picture(image, path, context, block);
+    }
+
+    // A frame from each video, made once (the preview is drawn again as you type).
+    private static readonly Dictionary<string, ImageSource?> Posters = new(StringComparer.OrdinalIgnoreCase);
+
+    private static ImageSource? Poster(string path)
+    {
+        if (!Posters.TryGetValue(path, out var poster)) Posters[path] = poster = ShellThumbnails.Get(path, 340);
+        return poster;
+    }
+
+    /// <summary>An attached picture: at its layout's width, else at most its own size and as wide as the page; a click opens it.</summary>
+    private static Image? Picture(MdImage image, string path, WikiRenderContext context, bool block)
+    {
         try
         {
             var bitmap = new BitmapImage();
@@ -324,10 +489,12 @@ public static class WikiRenderer
             bitmap.CreateOptions = BitmapCreateOptions.IgnoreColorProfile;
             bitmap.EndInit();
             bitmap.Freeze();
+            var sized = image.Layout.Width != null;
             var picture = new Image
             {
-                Source = bitmap, Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly,
-                MaxWidth = block ? 900 : 360, MaxHeight = block ? 900 : 240, HorizontalAlignment = HorizontalAlignment.Left,
+                Source = bitmap, Stretch = Stretch.Uniform, StretchDirection = sized ? StretchDirection.Both : StretchDirection.DownOnly,
+                MaxWidth = sized ? double.PositiveInfinity : block ? 900 : 360, MaxHeight = sized ? double.PositiveInfinity : block ? 900 : 240,
+                HorizontalAlignment = HorizontalAlignment.Left, Tag = Math.Min(bitmap.Width, 360),
                 ToolTip = (image.Alt.Length > 0 ? image.Alt + "\n" : "") + "Click to open", Cursor = Cursors.Hand,
             };
             picture.MouseLeftButtonUp += (_, e) =>
@@ -342,5 +509,14 @@ public static class WikiRenderer
             // A file Windows can't decode: shown as a missing picture.
             return null;
         }
+    }
+
+    /// <summary>What shows for a picture or player that can't be: a line saying what's missing (a web picture's opens it).</summary>
+    private static Inline MissingMedia(MdImage image, WikiRenderContext context)
+    {
+        var what = MediaLinks.KindOf(image.Url) switch { MediaKind.Video => "video", MediaKind.Audio => "sound", _ => "picture" };
+        return Missing($"[{what}: {(image.Alt.Length > 0 ? image.Alt : image.Url)}]",
+            IsWeb(image.Url) ? $"Pictures from the web aren't shown; open it: {image.Url}" : $"No file “{image.Url}” is attached to this page.",
+            IsWeb(image.Url) ? () => context.OpenLink(image.Url) : null);
     }
 }
