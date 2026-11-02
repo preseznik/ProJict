@@ -82,7 +82,7 @@
                             <Button DockPanel.Dock="Right" Content="Remove key" Margin="8,0,0,0" Command="{Binding RemoveKeyCommand}"
                                     Visibility="{Binding HasKey, Converter={StaticResource BoolToVis}}" />
                             <Button x:Name="SaveKey" DockPanel.Dock="Right" Content="Save key" Margin="8,0,0,0" Click="SaveKey_Click" />
-                            <PasswordBox x:Name="KeyBox" AutomationProperties.Name="API key" />
+                            <PasswordBox x:Name="KeyBox" AutomationProperties.Name="API key" PasswordChanged="KeyBox_PasswordChanged" KeyDown="KeyBox_KeyDown" />
                         </DockPanel>
                         <TextBlock Text="{Binding KeyText}" Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap" Margin="2,4,0,0" />
                     </StackPanel>

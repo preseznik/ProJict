@@ -11,16 +11,40 @@ public partial class ToolsWindow : Window
         InitializeComponent();
         ViewModel = new ToolsViewModel(main);
         DataContext = ViewModel;
+        // A key typed but not saved isn't lost: picking another tool or closing the window keeps it too.
+        ViewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(ToolsViewModel.Selected)) KeepTypedKey();
+        };
+        Closing += (_, _) => KeepTypedKey();
     }
 
     public ToolsViewModel ViewModel { get; }
 
-    /// <summary>The key goes from the password box straight to the tool; it's never shown or kept in the window.</summary>
-    private void SaveKey_Click(object sender, RoutedEventArgs e)
+    /// <summary>The tool a key being typed is for (the box stays the same while you pick another tool).</summary>
+    private ToolEditorViewModel? _keyFor;
+
+    private void KeyBox_PasswordChanged(object sender, RoutedEventArgs e) => _keyFor = KeyBox.Password.Length > 0 ? _keyFor ?? ViewModel.Selected : null;
+
+    private void KeyBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
-        if (ViewModel.Selected is not { } tool || KeyBox.Password.Trim().Length == 0) return;
-        tool.SaveKey(KeyBox.Password);
+        if (e.Key != System.Windows.Input.Key.Enter) return;
+        KeepTypedKey();
+        e.Handled = true;
+    }
+
+    private void SaveKey_Click(object sender, RoutedEventArgs e) => KeepTypedKey();
+
+    /// <summary>
+    /// The key goes from the password box straight to the tool it was typed for (with Save key, Enter, another tool or
+    /// Close); it's never shown or kept in the window. A tool switched away from its API meanwhile gets none.
+    /// </summary>
+    private void KeepTypedKey()
+    {
+        var tool = _keyFor;
+        if (tool is { IsApi: true } && KeyBox.Password.Trim().Length > 0) tool.SaveKey(KeyBox.Password);
         KeyBox.Clear();
+        _keyFor = null;
     }
 
     /// <summary>A workflow file exported from ComfyUI (Workflow › Export (API)) goes into the tool's library.</summary>

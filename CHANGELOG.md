@@ -2,6 +2,7 @@
 
 ## 0.1.37
 
+- **A typed API key isn't lost.** In **Settings → Tools**, a key was kept only when you clicked **Save key**: pressing Enter, picking another tool or closing the window dropped it without a word, so agents were told no key was set. Now all of those keep it, for the tool you typed it for.
 - **A ComfyUI address pasted with its path works.** An endpoint's address copied with ComfyUI's own path on the end (http://192.168.1.173:9696/prompt) made every check and run fail with a 404, because ProJict adds those paths itself. Now the address is cut back to the server's own (http://192.168.1.173:9696), also for addresses already saved, and when something does answer with a 404, **Check** says that's not ComfyUI's API there and what address to give.
 
 ## 0.1.36 (2026-11-02)
