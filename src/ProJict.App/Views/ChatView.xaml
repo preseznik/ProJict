@@ -368,20 +368,25 @@
                     </ToggleButton>
                     <TextBlock Text="Chat" FontSize="28" FontWeight="SemiBold" />
                 </DockPanel>
-                <!-- Search (Ctrl+F): the messages with all the words, instead of the channels while it has any. -->
+                <!-- Search (Ctrl+F): the messages with all the words, instead of the channels while it has any; # keeps to the open channel. -->
                 <StackPanel DockPanel.Dock="Top" Margin="0,10,0,0">
+                    <DockPanel>
+                        <ToggleButton x:Name="SearchHereToggle" DockPanel.Dock="Right" Style="{StaticResource SubtleToggle}" IsChecked="{Binding SearchHere}" Margin="4,0,0,0"
+                                      Padding="9,4" ToolTip="{Binding SearchHereToolTip}" AutomationProperties.Name="Search only the open channel"
+                                      Visibility="{Binding HasChannel, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="#" FontSize="15" FontWeight="SemiBold" />
+                        </ToggleButton>
                     <Grid>
                         <TextBox x:Name="SearchBox" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged, Delay=150}" Padding="8,5,28,5"
                                  AutomationProperties.Name="Search Chat" PreviewKeyDown="SearchBox_PreviewKeyDown"
                                  ToolTip="Messages with all these words, in the text, who wrote it or the channel's name (Ctrl+F; Esc clears)" />
-                        <TextBlock Text="Search Chat (Ctrl+F)" Margin="11,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"
+                        <TextBlock Text="{Binding SearchPlaceholder}" Margin="11,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False" TextTrimming="CharacterEllipsis"
                                    Foreground="{DynamicResource TextFillColorTertiaryBrush}" Visibility="{Binding SearchText, Converter={StaticResource InvEmptyToVis}}" />
                         <Button Style="{StaticResource SubtleIconButton}" Content="&#xE711;" FontSize="9" Padding="5" HorizontalAlignment="Right" Margin="0,0,3,0"
                                 Command="{Binding ClearSearchCommand}" ToolTip="Clear the search (Esc)" AutomationProperties.Name="Clear the search"
                                 Visibility="{Binding IsSearching, Converter={StaticResource BoolToVis}}" />
                     </Grid>
-                    <CheckBox x:Name="SearchHereBox" IsChecked="{Binding SearchHere}" Content="{Binding SearchHereText}" Margin="2,6,0,0" MinHeight="0" FontSize="12"
-                              Visibility="{Binding IsSearching, Converter={StaticResource BoolToVis}}" />
+                    </DockPanel>
                 </StackPanel>
                 <!-- What the search found: where, who and when, and the line with the words; a click opens it. -->
                 <Grid>

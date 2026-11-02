@@ -2,6 +2,7 @@
 
 ## 0.1.40
 
+- **Search one channel.** A **#** button beside Chat's search box keeps the search to the open channel or conversation, before or after you type; the box says where it searches ("Search #general"), and it follows you to the next channel you open.
 - **The channel under the office fills its space.** Its messages kept to a short strip, with empty space above and below when All agents was open beside it or the office had the whole view. Now the office and the channel share the height, and the messages fill the channel, the newest by the box.
 
 ## 0.1.39 (2026-11-02)

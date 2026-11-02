@@ -27,6 +27,9 @@ public sealed partial class ChatViewModel
         : SearchResults.Count >= MostSearchResults ? $"The newest {MostSearchResults} messages: add a word to narrow it down"
         : SearchResults.Count == 1 ? "1 message" : $"{SearchResults.Count} messages";
     public string SearchHereText => Channel is { } channel ? $"Only in {(channel.Direct ? "this conversation" : "#" + channel.Name)}" : "Only in the open channel";
+    /// <summary>Where the box searches: everywhere, or the open channel (the # toggle beside it).</summary>
+    public string SearchPlaceholder => SearchHere && Channel is { } channel ? $"Search {(channel.Direct ? "this conversation" : "#" + channel.Name)}" : "Search Chat (Ctrl+F)";
+    public string SearchHereToolTip => SearchHere ? $"{SearchHereText}: click to search everywhere again" : $"Search only the open channel ({SearchHereText.Replace("Only in ", "")})";
 
     /// <summary>The message last opened from the results (it's marked in the list).</summary>
     private Guid? _searchOpened;
@@ -44,7 +47,8 @@ public sealed partial class ChatViewModel
         SearchResults = IsSearching
             ? [.. ChatSearch.Search(channels, SearchText, MostSearchResults).Select(hit => new ChatSearchRow(hit, this, hit.Message.Id == _searchOpened))]
             : [];
-        foreach (var name in new[] { nameof(IsSearching), nameof(SearchResults), nameof(HasSearchResults), nameof(SearchSummary), nameof(SearchHereText) })
+        foreach (var name in new[] { nameof(IsSearching), nameof(SearchResults), nameof(HasSearchResults), nameof(SearchSummary), nameof(SearchHereText),
+                     nameof(SearchPlaceholder), nameof(SearchHereToolTip) })
             OnPropertyChanged(name);
     }
 
@@ -66,9 +70,18 @@ public sealed partial class ChatViewModel
     [RelayCommand]
     private void ClearSearch()
     {
+        // The # toggle stays as you set it: clearing only empties the box.
         _searchOpened = null;
-        SearchHere = false;
         SearchText = "";
+    }
+
+    /// <summary>Another channel opened: "only here" now means it.</summary>
+    private void SyncSearch()
+    {
+        if (SearchHere && IsSearching) RunSearch();
+        else
+            foreach (var name in new[] { nameof(SearchHereText), nameof(SearchPlaceholder), nameof(SearchHereToolTip) })
+                OnPropertyChanged(name);
     }
 }
 
