@@ -4,11 +4,13 @@ namespace ProJict.Core.Agents;
 public enum OfficeActivity { Building, Managing, Reading, Talking, Resting, Listening }
 
 /// <summary>
-/// Reads an agent's latest tool call as an activity for the office: chatting is Talking, checking out and finishing
-/// items is Building, adding items, comments, notes and wiki pages is Managing, going through items, discussions and the
-/// wiki is Reading, and nothing for a while is Resting. An agent that hears Chat right away (waiting for messages, or idle
-/// with a chat watcher running for it) is Listening rather than Resting. Saying what it does (set_status, set_label,
-/// set_name) changes nothing.
+/// Reads an agent's latest tool call as an activity for the office: a conversation in Chat is Talking (at the water
+/// cooler), checking out and finishing items is Building, adding items, comments, notes and wiki pages is Managing, going
+/// through items, discussions and the wiki is Reading, and nothing for a while is Resting. A message now and then is part
+/// of the work at the desk: reading a channel is Reading and posting one is Managing; only a real back-and-forth
+/// (<see cref="ConversationPosts"/> messages lately, the last one just now) takes it to the cooler. An agent that hears
+/// Chat right away (waiting for messages, or idle with a chat watcher running for it) is Listening rather than Resting.
+/// Saying what it does (set_status, set_label, set_name) changes nothing.
 /// </summary>
 public static class OfficeActivities
 {
@@ -20,6 +22,24 @@ public static class OfficeActivities
     private static readonly HashSet<string> Build = ["claim_item", "complete_item", "attach_file", "report_ship", "finish_ship"];
     private static readonly HashSet<string> Manage = ["add_item", "add_comment", "write_doc", "write_wiki", "update_project", "plan_ship", "draft_release", "update_item"];
     private static readonly HashSet<string> Meta = ["set_status", "set_label", "set_name"];
+    /// <summary>Chat tools that say something (the rest read).</summary>
+    private static readonly HashSet<string> Says = ["post_message", "edit_message", "create_channel", "invite_to_channel", "moderate_channel"];
+
+    /// <summary>A conversation: at least this many messages posted within <see cref="ConversationWithin"/>, the last within <see cref="ConversationGoesOn"/>.</summary>
+    public const int ConversationPosts = 3;
+    public static readonly TimeSpan ConversationWithin = TimeSpan.FromMinutes(10);
+    /// <summary>Quiet this long after its last message, it goes back to its desk.</summary>
+    public static readonly TimeSpan ConversationGoesOn = TimeSpan.FromMinutes(3);
+
+    /// <summary>In a back-and-forth in Chat: posted <see cref="ConversationPosts"/> messages lately, the last one just now.</summary>
+    public static bool InConversation(McpSession session, DateTime now)
+    {
+        var posts = session.Recent.Where(a => a.Tool == "post_message" && now - a.At <= ConversationWithin).ToList();
+        if (posts.Count == 0 || now - posts.Max(a => a.At) > ConversationGoesOn) return false;
+        // Repeats are kept as one action: count each, but only the ones within the window.
+        var count = posts.Sum(a => a.Since is { } since && now - since > ConversationWithin ? 1 : a.Times);
+        return count >= ConversationPosts;
+    }
 
     /// <summary>Everyone's asleep: an agent that did nothing this long has finished up and sleeps.</summary>
     public static readonly TimeSpan AsleepAfter = TimeSpan.FromSeconds(20);
@@ -34,7 +54,8 @@ public static class OfficeActivities
         var tool = session.Recent.LastOrDefault(a => a.Tool == null || !Meta.Contains(a.Tool))?.Tool;
         // Between two waits for messages.
         if (tool == "wait_for_messages") return OfficeActivity.Listening;
-        if (tool != null && Chat.Contains(tool)) return OfficeActivity.Talking;
+        if (tool != null && Chat.Contains(tool))
+            return InConversation(session, now) ? OfficeActivity.Talking : Says.Contains(tool) ? OfficeActivity.Managing : OfficeActivity.Reading;
         if (tool != null && Build.Contains(tool)) return OfficeActivity.Building;
         // Changing the item it works on is part of the work.
         if (tool == "update_item" && holdsItems) return OfficeActivity.Building;

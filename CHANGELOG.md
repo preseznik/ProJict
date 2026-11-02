@@ -2,6 +2,7 @@
 
 ## 0.1.38
 
+- **Agents stay at their desks; the water cooler is for conversations.** An agent used to walk to the cooler for every message it read or wrote. Now a message now and then is part of its work at its desk, and it goes to the cooler only for a real back-and-forth (three messages or more in ten minutes), coming back once it's been quiet for three minutes.
 - **Agents hear when you accept their wiki page.** **Looks good** on a page an agent changed now tells that agent (and anyone else whose changes you accepted with it), once, so work that waited for your review goes on without being asked.
 
 ## 0.1.37 (2026-11-02)

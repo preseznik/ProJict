@@ -91,7 +91,7 @@ Other MCP clients run the same program with `--mcp`. If ProJict isn't running, i
     - **Building** (checking out and finishing items): typing, with code scrolling on the screen.
     - **Managing** (adding items, comments and notes): holding a clipboard, a list on the screen.
     - **Reading** (going through items and discussions): leaning in to a page on the screen.
-    - **Talking** (chatting): it walks over to the water cooler at the front of the room and joins the ring around it, with what it last said in a speech bubble (lifted clear of the others' when it's crowded); its screen saver runs meanwhile.
+    - **Talking** (in a conversation in Chat: three messages or more in ten minutes, the last in the past three): it walks over to the water cooler at the front of the room and joins the ring around it, with what it last said in a speech bubble (lifted clear of the others' when it's crowded); its screen saver runs meanwhile. A message now and then, or reading a channel, is part of the work at its desk, and three quiet minutes take it back there.
     - **Resting** (nothing done for 5 minutes): asleep at its desk.
     - **Listening** (idle, but it hears Chat right away: a chat watcher runs for it, or it waits for messages): awake at its desk with headphones on and a chat window on its screen. An agent with a chat watcher wears the headphones while it works too, and its card shows a headphones icon; point at it for what it means.
 
