@@ -93,6 +93,8 @@ internal sealed class RemoteCopy(Project project)
     public int Revision { get; set; }
     public string BaseJson { get; set; } = "";
     public string BaseNormalized { get; set; } = "";
+    /// <summary>The copy as last sent to the host, to know when the host's "saved" means it has all of it.</summary>
+    public string? SentNormalized { get; set; }
     public bool InFlight { get; set; }
     public DispatcherTimer? Timer { get; set; }
 }
@@ -379,6 +381,13 @@ public sealed partial class GuestService
                 if (Guid.TryParse((string?)message["projectId"], out var saved) && connection.Copies.TryGetValue(saved, out var done))
                 {
                     done.InFlight = false;
+                    // The host had all of it already: the copy is in step with it, so it isn't sent again and again.
+                    if (done.SentNormalized == ProjectMerge.Normalized(done.Project))
+                    {
+                        done.BaseJson = Json.Serialize(done.Project);
+                        done.BaseNormalized = done.SentNormalized;
+                        if ((int?)message["revision"] is { } revision) done.Revision = revision;
+                    }
                     ScheduleSave(done);
                 }
                 break;
@@ -532,6 +541,7 @@ public sealed partial class GuestService
             catch (IOException) { }
         }
         copy.InFlight = true;
+        copy.SentNormalized = ProjectMerge.Normalized(copy.Project);
         connection.Send(Wire.Message("save", ("projectId", copy.Project.Id.ToString()), ("base", copy.Revision),
             ("project", JsonNode.Parse(Json.Serialize(copy.Project)))));
     }

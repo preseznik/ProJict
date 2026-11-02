@@ -501,6 +501,9 @@ public sealed partial class HostService
         var incoming = Json.Deserialize<Project>(message["project"]!.ToJsonString())!;
         var baseRevision = (int?)message["base"] ?? 0;
         var history = HistoryOf(project);
+        // What changed here since guests last got the project (say an item added a moment ago, not sent out yet) is a
+        // version of its own, so a save based on the one before merges with it instead of replacing it.
+        Bump(project, history);
         Project candidate;
         if (baseRevision == history.Revision) candidate = incoming;
         else if (history.Snapshots.TryGetValue(baseRevision, out var baseJson))
@@ -567,7 +570,9 @@ public sealed partial class HostService
     private History HistoryOf(Project project)
     {
         if (_history.TryGetValue(project.Id, out var history)) return history;
-        history = new History();
+        // Numbered from a random start, so a save based on a version from before this ProJict restarted can't pass for
+        // one of now.
+        history = new History { Revision = Random.Shared.Next(1, 1 << 30) };
         _history[project.Id] = history;
         Bump(project, history);
         return history;

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.33
+
+- **Items no longer vanish while another computer is connected.** A connected ProJict (your laptop, say) could keep sending its copy of a project back, about twice a second, and an item added here just before one of those arrived was lost: you, your agents and theirs saw new items disappear. This ProJict now merges such a copy with what changed here since, so nothing added here is lost, whatever version the other computer runs. With 0.1.33 there too, the other computer takes over the test build (and the other things only you change) and stops sending its copy when there's nothing new.
+
 ## 0.1.32 (2026-11-02)
 
 - **Game studio.** Choose a project in the Agents view and click **Game studio** above the room: it becomes that project's studio, with a banner and a station per role (Lead designer, Game designer, Level designer, Programmer, Artist, Sound engineer, Quality assurance, Producer), each with its things on the wall and desk. Agents working in the project wait in the lobby until you right-click one › **Hire as…**; you can also swap two or fire one back to the lobby. A hired agent sits at its station, its card shows the role, and it's told the role and what it expects; current_project repeats it, with who has the other roles. Each role's name and what it expects can be changed in the project's **Details → Game studio**. A milestone board on the studio's back wall shows how much of the project is done, and of each of its categories (the unfinished first), filling as items close; the banner says it too, and a click on a category shows it on the board. **Office** brings the usual room back, and the studio is kept.

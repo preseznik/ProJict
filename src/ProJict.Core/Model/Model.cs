@@ -372,11 +372,16 @@ public sealed class Project
         // With its items: undoing an import forgets it, so the next sync brings those issues back.
         Issues = snapshot.Issues;
         // Shipping is about commits and releases that really happened (and what you approved), which undo can't take
-        // back; a guest takes the host's version as it is.
+        // back; a guest takes the host's version as it is, with everything else only the host changes. (A guest that
+        // kept its own test build never matched the host's version again, and kept sending its copy back.)
         if (!keepIssueLinks)
         {
             Shipping = snapshot.Shipping;
             Ships = snapshot.Ships;
+            TestBuild = snapshot.TestBuild;
+            Cleanups = snapshot.Cleanups;
+            Studio = snapshot.Studio;
+            GitHubRelease = snapshot.GitHubRelease;
         }
     }
 
