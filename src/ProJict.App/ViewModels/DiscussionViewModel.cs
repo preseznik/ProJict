@@ -5,6 +5,7 @@ using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ProJict.App.Services;
+using ProJict.Core.Features;
 using ProJict.Core.Model;
 
 namespace ProJict.App.ViewModels;
@@ -348,6 +349,46 @@ public sealed partial class CommentViewModel : ObservableObject
         IsReplying = false;
     }
 
+    // ───────────── Questions to answer with a click ─────────────
+
+    private List<ChoiceViewModel>? _choices;
+    public IReadOnlyList<ChoiceViewModel> Choices => _choices ??= [.. (Model.Choices ?? []).Select(c => new ChoiceViewModel(this, c))];
+    public bool HasChoices => Model.Choices is { Count: > 0 } && !Model.Deleted;
+    public bool IsAnswered => CommentChoices.IsAnswered(Model.Choices);
+    /// <summary>Several questions: picked one by one, then sent together (one is sent with the click).</summary>
+    public bool NeedsSend => HasChoices && !IsAnswered && Choices.Count > 1;
+    private bool CanSendAnswers() => !IsAnswered && Choices.Count > 0 && Choices.All(c => c.Picked != null);
+
+    internal void Picked()
+    {
+        if (Choices.Count == 1) SendAnswers();
+        else SendAnswersCommand.NotifyCanExecuteChanged();
+    }
+
+    /// <summary>Your answers, kept on the question and posted as your reply (so the agent hears it).</summary>
+    [RelayCommand(CanExecute = nameof(CanSendAnswers))]
+    private void SendAnswers()
+    {
+        if (!CanSendAnswers()) return;
+        foreach (var choice in Choices) choice.Model.Answer = choice.Picked;
+        if (!_owner.Post(CommentChoices.AnswerText(Model.Choices!), Id))
+        {
+            foreach (var choice in Choices) choice.Model.Answer = null;
+            return;
+        }
+        foreach (var choice in Choices) choice.Refresh();
+        OnPropertyChanged(nameof(IsAnswered));
+        OnPropertyChanged(nameof(NeedsSend));
+    }
+
+    /// <summary>Takes the agent's suggestion (the first option) for every question.</summary>
+    [RelayCommand]
+    private void UseSuggestions()
+    {
+        foreach (var choice in Choices) choice.Picked = choice.Model.Options[0];
+        SendAnswers();
+    }
+
     /// <summary>Files to go with the reply being written.</summary>
     public ObservableCollection<PendingFile> Pending { get; } = [];
     public bool HasPending => Pending.Count > 0;
@@ -422,6 +463,56 @@ public sealed partial class CommentViewModel : ObservableObject
 }
 
 /// <summary>A file chosen for a comment that isn't posted yet: a file on disk, or a pasted picture.</summary>
+/// <summary>A question asked with a comment: its options as buttons, the asker's suggestion first.</summary>
+public sealed partial class ChoiceViewModel : ObservableObject
+{
+    private readonly CommentViewModel _comment;
+
+    public ChoiceViewModel(CommentViewModel comment, CommentChoice model)
+    {
+        _comment = comment;
+        Model = model;
+        _picked = model.Answer;
+        Options = [.. model.Options.Select((o, i) => new ChoiceOptionViewModel(this, o, i == 0))];
+    }
+
+    public CommentChoice Model { get; }
+    public string Question => Model.Question;
+    public IReadOnlyList<ChoiceOptionViewModel> Options { get; }
+    public bool IsAnswered => Model.Answer != null;
+    public string AnswerText => Model.Answer ?? "";
+    [ObservableProperty] private string? _picked;
+
+    partial void OnPickedChanged(string? value)
+    {
+        foreach (var option in Options) option.Refresh();
+    }
+
+    internal void Pick(string option)
+    {
+        if (IsAnswered) return;
+        Picked = option;
+        _comment.Picked();
+    }
+
+    internal void Refresh()
+    {
+        OnPropertyChanged(nameof(IsAnswered));
+        OnPropertyChanged(nameof(AnswerText));
+        foreach (var option in Options) option.Refresh();
+    }
+}
+
+public sealed partial class ChoiceOptionViewModel(ChoiceViewModel choice, string text, bool suggested) : ObservableObject
+{
+    public string Text => text;
+    public bool IsSuggested => suggested;
+    public bool IsPicked => choice.Picked == text;
+    public string? ToolTip => suggested ? "The suggestion" : null;
+    [RelayCommand] private void Pick() => choice.Pick(text);
+    internal void Refresh() => OnPropertyChanged(nameof(IsPicked));
+}
+
 public sealed partial class PendingFile(string name, long size, string? path, byte[]? data, ObservableCollection<PendingFile>? list)
 {
     public string Name { get; } = name;

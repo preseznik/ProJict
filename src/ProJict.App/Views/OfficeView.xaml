@@ -435,7 +435,17 @@
             place; its name and speech bubble stay full size and unmirrored (LabelScale), as do its initials and Zzz.
         -->
         <DataTemplate DataType="{x:Type vm:OfficeAgentViewModel}">
-            <Canvas x:Name="Root" Background="Transparent" Cursor="Hand" ToolTip="{Binding ToolTip}" Loaded="Agent_Loaded" Unloaded="Agent_Unloaded">
+            <Canvas x:Name="Root" Background="Transparent" Cursor="Hand" Loaded="Agent_Loaded" Unloaded="Agent_Unloaded">
+                <Canvas.ToolTip>
+                    <StackPanel MaxWidth="260">
+                        <Ellipse Width="72" Height="72" HorizontalAlignment="Left" Margin="0,2,0,6" Visibility="{Binding Card.HasPicture, Converter={StaticResource BoolToVis}}">
+                            <Ellipse.Fill>
+                                <ImageBrush ImageSource="{Binding Card.Picture}" Stretch="UniformToFill" />
+                            </Ellipse.Fill>
+                        </Ellipse>
+                        <TextBlock Text="{Binding ToolTip}" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Canvas.ToolTip>
                 <Canvas.RenderTransform>
                     <TranslateTransform x:Name="Mover" />
                 </Canvas.RenderTransform>

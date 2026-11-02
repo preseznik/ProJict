@@ -127,15 +127,28 @@ public sealed class Comment
     public bool Deleted { get; set; }
     /// <summary>Files and pictures posted with the comment; null (and left out of the JSON) while there are none.</summary>
     public List<Attachment>? Attachments { get; set; }
+    /// <summary>Questions an agent asks with the comment, answered with a click (see CommentChoices); null while none.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<CommentChoice>? Choices { get; set; }
     public List<Comment>? Replies { get; set; }
 
     public Comment DeepClone()
     {
         var copy = (Comment)MemberwiseClone();
         copy.Attachments = Attachments?.ToList();
+        copy.Choices = Choices?.Select(c => new CommentChoice { Question = c.Question, Options = [.. c.Options], Answer = c.Answer }).ToList();
         copy.Replies = Replies?.Select(r => r.DeepClone()).ToList();
         return copy;
     }
+}
+
+/// <summary>A question asked with a comment, with the options to click (the asker's suggestion first) and, once given, the answer.</summary>
+public sealed class CommentChoice
+{
+    public string Question { get; set; } = "";
+    public List<string> Options { get; set; } = [];
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Answer { get; set; }
 }
 
 /// <summary>A GitHub issue an item stands for, as last seen on GitHub.</summary>

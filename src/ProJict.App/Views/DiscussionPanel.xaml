@@ -63,6 +63,48 @@
                                  AutomationProperties.Name="Comment" Visibility="{Binding Text, Converter={StaticResource EmptyToVis}}" />
                         <ItemsControl ItemsSource="{Binding Attachments}" ItemTemplate="{StaticResource CommentFile}" ItemsPanel="{StaticResource Wrap}"
                                       Focusable="False" Margin="18,4,4,0" Visibility="{Binding HasAttachments, Converter={StaticResource BoolToVis}}" />
+                        <!-- Questions to answer with a click: one is sent with the click, several together; once answered, the answer -->
+                        <StackPanel x:Name="Choices" Margin="18,6,4,0" Visibility="{Binding HasChoices, Converter={StaticResource BoolToVis}}">
+                            <ItemsControl ItemsSource="{Binding Choices}" Focusable="False">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:ChoiceViewModel}">
+                                        <StackPanel Margin="0,0,0,6">
+                                            <TextBlock Text="{Binding Question}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,0,0,3" />
+                                            <ItemsControl ItemsSource="{Binding Options}" ItemsPanel="{StaticResource Wrap}" Focusable="False"
+                                                          Visibility="{Binding IsAnswered, Converter={StaticResource InvBoolToVis}}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate DataType="{x:Type vm:ChoiceOptionViewModel}">
+                                                        <Button x:Name="Option" Command="{Binding PickCommand}" Margin="0,0,6,4" Padding="10,3" ToolTip="{Binding ToolTip}"
+                                                                AutomationProperties.Name="{Binding Text}">
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <TextBlock Style="{StaticResource Icon}" Text="&#xE73E;" FontSize="11" Margin="0,0,6,0" VerticalAlignment="Center"
+                                                                           Visibility="{Binding IsPicked, Converter={StaticResource BoolToVis}}" />
+                                                                <TextBlock Text="{Binding Text}" TextWrapping="Wrap" MaxWidth="320" />
+                                                            </StackPanel>
+                                                        </Button>
+                                                        <DataTemplate.Triggers>
+                                                            <DataTrigger Binding="{Binding IsPicked}" Value="True">
+                                                                <Setter TargetName="Option" Property="Style" Value="{StaticResource AccentButtonStyle}" />
+                                                            </DataTrigger>
+                                                        </DataTemplate.Triggers>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                            <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                                                       Visibility="{Binding IsAnswered, Converter={StaticResource BoolToVis}}">
+                                                <Run Text="&#xE73E;" FontFamily="{StaticResource IconFont}" FontSize="11" /><Run Text="  " /><Run Text="{Binding AnswerText, Mode=OneWay}" />
+                                            </TextBlock>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <StackPanel Orientation="Horizontal" Visibility="{Binding NeedsSend, Converter={StaticResource BoolToVis}}">
+                                <Button Style="{StaticResource SubtleButton}" Content="Use all suggestions" Command="{Binding UseSuggestionsCommand}"
+                                        ToolTip="The first option of each question" />
+                                <Button Style="{StaticResource AccentButtonStyle}" Content="Send answers" Command="{Binding SendAnswersCommand}" Margin="6,0,0,0"
+                                        ToolTip="Posted as your reply, so the agent hears it" />
+                            </StackPanel>
+                        </StackPanel>
                         <StackPanel Margin="18,6,0,0" Visibility="{Binding IsReplying, Converter={StaticResource BoolToVis}}">
                             <TextBox Text="{Binding ReplyText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" TextWrapping="Wrap"
                                      MinHeight="54" MaxHeight="160" VerticalScrollBarVisibility="Auto" AutomationProperties.Name="Reply"
