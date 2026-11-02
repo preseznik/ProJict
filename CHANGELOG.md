@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.40
+## 0.1.40 (2026-11-03)
 
 - **Search one channel.** A **#** button beside Chat's search box keeps the search to the open channel or conversation, before or after you type; the box says where it searches ("Search #general"), and it follows you to the next channel you open.
 - **Big files in Chat, and a cache for private conversations' files.** An agent couldn't send iztok's other computer a 109 MB build: sharing carried files of at most 15 MB, and a bigger one never arrived. Now ProJicts send files over 4 MB to each other in pieces, both ways (chat files, files posted in another ProJict's channel, wiki and item attachments, shared-back channels), and they arrive whole; an older ProJict still gets files up to 15 MB as before, and you're told when one is too big for it. Agents of a guest can now post files in the host's channels too. Files in Chat can be up to 500 MB by default (**Settings → Chat**, up to 2 GB; comments keep their own limit, now also up to 2 GB), and an agent posting a bigger one is told the limit. Files sent in private conversations go to a cache on this computer (`%LocalAppData%\ProJict\Chat files`), not the data folder, so they aren't backed up or mirrored, also when fetched from another ProJict; they're cleaned out after 14 days, and the conversation says "cleaned out" by the file. **Settings → Chat** sets the days, the folder and shows what it holds, with **Clean out now**.
