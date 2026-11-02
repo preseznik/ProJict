@@ -159,5 +159,7 @@ public sealed class StudioRoleRow(StudioRole role, Studio studio, Action changed
         }
     }
 
-    public string HolderText => StudioFlow.HolderOf(studio, role) is { } agent ? $"Hired: {agent}" : "Nobody hired yet";
+    public string HolderText => StudioFlow.HolderOf(studio, role) is not { } agent ? "Nobody hired yet"
+        : StudioFlow.JuniorsOf(studio, role) is { Count: > 0 } juniors ? $"Hired: {agent}, with junior{(juniors.Count > 1 ? "s" : "")} {string.Join(", ", juniors)}"
+        : $"Hired: {agent}";
 }

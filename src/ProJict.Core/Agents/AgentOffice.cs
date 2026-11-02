@@ -20,7 +20,7 @@ public static class OfficeActivities
     private static readonly HashSet<string> Chat =
         ["list_channels", "create_channel", "read_channel", "post_message", "edit_message", "join_channel", "invite_to_channel", "moderate_channel"];
     private static readonly HashSet<string> Build = ["claim_item", "complete_item", "attach_file", "report_ship", "finish_ship"];
-    private static readonly HashSet<string> Manage = ["add_item", "add_comment", "write_doc", "write_wiki", "update_project", "plan_ship", "draft_release", "update_item"];
+    private static readonly HashSet<string> Manage = ["add_item", "add_comment", "write_doc", "write_wiki", "update_project", "plan_ship", "draft_release", "update_item", "hire_to_role"];
     private static readonly HashSet<string> Meta = ["set_status", "set_label", "set_name"];
     /// <summary>Chat tools that say something (the rest read).</summary>
     private static readonly HashSet<string> Says = ["post_message", "edit_message", "create_channel", "invite_to_channel", "moderate_channel"];

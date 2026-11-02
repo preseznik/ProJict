@@ -346,7 +346,8 @@ public sealed partial class OfficeViewModel : ObservableObject
 /// <summary>What hiring in the studio does: the Agents view does it and saves the project.</summary>
 public interface IStudioHiring
 {
-    void Hire(string agent, StudioRole role);
+    /// <param name="junior">Under the role's senior, rather than in its place.</param>
+    void Hire(string agent, StudioRole role, bool junior = false);
     void Fire(string agent);
     void Swap(string agent, string other);
 }
@@ -494,18 +495,26 @@ public sealed partial class OfficeAgentViewModel(AgentCardViewModel card, Action
         InStudio = studio != null;
         var name = Session.AgentName;
         var role = studio != null ? StudioFlow.RoleOf(studio.Studio, name) : null;
-        RoleName = role?.Name;
+        RoleName = studio != null ? StudioFlow.TitleOf(studio.Studio, name) : null;
         _fire = studio != null && role != null ? () => studio.Hiring.Fire(name) : null;
         if (studio == null)
         {
             HireChoices = SwapChoices = [];
             return;
         }
-        HireChoices = studio.Studio.Roles.Where(r => r != role).Select(r => new StudioChoice(
-            StudioFlow.HolderOf(studio.Studio, r) is { } holder ? $"{r.Name} (instead of {holder})" : r.Name,
-            new RelayCommand(() => studio.Hiring.Hire(name, r)))).ToList();
+        // A role with someone in it: in their place, or as a junior under them. A junior can take its senior's place.
+        var junior = StudioFlow.HireOf(studio.Studio, name)?.Junior == true;
+        HireChoices = [.. studio.Studio.Roles.Where(r => r != role || junior).SelectMany(r => StudioFlow.HolderOf(studio.Studio, r) is { } holder
+            ? r == role
+                ? [new StudioChoice($"{r.Name} (instead of {holder})", new RelayCommand(() => studio.Hiring.Hire(name, r)))]
+                : new[]
+                {
+                    new StudioChoice($"{r.Name} (instead of {holder})", new RelayCommand(() => studio.Hiring.Hire(name, r))),
+                    new StudioChoice($"Junior {r.Name} (under {holder})", new RelayCommand(() => studio.Hiring.Hire(name, r, junior: true))),
+                }
+            : [new StudioChoice(r.Name, new RelayCommand(() => studio.Hiring.Hire(name, r)))])];
         SwapChoices = role == null ? [] : studio.Studio.Hires.Where(h => !string.Equals(h.Agent, name, StringComparison.OrdinalIgnoreCase))
-            .Select(h => new StudioChoice($"{h.Agent} ({studio.Studio.Roles.FirstOrDefault(r => r.Id == h.RoleId)?.Name})",
+            .Select(h => new StudioChoice($"{h.Agent} ({StudioFlow.TitleOf(studio.Studio, h.Agent)})",
                 new RelayCommand(() => studio.Hiring.Swap(name, h.Agent)))).ToList();
     }
 

@@ -32,6 +32,9 @@ public sealed class StudioHire
     public Guid RoleId { get; set; }
     public DateTime At { get; set; } = DateTime.Now;
     public string By { get; set; } = "";
+    /// <summary>One of more in the role, under its senior (the first hired): "Junior Programmer".</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Junior { get; set; }
 }
 
 /// <summary>

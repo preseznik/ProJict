@@ -129,37 +129,81 @@ public static class StudioFlow
     public static StudioRole? RoleOf(Studio studio, string agent) =>
         HireOf(studio, agent) is { } hire ? studio.Roles.FirstOrDefault(r => r.Id == hire.RoleId) : null;
 
-    /// <summary>Who has the role, if anyone.</summary>
-    public static string? HolderOf(Studio studio, StudioRole role) => studio.Hires.FirstOrDefault(h => h.RoleId == role.Id)?.Agent;
+    /// <summary>Who has the role (its senior, the first hired), if anyone.</summary>
+    public static string? HolderOf(Studio studio, StudioRole role) =>
+        (studio.Hires.FirstOrDefault(h => h.RoleId == role.Id && !h.Junior) ?? studio.Hires.FirstOrDefault(h => h.RoleId == role.Id))?.Agent;
 
-    /// <summary>Hires the agent to the role (leaving any role it had); whoever had it goes back to the lobby, and is returned.</summary>
-    public static string? Hire(Studio studio, string agent, StudioRole role, string by)
+    /// <summary>The role's juniors, longest hired first.</summary>
+    public static IReadOnlyList<string> JuniorsOf(Studio studio, StudioRole role) =>
+        [.. studio.Hires.Where(h => h.RoleId == role.Id && h.Junior).OrderBy(h => h.At).Select(h => h.Agent)];
+
+    /// <summary>What the agent is called in the studio: "Programmer", "Senior Programmer" (with juniors under it) or "Junior Programmer".</summary>
+    public static string? TitleOf(Studio studio, string agent)
+    {
+        if (HireOf(studio, agent) is not { } hire || studio.Roles.FirstOrDefault(r => r.Id == hire.RoleId) is not { } role) return null;
+        return hire.Junior ? $"Junior {role.Name}" : JuniorsOf(studio, role).Count > 0 ? $"Senior {role.Name}" : role.Name;
+    }
+
+    /// <summary>
+    /// Hires the agent to the role (leaving any role it had). As its senior (the default), whoever was senior goes back to
+    /// the lobby and is returned, and its juniors stay. As a junior, the senior stays; a role without one gets its senior.
+    /// </summary>
+    public static string? Hire(Studio studio, string agent, StudioRole role, string by, bool asJunior = false)
     {
         agent = agent.Trim();
         if (agent.Length == 0) throw new InvalidOperationException("Say which agent to hire.");
         if (!studio.Roles.Contains(role)) throw new InvalidOperationException("That role isn't in this studio.");
-        if (HireOf(studio, agent) is { } current && current.RoleId == role.Id) return null;
-        var replaced = studio.Hires.FirstOrDefault(h => h.RoleId == role.Id && !Same(h.Agent, agent));
-        if (replaced != null) End(studio, replaced, by);
-        if (HireOf(studio, agent) is { } previous) studio.Hires.Remove(previous);
-        studio.Hires.Add(new StudioHire { Agent = agent, RoleId = role.Id, By = by });
-        return replaced?.Agent;
+        var senior = studio.Hires.FirstOrDefault(h => h.RoleId == role.Id && !h.Junior && !Same(h.Agent, agent));
+        var junior = asJunior && senior != null;
+        if (HireOf(studio, agent) is { } current)
+        {
+            if (current.RoleId == role.Id && current.Junior == junior) return null;
+            Leave(studio, current, by);
+        }
+        string? replaced = null;
+        if (senior != null && !junior)
+        {
+            End(studio, senior, by);
+            replaced = senior.Agent;
+        }
+        studio.Hires.Add(new StudioHire { Agent = agent, RoleId = role.Id, By = by, Junior = junior });
+        return replaced;
     }
 
-    /// <summary>The agent leaves its role and goes back to the lobby.</summary>
+    /// <summary>The agent leaves its role and goes back to the lobby (a senior's longest-hired junior takes its place).</summary>
     public static void Fire(Studio studio, string agent, string by)
     {
-        if (HireOf(studio, agent) is { } hire) End(studio, hire, by);
+        if (HireOf(studio, agent) is not { } hire) return;
+        End(studio, hire, by);
+        if (!hire.Junior) Promote(studio, hire.RoleId, by);
     }
 
-    /// <summary>Two hired agents swap roles.</summary>
+    /// <summary>Two hired agents swap roles (and whether they're junior in them).</summary>
     public static void Swap(Studio studio, string a, string b, string by)
     {
         if (HireOf(studio, a) is not { } first || HireOf(studio, b) is not { } second || first == second)
             throw new InvalidOperationException("Both need a role to swap them.");
         (first.RoleId, second.RoleId) = (second.RoleId, first.RoleId);
+        (first.Junior, second.Junior) = (second.Junior, first.Junior);
         first.At = second.At = DateTime.Now;
         first.By = second.By = by;
+    }
+
+    /// <summary>Leaving a role for another: no "back to the lobby" for it, but a senior's longest-hired junior takes its place.</summary>
+    private static void Leave(Studio studio, StudioHire hire, string by)
+    {
+        studio.Hires.Remove(hire);
+        if (!hire.Junior) Promote(studio, hire.RoleId, by);
+    }
+
+    /// <summary>The role lost its senior: its longest-hired junior is senior now (and hears it, as a new hire).</summary>
+    private static void Promote(Studio studio, Guid roleId, string by)
+    {
+        if (studio.Hires.Any(h => h.RoleId == roleId && !h.Junior)) return;
+        if (studio.Hires.Where(h => h.RoleId == roleId && h.Junior).OrderBy(h => h.At).FirstOrDefault() is not { } next) return;
+        next.Junior = false;
+        next.At = DateTime.Now;
+        next.By = by;
     }
 
     private static void End(Studio studio, StudioHire hire, string by)

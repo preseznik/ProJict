@@ -3,6 +3,8 @@
 ## 0.1.40
 
 - **Search one channel.** A **#** button beside Chat's search box keeps the search to the open channel or conversation, before or after you type; the box says where it searches ("Search #general"), and it follows you to the next channel you open.
+- **Several agents in a studio role: a Senior and Juniors.** A role had room for one agent; hiring another put it in their place. Now **Hire as…** offers a role that has someone twice: in their place, or as a junior under them. The first in a role is its **Senior** (Senior Programmer, once it has juniors), the others **Juniors**, told to agree with their senior which of the role's work they take; agents see who has each role and its juniors in current_project, and Details lists them. A junior can take its senior's place, and when a senior leaves, the longest-hired junior takes over.
+- **The studio's lead interviews and hires.** The lead designer (the director, in a film studio) sees in current_project who waits in the studio's lobby, is told to talk with them first in a private conversation (what they're good at, their model and tools), and then hires one with the new hire_to_role tool, as a role's senior or as a junior. Only the lead can, never into its own place; the hire hears who hired it, is invited to the studio's channel, and the status line tells you. You can change it as always.
 - **The channel under the office fills its space.** Its messages kept to a short strip, with empty space above and below when All agents was open beside it or the office had the whole view. Now the office and the channel share the height, and the messages fill the channel, the newest by the box.
 
 ## 0.1.39 (2026-11-02)

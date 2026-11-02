@@ -189,6 +189,7 @@ public sealed partial class AgentTools : IMcpToolHost
         AddPublishTools();
         AddMediaTools();
         AddPictureTools();
+        AddStudioTools();
     }
 
     public IReadOnlyList<McpTool> Tools => _tools;
@@ -295,8 +296,9 @@ public sealed partial class AgentTools : IMcpToolHost
         "When a result says asleep, the user put every agent to sleep: finish what you're doing, then stop and stay idle until you're told you're " +
         "woken (claim_item is refused meanwhile). " +
         "When a project shows a studio (a game or film studio), the user hires agents to its roles: if you have one, work as it expects, and agree with the " +
-        "team in the studio's channel who takes what, volunteering for what suits your model and tools. If you're its lead and the user lets the lead " +
-        "review wiki pages, you're told which pages wait for you: accept them or send them back with review_wiki. " +
+        "team in the studio's channel who takes what, volunteering for what suits your model and tools. A role's first agent is its senior, the others " +
+        "juniors who agree with it what they take. If you're its lead, you hire too: talk with the agents in its lobby first, then hire_to_role. And if " +
+        "the user lets the lead review wiki pages, you're told which pages wait for you: accept them or send them back with review_wiki. " +
         "Outside tools the user set up for agents (such as ElevenLabs or Suno) are in list_tools; use_tool_key gets one's API key once the user allows it, " +
         "and run_workflow runs a workflow on the user's ComfyUI server, attaching what it makes to an item. " +
         "If you can tell how much of your usage you've used, say so with report_usage. " +
@@ -538,6 +540,7 @@ public sealed partial class AgentTools : IMcpToolHost
             "finish_ship" => args.String("outcome") == "shipped" ? "Shipped it" : "Couldn't ship it",
             "cleanup_request" => "Read the clean-up request",
             "plan_cleanup" => "Posted a clean-up plan",
+            "hire_to_role" => $"Hired {args.String("agent")?.Trim().TrimStart('@')} as {(args.String("as") == "junior" ? "a junior " : "")}{args.String("role")?.Trim()}",
             "set_picture" => args.Bool("wanted") == true ? "Asked for a picture" : args.String("for") is { Length: > 0 } other ? $"Made {other}'s picture" : "Set its picture",
             "link_media" => args.Bool("unlink") == true ? $"Unlinked files from {what}" : $"Linked files to {what}",
             "plan_publish" => $"Planned publishing “{Short(args.String("title") ?? "")}”",

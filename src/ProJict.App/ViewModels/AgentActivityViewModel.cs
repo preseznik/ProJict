@@ -689,18 +689,19 @@ public sealed partial class AgentActivityViewModel : ObservableObject, IStudioHi
         return new MilestoneBoard(rows, categories.Sum(x => x.Done), categories.Sum(x => x.Total));
     }
 
-    void IStudioHiring.Hire(string agent, StudioRole role) => ChangeStudio(studio =>
+    void IStudioHiring.Hire(string agent, StudioRole role, bool junior) => ChangeStudio(studio =>
     {
-        var replaced = StudioFlow.Hire(studio, agent, role, _state.UserName);
+        var replaced = StudioFlow.Hire(studio, agent, role, _state.UserName, junior);
         // The team talks in the studio's channel: the new hire is invited.
         if (FilterProject is { } project && StudioChannel(project) is { } channel)
         {
             try { _state.Chat.Invite(channel, _state.ChatMe, agent, true); }
             catch (ChatException) { }
         }
+        var title = StudioFlow.TitleOf(studio, agent) ?? role.Name;
         return replaced != null
-            ? $"Hired {agent} as {role.Name} instead of {replaced}, who's back in the lobby. {agent} is told what the role expects, and invited to the studio's channel."
-            : $"Hired {agent} as {role.Name}. It's told what the role expects, and invited to the studio's channel.";
+            ? $"Hired {agent} as {title} instead of {replaced}, who's back in the lobby. {agent} is told what the role expects, and invited to the studio's channel."
+            : $"Hired {agent} as {title}{(junior && StudioFlow.HolderOf(studio, role) is { } senior ? $" under {senior}" : "")}. It's told what the role expects, and invited to the studio's channel.";
     });
 
     /// <summary>The studio's channel (made the first time if the project has none), or null if Chat can't have it.</summary>
