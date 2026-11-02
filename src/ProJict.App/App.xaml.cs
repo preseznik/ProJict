@@ -6,6 +6,7 @@ using ProJict.App.ViewModels;
 using ProJict.App.Views;
 using ProJict.Core.Export;
 using ProJict.Core.Storage;
+using ProJict.Core.Updates;
 
 namespace ProJict.App;
 
@@ -30,6 +31,15 @@ public partial class App : Application
         if (HasFlag(e.Args, "--mcp") || HasFlag(e.Args, "--watch-chat"))
         {
             RunBridge(e.Args);
+            return;
+        }
+
+        // ProJict is being updated: Setup starts it when it's done. Started now (by an agent's bridge, say), it would keep
+        // the install folder's files in use and the update would fail. So it quits first thing: quietly (a message box would
+        // keep them in use too), and before the single-instance lock, which would make Setup's own start think it runs.
+        if (SetupLock.IsHeld() && !HasFlag(e.Args, SetupLock.AfterSetupFlag))
+        {
+            Shutdown();
             return;
         }
 
@@ -91,8 +101,9 @@ public partial class App : Application
             () => MainWindow is { IsVisible: true, IsActive: true } window && window.WindowState != WindowState.Minimized);
 
         _agents = new AgentPipeServer(AgentPipeServer.PipeName(dataRoot), MainVm.AgentTools, UpdateService.CurrentVersionText, MainVm.AgentTools.WatchOverPipeAsync);
-        // The bridge agents start, outside the install folder so updates don't cut them off.
-        Task.Run(BridgeInstaller.Refresh);
+        // The bridge agents start, outside the install folder so updates don't cut them off. Not from a ProJict on another
+        // data folder (a test or second copy): the bridge would start that one for every agent.
+        if (dataArg == null) Task.Run(BridgeInstaller.Refresh);
         if (appSettings.AllowAgents) _agents.Start();
 
         // Started for an AI agent (by the --mcp bridge): stay in the tray until the user opens the window.
@@ -123,6 +134,14 @@ public partial class App : Application
     /// </summary>
     private void RunBridge(string[] args)
     {
+        // Running from the install folder while it's being updated would keep its files in use: quit at once.
+        if (SetupLock.IsHeld())
+        {
+            try { Console.Error.WriteLine("ProJict: ProJict is being updated. Try again in a minute."); }
+            catch (IOException) { }
+            Shutdown(1);
+            return;
+        }
         var dataArg = ArgValue(args, "--data");
         var dataRoot = Path.GetFullPath(dataArg ?? AppSettings.Load().DataRoot ?? AppSettings.DefaultDataRoot());
         var launch = !HasFlag(args, "--no-launch");

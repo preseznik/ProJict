@@ -4,6 +4,7 @@ using System.IO.Pipes;
 using System.Text;
 using System.Text.Json.Nodes;
 using ProJict.Core.Agents;
+using ProJict.Core.Updates;
 
 namespace ProJict.App.Services;
 
@@ -60,6 +61,7 @@ public static class McpBridge
         if (SingleInstance.IsRunning(dataRoot))
             return (null, "ProJict is running but doesn't accept AI agents. Turn on Settings > AI agents in ProJict.");
         if (!launch) return (null, "ProJict isn't running.");
+        if (SetupLock.IsHeld()) return (null, "ProJict is being updated. Try again in a minute.");
         // Shell execute, so ProJict doesn't inherit (and keep open) the client's stdio pipes.
         var args = "--background" + (dataArgument != null ? $" --data \"{dataArgument}\"" : "");
         Process.Start(new ProcessStartInfo(Environment.ProcessPath!, args) { UseShellExecute = true });

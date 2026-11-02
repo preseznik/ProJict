@@ -40,6 +40,17 @@ internal static class ProJictPipe
 {
     private static string Id(string dataRoot) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(dataRoot.ToLowerInvariant())))[..16];
 
+    /// <summary>
+    /// ProJict is being updated: its installer holds this mutex while it runs (SetupMutex in installer\ProJict.iss, and
+    /// SetupLock in ProJict.Core). Nothing starts ProJict meanwhile; Setup starts it itself when it's done.
+    /// </summary>
+    public static bool SetupRunning()
+    {
+        if (!Mutex.TryOpenExisting("ProJictSetupRunning", out var mutex)) return false;
+        mutex.Dispose();
+        return true;
+    }
+
     public static bool IsRunning(string dataRoot)
     {
         if (!Mutex.TryOpenExisting($"ProJict-{Id(dataRoot)}-mutex", out var mutex)) return false;
@@ -62,10 +73,23 @@ internal static class ProJictPipe
         }
     }
 
-    /// <summary>The pipe, starting ProJict in the tray first if it isn't running and that's allowed; else why not.</summary>
-    public static async Task<(NamedPipeClientStream? Pipe, string? Problem)> OpenAsync(Options options, bool launch)
+    /// <summary>
+    /// The pipe, starting ProJict in the tray first if it isn't running and that's allowed; else why not. While ProJict is
+    /// being updated it waits for Setup (at most <paramref name="waitForSetup"/>), which starts ProJict when it's done.
+    /// </summary>
+    public static async Task<(NamedPipeClientStream? Pipe, string? Problem)> OpenAsync(Options options, bool launch, TimeSpan waitForSetup = default)
     {
         if (await ConnectAsync(options.DataRoot, TimeSpan.FromSeconds(1)) is { } pipe) return (pipe, null);
+        if (SetupRunning())
+        {
+            var until = DateTime.Now + waitForSetup;
+            while (SetupRunning())
+            {
+                if (DateTime.Now >= until) return (null, "ProJict is being updated. Try again in a minute.");
+                await Task.Delay(1000);
+            }
+            if (await ConnectAsync(options.DataRoot, TimeSpan.FromSeconds(30)) is { } after) return (after, null);
+        }
         if (IsRunning(options.DataRoot)) return (null, "ProJict is running but doesn't accept AI agents. Turn on Settings > AI agents in ProJict.");
         if (!launch) return (null, "ProJict isn't running.");
         if (!Launch(options)) return (null, "ProJict isn't running, and the bridge doesn't know where it's installed. Start ProJict once.");
@@ -75,6 +99,7 @@ internal static class ProJictPipe
     /// <summary>Starts ProJict in the tray: the ProJict.exe that last set this bridge up (bridge.json beside it).</summary>
     public static bool Launch(Options options)
     {
+        if (SetupRunning()) return false;
         try
         {
             var settings = Path.Combine(AppContext.BaseDirectory, "bridge.json");

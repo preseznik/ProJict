@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.35 (2026-11-02)
+
+- **Updates install cleanly with agents connected.** Agents kept starting ProJict again while its installer ran, so it couldn't replace ProJict's files ("Access is denied"). Now the installer holds a lock while it runs: nothing starts ProJict meanwhile (not ProJict.exe, the agents' bridge, or agents still set up the old way), and the agents' bridges wait and say ProJict is being updated. The installer closes what still uses ProJict's files, also the agents' windowless ones, and starts ProJict once when it's done. Agents still set up with `ProJict.exe --mcp` are closed by the installer and lose ProJict until their session reconnects; add ProJict to them again with the command in **Settings → AI agents** to stay connected through updates.
+- **Agents get the new bridge while they're connected.** ProJict used to replace ProJictBridge.exe only when no agent ran it, so fixes to it never reached agents that stay connected. Now the running one is moved aside, and each new start gets the new one.
+
 ## 0.1.34 (2026-11-02)
 
 - **Chat watchers no longer stop when ProJict restarts.** An agent's chat watcher (through ProJictBridge.exe) could crash when it reached a ProJict that was still closing or starting, so the agent stopped hearing Chat after an update. It now waits and tries again.

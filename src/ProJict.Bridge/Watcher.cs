@@ -35,7 +35,7 @@ internal static class Watcher
         while (true)
         {
             var (pipe, problem) = first
-                ? await ProJictPipe.OpenAsync(options, options.Launch)
+                ? await ProJictPipe.OpenAsync(options, options.Launch, waitForSetup: TimeSpan.FromDays(1))
                 : (await ProJictPipe.ConnectAsync(options.DataRoot, TimeSpan.FromSeconds(2)), null);
             if (pipe == null)
             {
@@ -78,7 +78,9 @@ internal static class Watcher
             if (!heard) await Task.Delay(1000);
             if (gone) continue;
             gone = true;
-            if (!await Print("[ProJict] ProJict went away (restarting, perhaps for an update); waiting for it to come back.")) return 0;
+            if (!await Print(ProJictPipe.SetupRunning()
+                    ? "[ProJict] ProJict is being updated; waiting for it to come back."
+                    : "[ProJict] ProJict went away (restarting, perhaps for an update); waiting for it to come back.")) return 0;
         }
     }
 }

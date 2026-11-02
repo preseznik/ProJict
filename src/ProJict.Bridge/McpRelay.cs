@@ -15,8 +15,9 @@ internal sealed class McpRelay(Options options)
 {
     /// <summary>The bridge's protocol, in its hello; ProJict tells agents still on the old ProJict.exe --mcp to move.</summary>
     public const string Version = "2";
-    private const string Gone = "ProJict went away: it's restarting, perhaps for an update. Try again in a moment; you stay connected, and the bridge " +
-                                "reconnects by itself.";
+    private static string Gone => ProJictPipe.SetupRunning()
+        ? "ProJict is being updated. Try again in a minute; you stay connected, and the bridge reconnects by itself when it's back."
+        : "ProJict went away: it's restarting, perhaps for an update. Try again in a moment; you stay connected, and the bridge reconnects by itself.";
     /// <summary>After this long without ProJict a call may start it (not sooner: an update's installer may be at work).</summary>
     private static readonly TimeSpan LaunchAfter = TimeSpan.FromMinutes(2);
     private static readonly UTF8Encoding Utf8 = new(false);
@@ -38,7 +39,8 @@ internal sealed class McpRelay(Options options)
 
     public async Task<int> RunAsync()
     {
-        var (pipe, problem) = await ProJictPipe.OpenAsync(options, options.Launch);
+        // A client waits for its connection only so long.
+        var (pipe, problem) = await ProJictPipe.OpenAsync(options, options.Launch, waitForSetup: TimeSpan.FromSeconds(20));
         if (pipe == null)
         {
             Console.Error.WriteLine("ProJict: " + problem);
