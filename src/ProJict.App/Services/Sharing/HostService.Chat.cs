@@ -167,20 +167,9 @@ public sealed partial class HostService
 
             if (!Guid.TryParse(Text("channel"), out var id) || room.Channels.FirstOrDefault(c => c.Id == id) is not { } channel || !ChatRoom.CanSee(channel, seeing))
                 return Refuse("That channel isn't there any more.");
-            if (op == "read")
-            {
-                if (DateTime.TryParse(Text("upTo"), null, System.Globalization.DateTimeStyles.RoundtripKind, out var upTo))
+            RemoteChatOps.OnChannel(room, channel, actor, message, GuestAccess.CanComment(RoleOf(account)),
+                who => _main.AgentTools.KnownAgentNames().Contains(who, StringComparer.OrdinalIgnoreCase), () =>
                 {
-                    if (ChatRoom.Member(channel, actor.Name) != null) room.MarkRead(channel, actor.Name, upTo);
-                    else if (actor.Agent) room.MarkMentionsRead(channel, actor.Name, upTo);
-                }
-                return null;
-            }
-            if (!GuestAccess.CanComment(RoleOf(account))) return Refuse("As a viewer you can read, not write.");
-            Guid? messageId = Guid.TryParse(Text("message"), out var m) ? m : null;
-            switch (op)
-            {
-                case "post":
                     var files = new List<Attachment>();
                     foreach (var f in message["files"] as JsonArray ?? [])
                     {
@@ -189,27 +178,8 @@ public sealed partial class HostService
                         // Only files it sent first (putFile), never someone else's.
                         if (File.Exists(_state.Store.AttachmentPath(attachment))) files.Add(attachment);
                     }
-                    room.Post(channel, actor, Text("text") ?? "", Guid.TryParse(Text("replyTo"), out var r) ? r : null, files);
-                    break;
-                case "edit": room.Edit(channel, actor, messageId ?? Guid.Empty, Text("text") ?? ""); break;
-                case "react": room.React(channel, actor, messageId ?? Guid.Empty, (bool?)message["up"]); break;
-                case "delete": room.DeleteMessage(channel, actor, messageId ?? Guid.Empty); break;
-                case "join": room.Join(channel, actor); break;
-                case "leave": room.Leave(channel, actor); break;
-                case "invite":
-                    var who = (Text("who") ?? "").Trim();
-                    room.Invite(channel, actor, who, _main.AgentTools.KnownAgentNames().Contains(who, StringComparer.OrdinalIgnoreCase) && !room.IsOwner(who));
-                    break;
-                case "kick": room.Kick(channel, actor, Text("who") ?? ""); break;
-                case "mute":
-                    room.Mute(channel, actor, Text("who") ?? "", (int?)message["minutes"] is > 0 and var minutes ? TimeSpan.FromMinutes(minutes) : null);
-                    break;
-                case "unmute": room.Unmute(channel, actor, Text("who") ?? ""); break;
-                case "moderator": room.SetModerator(channel, actor, Text("who") ?? "", (bool?)message["on"] == true); break;
-                case "topic": room.SetTopic(channel, actor, Text("topic")); break;
-                case "access": room.SetAccess(channel, actor, (bool?)message["inviteOnly"] == true ? ChannelAccess.InviteOnly : ChannelAccess.Open); break;
-                default: return Refuse("ProJict here doesn't know that.");
-            }
+                    return files;
+                });
             return null;
         }
         catch (ChatException ex)

@@ -124,6 +124,7 @@ public sealed partial class GuestService
         _store = store;
         _dispatcher = Dispatcher.CurrentDispatcher;
         state.RemoteProjectChanged += OnLocalChange;
+        WatchOwnChat();
     }
 
     public System.Collections.ObjectModel.ObservableCollection<HostConnection> Connections { get; } = [];
@@ -406,6 +407,12 @@ public sealed partial class GuestService
             case "presence":
                 TakePresence(connection, message);
                 break;
+            case "backOp":
+                HandleBackOp(connection, message);
+                break;
+            case "backGetFile":
+                SendBackFile(connection, message);
+                break;
         }
     }
 
@@ -439,6 +446,7 @@ public sealed partial class GuestService
         _state.StatusText = $"Connected to {connection.HostName}'s ProJict.";
         _main.SendViewing();
         SendPresence();
+        if (connection.SharesChatBack) SendBackSnapshot(connection);
         Changed?.Invoke();
     }
 

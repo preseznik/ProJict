@@ -7,8 +7,13 @@ using ProJict.Core.Storage;
 
 namespace ProJict.App.Services.Sharing;
 
-public sealed partial class HostConnection
+public sealed partial class HostConnection : IChatRemote
 {
+    string IChatRemote.OwnerName => HostName;
+    bool IChatRemote.IsConnected => State == ConnectionState.Connected;
+    bool IChatRemote.CanWrite => GuestAccess.CanComment(Role);
+    bool IChatRemote.AsOwner => false;
+
     /// <summary>The host's channels you may see: a copy kept in memory while connected, never saved here.</summary>
     public ChatRoom? Chat { get; internal set; }
     /// <summary>The name the host knows you by; you write in its Chat with it.</summary>

@@ -58,6 +58,7 @@ public sealed class NotificationService
         state.GroupCommentsChanged += _ => CheckOthers();
         state.Chat.Changed += _ => CheckOthers();
         main.Guest.ChatChanged += _ => CheckOthers();
+        main.Host.BackChatChanged += _ => CheckOthers();
         main.Host.Requests.CollectionChanged += (_, _) => CheckOthers();
         main.Updates.PropertyChanged += (_, e) =>
         {
@@ -161,7 +162,10 @@ public sealed class NotificationService
         // Yours, and the ones of the ProJicts you're connected to (under the name they know you by).
         var places = _state.Chat.Channels.Select(c => (Channel: c, Me: _state.UserName, Host: (string?)null))
             .Concat(_main.Guest.Connections.Where(c => c.Chat != null && c.MyName != null)
-                .SelectMany(c => c.Chat!.Channels.Select(ch => (Channel: ch, Me: c.MyName!, Host: (string?)c.HostName))));
+                .SelectMany(c => c.Chat!.Channels.Select(ch => (Channel: ch, Me: c.MyName!, Host: (string?)c.HostName))))
+            // And the guests' that share their channels back with you.
+            .Concat(_main.Host.BackChats.Where(b => b.MyName != null)
+                .SelectMany(b => b.Chat.Channels.Select(ch => (Channel: ch, Me: b.MyName!, Host: (string?)b.OwnerName))));
         foreach (var (channel, me, host) in places)
             foreach (var message in ProJict.Core.Chat.ChatRoom.Unread(channel, me).Where(m => !m.Notice))
             {

@@ -138,6 +138,7 @@ public sealed partial class MainViewModel : ObservableObject
             if (e.PropertyName == nameof(ChatViewModel.Channel) && CurrentView == Chat) Arrived();
         };
         Guest.ChatChanged += connection => Chat.OnRemoteChanged(connection);
+        Host.BackChatChanged += back => Chat.OnRemoteChanged(back);
         Guest.PresenceChanged += _ => Chat.RefreshPresence();
         Agents.Me = state.UserName;
         Agents.PresenceChanged += () =>

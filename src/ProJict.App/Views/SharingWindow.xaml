@@ -205,6 +205,11 @@
                                                 <TextBlock Text="{Binding Message}" Foreground="{DynamicResource SystemFillColorCriticalBrush}" FontSize="12" TextWrapping="Wrap"
                                                            Visibility="{Binding Message, Converter={StaticResource EmptyToVis}}" />
                                                 <CheckBox Content="Connect when ProJict starts" IsChecked="{Binding AutoConnect}" Margin="0,4,0,0" />
+                                                <CheckBox x:Name="ShareChatBack" Content="{Binding ShareChatBackText}" IsChecked="{Binding ShareChatBack}" Margin="0,4,0,0"
+                                                          Visibility="{Binding IsSelf, Converter={StaticResource InvBoolToVis}}"
+                                                          ToolTip="Your Open channels (not a private project's) show in their Chat too, under your name, and they can read and write in them; nothing else of yours goes there" />
+                                                <TextBlock Text="Linked as you: your channels show there too, and you write in them from there as here." Style="{StaticResource MutedText}" FontSize="12"
+                                                           TextWrapping="Wrap" Margin="0,4,0,0" Visibility="{Binding IsSelf, Converter={StaticResource BoolToVis}}" />
                                             </StackPanel>
                                         </DockPanel>
                                     </Border>

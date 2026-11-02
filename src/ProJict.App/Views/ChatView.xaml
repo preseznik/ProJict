@@ -74,6 +74,9 @@
                     <StackPanel>
                         <StackPanel Orientation="Horizontal">
                             <TextBlock x:Name="Name" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                            <!-- From another ProJict: whose -->
+                            <TextBlock x:Name="SourceTag" Text="{Binding SourceTag}" FontSize="11" Margin="6,1,0,0" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}" Visibility="{Binding Source, Converter={StaticResource EmptyToVis}}" />
                             <TextBlock x:Name="Lock" Style="{StaticResource Icon}" Text="&#xE72E;" FontSize="10" Margin="6,2,0,0" Foreground="{DynamicResource TextFillColorTertiaryBrush}"
                                        ToolTip="Invite only" Visibility="{Binding IsInviteOnly, Converter={StaticResource BoolToVis}}" />
                         </StackPanel>

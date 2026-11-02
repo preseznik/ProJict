@@ -51,6 +51,8 @@ public sealed class GuestSession(GuestAccount account, Wire wire, string address
     internal string? RulesSent { get; set; }
     /// <summary>Who's online or away, as the guest last heard it.</summary>
     internal string? PresenceSent { get; set; }
+    /// <summary>The guest's own channels, when it shares them back.</summary>
+    public BackChat? Back { get; internal set; }
 
     internal void Send(JsonObject message) => _ = SendAsync(message);
 
@@ -418,6 +420,7 @@ public sealed partial class HostService
                     session.Account.LastSeen = DateTime.Now;
                     _store.Save();
                     _main.Agents.PersonDisconnected(session);
+                    DropBack(session);
                     Changed?.Invoke();
                 }).ConfigureAwait(false);
         }
@@ -497,6 +500,11 @@ public sealed partial class HostService
                 var agents = Presence.FromJson(message["agents"]).Take(100)
                     .ToDictionary(a => session.Account.Self ? a.Key : AgentNaming.Via(a.Key, NameOf(session.Account)), a => a.Value, StringComparer.OrdinalIgnoreCase);
                 _main.Agents.PersonPresence(session, (bool?)message["away"] == true, agents);
+                BackPresence(session, (bool?)message["away"] == true, Presence.FromJson(message["agents"]));
+                if (session.Back is { } back) BackChatChanged?.Invoke(back);
+                return null;
+            case "backChat" or "backChannel" or "backGone" or "backFile" or "backError":
+                HandleBack(session, (string)message["type"]!, message);
                 return null;
             default:
                 return null;

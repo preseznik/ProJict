@@ -52,6 +52,12 @@ public sealed class KnownHost
     /// <summary>The secret token, protected for this Windows user (DPAPI).</summary>
     public string? ProtectedToken { get; set; }
     public bool AutoConnect { get; set; } = true;
+    /// <summary>
+    /// Your Open channels go to that ProJict too, over the same connection, so its owner reads and writes in them (a
+    /// ProJict linked as you shares all of yours anyway).
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public bool ShareChatBack { get; set; }
 }
 
 /// <summary>%LocalAppData%\ProJict\sharing.json: this computer's side of sharing, as host and as guest.</summary>

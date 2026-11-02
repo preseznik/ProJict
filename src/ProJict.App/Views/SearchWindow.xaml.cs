@@ -13,12 +13,12 @@ public partial class SearchWindow : Window
     private readonly MainViewModel _main;
 
     /// <summary>An item, note, wiki page or chat message that matches.</summary>
-    public sealed record ResultRow(SearchHit? Hit, ProJict.Core.Chat.ChatHit? Chat = null, ProJict.Core.Wiki.WikiHit? Wiki = null)
+    public sealed record ResultRow(SearchHit? Hit, ProJict.Core.Chat.ChatHit? Chat = null, ProJict.Core.Wiki.WikiHit? Wiki = null, string? Source = null)
     {
         public string Snippet => Hit?.Snippet ?? (Wiki != null ? $"{Wiki.Page.Title}: {Wiki.Snippet}" : Chat!.Snippet);
         public string Location => Hit?.Location ?? (Wiki != null ? "Wiki › " + ProJict.Core.Wiki.WikiPaths.Display(Wiki.Page.Path) : Chat!.Channel.Direct
             ? $"Chat › private: {string.Join(" & ", Chat.Channel.Members.Select(m => m.Name))} › {Chat.Message.By}, {Chat.Message.At:d MMM HH:mm}"
-            : $"Chat › #{Chat.Channel.Name} › {Chat.Message.By}, {Chat.Message.At:d MMM HH:mm}");
+            : $"Chat › #{Chat.Channel.Name}{(Source != null ? " · " + Source : "")} › {Chat.Message.By}, {Chat.Message.At:d MMM HH:mm}");
         public string StateText => Hit?.Item switch
         {
             null => "",
@@ -40,10 +40,14 @@ public partial class SearchWindow : Window
     {
         QueryHint.Visibility = Query.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
         var hits = GlobalSearch.Search(_state.Projects, Query.Text, 150);
-        var chat = ProJict.Core.Chat.ChatSearch.Search(_state.Chat.Channels, Query.Text, 50);
+        var chat = ProJict.Core.Chat.ChatSearch.Search(_state.Chat.Channels, Query.Text, 50).Select(c => new ResultRow(null, c))
+            // And the channels of the ProJicts you're connected to, said whose.
+            .Concat(_main.Guest.Connections.Where(c => c.Chat != null).Cast<Services.Sharing.IChatRemote>().Concat(_main.Host.BackChats)
+                .SelectMany(r => ProJict.Core.Chat.ChatSearch.Search(r.Chat!.Channels, Query.Text, 20).Select(c => new ResultRow(null, c, Source: r.OwnerName))))
+            .Take(70).ToList();
         var wiki = ProJict.Core.Wiki.WikiText.Search(_state.Wiki.Pages, Query.Text, 50);
         // Pages whose name matches come right after the items.
-        var rows = hits.Select(h => new ResultRow(h)).Concat(wiki.Select(w => new ResultRow(null, Wiki: w))).Concat(chat.Select(c => new ResultRow(null, c))).ToList();
+        var rows = hits.Select(h => new ResultRow(h)).Concat(wiki.Select(w => new ResultRow(null, Wiki: w))).Concat(chat).ToList();
         Results.ItemsSource = rows;
         Count.Text = Query.Text.Trim().Length == 0 ? "" : hits.Count == 150 ? "150+ results" : $"{rows.Count} result(s)";
         if (rows.Count > 0) Results.SelectedIndex = 0;

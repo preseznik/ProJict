@@ -220,6 +220,17 @@ public sealed partial class SharingViewModel : ObservableObject
         host.AutoConnect = value;
         _main.Sharing.Save();
     }
+
+    /// <summary>Your Open channels go to that ProJict too (at once when it's connected, or next time it is).</summary>
+    internal void SetShareChatBack(KnownHost host, HostConnection? connection, bool value)
+    {
+        if (connection != null) _main.Guest.SetShareChatBack(connection, value);
+        else
+        {
+            host.ShareChatBack = value;
+            _main.Sharing.Save();
+        }
+    }
 }
 
 public sealed partial class GroupChoice(string name) : ObservableObject
@@ -288,6 +299,16 @@ public sealed class HostRow(KnownHost host, HostConnection? connection, SharingV
     {
         get => Host.AutoConnect;
         set => owner.SetAutoConnect(Host, value);
+    }
+
+    /// <summary>Linked as you, your channels always go there; for someone else's ProJict, when you tick it.</summary>
+    public bool IsSelf => Connection?.IsSelf == true;
+    public string ShareChatBackText => $"Share my Open channels with {Host.HostName ?? "them"}";
+
+    public bool ShareChatBack
+    {
+        get => Host.ShareChatBack;
+        set => owner.SetShareChatBack(Host, Connection, value);
     }
 
     public IRelayCommand Disconnect => new RelayCommand(() => owner.Disconnect(this, forget: false));
