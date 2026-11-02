@@ -34,6 +34,7 @@ public partial class ProjectView : UserControl
         {
             _vm.FocusRequested -= OnFocusRequested;
             _vm.FocusAddItemRequested -= OnFocusAddItem;
+            _vm.PropertyChanged -= OnVmPropertyChanged;
             _vm.CaretOf = null;
         }
         _vm = DataContext as ProjectViewModel;
@@ -41,8 +42,70 @@ public partial class ProjectView : UserControl
         {
             _vm.FocusRequested += OnFocusRequested;
             _vm.FocusAddItemRequested += OnFocusAddItem;
+            _vm.PropertyChanged += OnVmPropertyChanged;
             _vm.CaretOf = id => FindRowTextBox(id) is { IsKeyboardFocused: true } box ? box.CaretIndex : null;
         }
+        ArrangeHeaderButtons();
+    }
+
+    private void OnVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(ProjectViewModel.BigHeaderButtons)) ArrangeHeaderButtons();
+    }
+
+    // ───────────── Header buttons ─────────────
+
+    /// <summary>The header's buttons as written, in their order (the cog aside): each goes with the big ones or the others.</summary>
+    private List<Button>? _headerButtons;
+
+    /// <summary>The buttons chosen with the cog big on the left, the others after them as before, each group in the usual order.</summary>
+    private void ArrangeHeaderButtons()
+    {
+        _headerButtons ??= HeaderButtons.Children.OfType<Button>().Where(b => b != HeaderCog).ToList();
+        var big = _vm?.BigHeaderButtons ?? ProJict.Core.Features.HeaderLayout.DefaultBig;
+        BigHeaderButtons.Children.Clear();
+        HeaderButtons.Children.Clear();
+        foreach (var button in _headerButtons)
+        {
+            var isBig = big.Contains(System.Windows.Automation.AutomationProperties.GetName(button), StringComparer.OrdinalIgnoreCase);
+            button.Style = (Style)FindResource(isBig ? "BigHeaderButton" : "SubtleButton");
+            // The icon a size up with its label.
+            if (button.Content is StackPanel { Children: [TextBlock icon, ..] })
+            {
+                if (isBig) icon.FontSize = 17;
+                else icon.ClearValue(TextBlock.FontSizeProperty);
+            }
+            (isBig ? BigHeaderButtons : HeaderButtons).Children.Add(button);
+        }
+        HeaderButtons.Children.Add(HeaderCog);
+    }
+
+    private void HeaderCog_Click(object sender, RoutedEventArgs e)
+    {
+        var menu = HeaderButtonsMenu();
+        menu.PlacementTarget = HeaderCog;
+        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+        menu.IsOpen = true;
+    }
+
+    /// <summary>The cog's menu: tick the buttons to show big, on the left (it stays open while you tick); or back to the start.</summary>
+    internal ContextMenu HeaderButtonsMenu()
+    {
+        var menu = new ContextMenu();
+        menu.Items.Add(new MenuItem { Header = "Big, on the left:", IsEnabled = false });
+        foreach (var button in _headerButtons ?? [])
+        {
+            if (button.Visibility != Visibility.Visible) continue;
+            var name = System.Windows.Automation.AutomationProperties.GetName(button);
+            var item = new MenuItem { Header = name, IsCheckable = true, StaysOpenOnClick = true, IsChecked = _vm?.BigHeaderButtons.Contains(name, StringComparer.OrdinalIgnoreCase) == true };
+            item.Click += (_, _) => _vm?.SetBigHeaderButton(name, item.IsChecked);
+            menu.Items.Add(item);
+        }
+        menu.Items.Add(new Separator());
+        var reset = new MenuItem { Header = "As at first: Ship and Clean up" };
+        reset.Click += (_, _) => _vm?.ResetBigHeaderButtons();
+        menu.Items.Add(reset);
+        return menu;
     }
 
     private void OnPreviewKeyDown(object sender, KeyEventArgs e)
@@ -104,8 +167,12 @@ public partial class ProjectView : UserControl
             PriorityChevron.Visibility = labels;
             ShowDoneToggle.Margin = new Thickness(compact ? 4 : 12, 0, 0, 0);
             ToolbarRight.Margin = new Thickness(compact ? 4 : 12, 0, 0, 0);
-            // Leaves room for the title and the status and group boxes under it.
-            HeaderButtons.MaxWidth = Math.Clamp(constraint.Width - 340, 180, 560);
+            // Leaves room for the title and the status and group boxes under it, and for the big buttons beside them.
+            var room = Math.Max(constraint.Width - 340, 180);
+            BigHeaderButtons.MaxWidth = Math.Max(room - 180, 140);
+            // Measured first, so the others get what it leaves (its size from before may be another project's).
+            BigHeaderButtons.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            HeaderButtons.MaxWidth = Math.Clamp(room - BigHeaderButtons.DesiredSize.Width, 180, 560);
         }
         return base.MeasureOverride(constraint);
     }

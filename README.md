@@ -158,6 +158,8 @@ Outside tools your agents may use for your work: **Settings → Tools → Tools�
 
 Click **Ship** in a project's header (or right-click the project › **Ship…**) and tick what you want done: commit, build, package, push and/or release. An AI agent working in the project sees the request and posts its plan on the board: the version, what's in it, the items still waiting for your review and what it will run. **Approve** or **Decline** it there; nothing runs before you approve. The agent then runs the steps and reports each one under the plan, and the request shows in the sidebar, on the dashboard and in the Feed.
 
+**Ship** and **Clean up** are the big buttons on the left of a project's header, with the others (Folder, VS Code, Terminal, GitHub, Chat, Wiki, Copy prompt, Release, Export) after them. The cog after those chooses which show big: tick any of them, or **As at first** for Ship and Clean up. It's the same for every project, on this computer.
+
 How a project is shipped goes in its **Details → Shipping**: the steps it has and the instructions the agent follows (e.g. bump the version, run the build script, test, commit, push, publish the release). Push and release always need your approval; commit, build and package can run without asking if you tick that for the project.
 
 Agents can write the steps and instructions too, for example after looking at how the project is built. Details → Shipping then says which agent changed them. Until you click **Looks good**, every ship request waits for your approval, so nothing an agent wrote runs unseen. Ctrl+Z doesn't undo shipping settings. Only you can let steps run without asking.

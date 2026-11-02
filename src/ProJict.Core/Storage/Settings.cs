@@ -85,6 +85,11 @@ public sealed class AppSettings
     public bool DashboardGroupByGroup { get; set; } = true;
     /// <summary>The dashboard's side panels (waiting for review, agent activity, done this week) are folded away.</summary>
     public bool DashboardPanelsFolded { get; set; }
+    /// <summary>
+    /// The project header's buttons shown big, on the left of the others (their names: "Ship", "Clean up", "Folder"…),
+    /// chosen with the cog there. Null until you choose: Ship and Clean up.
+    /// </summary>
+    public List<string>? BigHeaderButtons { get; set; }
     /// <summary>Windows notifications for what needs you (Settings › Notifications).</summary>
     public NotificationSettings Notifications { get; set; } = new();
     /// <summary>How the Feed groups what happened: by day, week or month.</summary>

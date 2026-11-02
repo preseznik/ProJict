@@ -1577,6 +1577,27 @@ public sealed partial class ProjectViewModel : ObservableObject
         SyncIssuesCommand.NotifyCanExecuteChanged();
     }
 
+    // ───────────── Header buttons ─────────────
+
+    /// <summary>The header's buttons (by name) shown big, on the left of the others: Ship and Clean up until you choose with the cog.</summary>
+    public IReadOnlyList<string> BigHeaderButtons => HeaderLayout.Big(_state.AppSettings);
+
+    /// <summary>Shows a header button big or not, for every project on this computer.</summary>
+    public void SetBigHeaderButton(string name, bool big)
+    {
+        HeaderLayout.SetBig(_state.AppSettings, name, big);
+        _state.SaveAppSettings();
+        OnPropertyChanged(nameof(BigHeaderButtons));
+    }
+
+    /// <summary>Back to Ship and Clean up big.</summary>
+    public void ResetBigHeaderButtons()
+    {
+        HeaderLayout.Reset(_state.AppSettings);
+        _state.SaveAppSettings();
+        OnPropertyChanged(nameof(BigHeaderButtons));
+    }
+
     // ───────────── Shipping ─────────────
 
     /// <summary>Your own projects can be shipped (not the Inbox, nor another ProJict's project).</summary>

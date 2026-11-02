@@ -12,6 +12,16 @@
     </UserControl.InputBindings>
 
     <UserControl.Resources>
+        <!-- A header button chosen with the cog: a real button, bigger, on the left of the others. -->
+        <Style x:Key="BigHeaderButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Padding" Value="14,7" />
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="Margin" Value="0,0,8,6" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="VerticalAlignment" Value="Top" />
+        </Style>
+
         <!-- An attached file: a thumbnail for images, otherwise a chip with its name. Click opens it, right-click for more. -->
         <DataTemplate x:Key="AttachmentChip" DataType="{x:Type vm:AttachmentViewModel}">
             <Button Style="{StaticResource SubtleButton}" Padding="0" Margin="0,0,6,4" Command="{Binding OpenCommand}"
@@ -497,7 +507,13 @@
                            Text="Ideas and loose notes. Promote an item to a project from its right-click menu."
                            Visibility="{Binding IsInbox, Converter={StaticResource BoolToVis}}" />
             </StackPanel>
-            <WrapPanel x:Name="HeaderButtons" Grid.Column="1" VerticalAlignment="Top" HorizontalAlignment="Right" MaxWidth="560">
+            <!--
+                The buttons: the ones chosen with the cog (Ship and Clean up at first) big on the left, the others after them.
+                They're all written here once; the view moves each to where it goes (ArrangeHeaderButtons).
+            -->
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top" HorizontalAlignment="Right">
+            <WrapPanel x:Name="BigHeaderButtons" VerticalAlignment="Top" Margin="0,0,10,0" />
+            <WrapPanel x:Name="HeaderButtons" VerticalAlignment="Top" MaxWidth="560">
                 <Button Style="{StaticResource SubtleButton}" AutomationProperties.Name="Folder" Command="{Binding OpenFolderCommand}" ToolTip="Open the local repo folder" Visibility="{Binding IsNotInbox, Converter={StaticResource BoolToVis}}">
                     <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource Icon}" Text="&#xE8B7;" /><TextBlock Text="Folder" Margin="6,0,0,0" /></StackPanel>
                 </Button>
@@ -535,7 +551,13 @@
                 <Button Style="{StaticResource SubtleButton}" AutomationProperties.Name="Export" Command="{Binding ExportCommand}" ToolTip="Export to TODO/DONE text files">
                     <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource Icon}" Text="&#xEDE1;" /><TextBlock Text="Export" Margin="6,0,0,0" /></StackPanel>
                 </Button>
+                <!-- The glyph has the icon font, not the button: its menu would inherit it and show boxes for letters. -->
+                <Button x:Name="HeaderCog" Style="{StaticResource SubtleButton}" Click="HeaderCog_Click" AutomationProperties.Name="Choose the big buttons"
+                        ToolTip="Choose which of these buttons show big, on the left">
+                    <TextBlock Style="{StaticResource Icon}" Text="&#xE713;" FontSize="13" />
+                </Button>
             </WrapPanel>
+            </StackPanel>
         </Grid>
 
         <TabControl Grid.Row="1" Margin="16,8,16,8" SelectedIndex="{Binding SelectedTab}">
