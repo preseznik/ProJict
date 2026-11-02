@@ -21,11 +21,18 @@ namespace ProJict.App.ViewModels;
 /// </summary>
 public sealed partial class ChatViewModel : ObservableObject
 {
-    private const int PageSize = 200;
+    /// <summary>
+    /// A channel opens with its newest messages, and older ones come this many at a time as you scroll up: a message
+    /// takes a few milliseconds to lay out, so building all of a long channel's at once made opening it slow.
+    /// </summary>
+    private const int PageSize = 30;
+    /// <summary>To show the New line, a channel opens with up to this many (from a little above the line).</summary>
+    private const int MostToShowNew = 200;
     private readonly AppState _state;
     private readonly MainViewModel _main;
     private readonly Dictionary<Guid, ChatMessageViewModel> _messageVms = [];
-    private int _shown = PageSize;
+    /// <summary>The oldest message shown (all newer ones show too); none: the newest PageSize.</summary>
+    private Guid? _oldestShown;
     private bool _syncing;
 
     public ChatViewModel(AppState state, MainViewModel main)
@@ -180,7 +187,7 @@ public sealed partial class ChatViewModel : ObservableObject
             ReadIfLooking();
         }
         Refresh();
-        if (message is { } id && _messageVms.TryGetValue(id, out var vm)) Highlight(vm);
+        if (message is { } id) HighlightMessage(id);
     }
 
     public void Hide() => IsShown = false;
@@ -198,6 +205,9 @@ public sealed partial class ChatViewModel : ObservableObject
     {
         if (Channel == null || ChatRoom.Member(Channel, NameIn(Channel)) is not { } me || !ChatRoom.Unread(Channel, NameIn(Channel)).Any()) return;
         UnreadFrom = me.LastRead ?? DateTime.MinValue;
+        // The New line shows, with a little of what came before it, unless it's far back.
+        if (ChatRoom.Unread(Channel, NameIn(Channel)).FirstOrDefault() is { } first)
+            ShowFrom(Math.Max(Channel.Messages.Count - MostToShowNew, Channel.Messages.IndexOf(first) - 2));
         SyncMessages();
     }
 
@@ -213,7 +223,7 @@ public sealed partial class ChatViewModel : ObservableObject
 
     partial void OnChannelChanged(ChatChannel? value)
     {
-        _shown = PageSize;
+        _oldestShown = null;
         _messageVms.Clear();
         Messages.Clear();
         ReplyTo = null;
@@ -463,12 +473,17 @@ public sealed partial class ChatViewModel : ObservableObject
         return host.Presence.TryGetValue(member.Name, out var state) ? state : PresenceState.Offline;
     }
 
-    /// <summary>The newest messages (more with Show earlier); new ones are appended, edited ones refreshed.</summary>
+    /// <summary>
+    /// The newest messages, or all from the oldest you scrolled up to. The rows already built stay: new messages are added
+    /// at the end, older ones in front, and a message a host sent again replaces its row.
+    /// </summary>
     private void SyncMessages()
     {
         var models = Channel?.Messages ?? [];
-        var shown = models.Skip(Math.Max(0, models.Count - _shown)).ToList();
-        HasEarlier = shown.Count < models.Count;
+        var start = Start(models);
+        var shown = models.GetRange(start, models.Count - start);
+        _oldestShown = shown.FirstOrDefault()?.Id;
+        HasEarlier = start > 0;
         OnPropertyChanged(nameof(HasEarlier));
         // A host's version of a message is a new object: it gets a new row.
         var wanted = shown.Select(m => _messageVms.TryGetValue(m.Id, out var vm) && vm.Model == m ? vm : _messageVms[m.Id] = new ChatMessageViewModel(m, this)).ToList();
@@ -481,10 +496,29 @@ public sealed partial class ChatViewModel : ObservableObject
             vm.Refresh(previous, first);
             previous = vm.Model;
         }
-        var keep = Messages.Count <= wanted.Count && Messages.Select((m, i) => wanted[i] == m).All(same => same);
-        if (!keep) Messages.Clear();
+        // Where the rows don't line up with what's wanted (another channel, say), they're built again.
+        var lead = Messages.Count == 0 ? -1 : wanted.FindIndex(w => w.Model.Id == Messages[0].Model.Id);
+        if (lead >= 0 && lead + Messages.Count <= wanted.Count && Messages.Select((m, i) => wanted[lead + i].Model.Id == m.Model.Id).All(same => same))
+        {
+            for (var i = 0; i < Messages.Count; i++)
+                if (Messages[i] != wanted[lead + i]) Messages[i] = wanted[lead + i];
+            for (var i = 0; i < lead; i++) Messages.Insert(i, wanted[i]);
+        }
+        else Messages.Clear();
         foreach (var vm in wanted.Skip(Messages.Count)) Messages.Add(vm);
         MessagesChanged?.Invoke();
+    }
+
+    /// <summary>Where the shown messages start in the channel's.</summary>
+    private int Start(List<ChatMessage> models) =>
+        _oldestShown is { } id && models.FindIndex(m => m.Id == id) is >= 0 and var at ? at : Math.Max(0, models.Count - PageSize);
+
+    /// <summary>Shows the messages from this one on (never fewer than now).</summary>
+    private void ShowFrom(int index)
+    {
+        if (Channel?.Messages is not { Count: > 0 } models) return;
+        index = Math.Clamp(index, 0, models.Count - 1);
+        if (index < Start(models)) _oldestShown = models[index].Id;
     }
 
     /// <summary>Messages were added or changed: the view scrolls to the newest when it was there.</summary>
@@ -493,10 +527,12 @@ public sealed partial class ChatViewModel : ObservableObject
     /// <summary>Asks the view to bring a message into sight.</summary>
     public event Action<ChatMessageViewModel>? Reveal;
 
+    /// <summary>The next older messages, in front (the view keeps your place).</summary>
     [RelayCommand]
     private void ShowEarlier()
     {
-        _shown += PageSize;
+        if (Channel is not { } channel) return;
+        ShowFrom(Start(channel.Messages) - PageSize);
         SyncMessages();
     }
 
@@ -509,8 +545,13 @@ public sealed partial class ChatViewModel : ObservableObject
 
     internal void HighlightMessage(Guid id)
     {
-        if (Channel == null) return;
-        while (!_messageVms.ContainsKey(id) && HasEarlier) ShowEarlier();
+        if (Channel is not { } channel) return;
+        // An older message: everything from a little before it shows.
+        if (channel.Messages.FindIndex(m => m.Id == id) is >= 0 and var at && at < Start(channel.Messages))
+        {
+            ShowFrom(at - 2);
+            SyncMessages();
+        }
         if (_messageVms.TryGetValue(id, out var vm)) Highlight(vm);
     }
 

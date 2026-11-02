@@ -577,7 +577,7 @@
             <!-- Messages -->
             <ScrollViewer x:Name="MessageScroller" VerticalScrollBarVisibility="Auto" ScrollChanged="MessageScroller_ScrollChanged">
                 <StackPanel Margin="0,0,6,6">
-                    <Button Content="Show earlier messages" HorizontalAlignment="Center" Margin="0,4,0,8" Command="{Binding ShowEarlierCommand}"
+                    <Button Content="Show earlier messages" HorizontalAlignment="Center" Margin="0,4,0,8" Click="ShowEarlier_Click"
                             Visibility="{Binding HasEarlier, Converter={StaticResource BoolToVis}}" />
                     <ItemsControl x:Name="MessageList" ItemsSource="{Binding Messages}" ItemTemplate="{StaticResource ChatMessage}" Focusable="False" />
                 </StackPanel>
