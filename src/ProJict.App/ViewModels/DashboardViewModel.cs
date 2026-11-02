@@ -1,8 +1,11 @@
+using System.ComponentModel;
 using System.Globalization;
+using System.Windows.Data;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ProJict.Core.Features;
 using ProJict.Core.Model;
+using ProJict.Core.Storage;
 
 namespace ProJict.App.ViewModels;
 
@@ -12,7 +15,14 @@ public sealed partial class ProjectCardViewModel(Project project, ProjectStats s
     public ProjectStats Stats { get; } = stats;
     public string Name => Project.Name;
     public string Group => string.IsNullOrWhiteSpace(Project.Group) ? "Personal" : Project.Group;
+    /// <summary>The group as the sidebar shows it ("Sam's Work" for a shared one), and where it comes there.</summary>
+    public string DisplayGroup => ProjectGroups.Of(Project);
+    public int GroupOrder => ProjectGroups.Order(Project, main.State.Settings);
+    /// <summary>Its place in the order chosen (Sort), which List and Table keep within a group.</summary>
+    public int Order { get; set; }
     public ProjectStatus Status => Project.Status;
+    /// <summary>Its status can be changed here (on the Board): it's yours, not one shared with you.</summary>
+    public bool CanChangeStatus => Project.Remote == null;
     public double ProgressPercent => Stats.Progress * 100;
     public string ProgressText => Stats.Total == 0 ? "no items" : $"{Stats.Done}/{Stats.Total} done ({Stats.Progress:P0})";
     public string OpenText => Stats.Open == 1 ? "1 open" : $"{Stats.Open} open";
@@ -37,6 +47,8 @@ public sealed partial class ProjectCardViewModel(Project project, ProjectStats s
         ? $"Latest {(info.Prerelease ? "pre-release" : "release")} on GitHub: {tag}" + (info.PublishedAt is { } at ? $", published {at:d MMM yyyy}" : "")
         : "";
     public string LastActivityText => "Last activity " + DashboardViewModel.Ago(Stats.LastActivity);
+    public string LastActivityShort => DashboardViewModel.Ago(Stats.LastActivity);
+    public string ProgressPercentText => Stats.Total == 0 ? "–" : Stats.Progress.ToString("P0", CultureInfo.CurrentCulture);
     public string? Description => Project.Description;
 
     [RelayCommand] private void Open() => main.OpenProject(Project);
@@ -47,6 +59,15 @@ public sealed partial class ProjectCardViewModel(Project project, ProjectStats s
         main.Dashboard.Filter.SetShown([Project], false);
         main.State.StatusText = $"Hid {Name}. The eye button next to a filter box shows it again.";
     }
+}
+
+/// <summary>A column of the dashboard's Board: the projects with one status, which a project dragged there takes on.</summary>
+public sealed class BoardColumnViewModel(ProjectStatus status, IReadOnlyList<ProjectCardViewModel> cards)
+{
+    public ProjectStatus Status => status;
+    public string Title => status.ToString();
+    public IReadOnlyList<ProjectCardViewModel> Cards => cards;
+    public string Count => cards.Count.ToString(CultureInfo.CurrentCulture);
 }
 
 /// <summary>A line in the dashboard's side feed; a click opens the item (or project) and, for a comment, its discussion.</summary>
@@ -78,6 +99,125 @@ public sealed partial class DashboardViewModel : ObservableObject
     public ProjectFilterViewModel Filter { get; }
 
     public List<ProjectCardViewModel> Cards { get; private set; } = [];
+
+    // ───────────── Views: Cards · List · Table · Board ─────────────
+
+    public static IReadOnlyList<DashboardMode> Modes { get; } = Enum.GetValues<DashboardMode>();
+
+    /// <summary>How projects show, remembered on this computer.</summary>
+    public DashboardMode Mode
+    {
+        get => _state.AppSettings.DashboardMode;
+        set
+        {
+            if (value == _state.AppSettings.DashboardMode) return;
+            _state.AppSettings.DashboardMode = value;
+            _state.SaveAppSettings();
+            foreach (var name in new[] { nameof(Mode), nameof(IsCards), nameof(IsList), nameof(IsTable), nameof(IsBoard), nameof(ShowsGroupToggle) })
+                OnPropertyChanged(name);
+        }
+    }
+
+    // For the switch's buttons: each one checked sets its mode.
+    public bool IsCards { get => Mode == DashboardMode.Cards; set { if (value) Mode = DashboardMode.Cards; } }
+    public bool IsList { get => Mode == DashboardMode.List; set { if (value) Mode = DashboardMode.List; } }
+    public bool IsTable { get => Mode == DashboardMode.Table; set { if (value) Mode = DashboardMode.Table; } }
+    public bool IsBoard { get => Mode == DashboardMode.Board; set { if (value) Mode = DashboardMode.Board; } }
+    public bool ShowsGroupToggle => Mode is DashboardMode.List or DashboardMode.Table;
+
+    /// <summary>List and Table show projects under their groups, like the sidebar.</summary>
+    public bool GroupByGroup
+    {
+        get => _state.AppSettings.DashboardGroupByGroup;
+        set
+        {
+            if (value == _state.AppSettings.DashboardGroupByGroup) return;
+            _state.AppSettings.DashboardGroupByGroup = value;
+            _state.SaveAppSettings();
+            OnPropertyChanged();
+            Group(Rows);
+        }
+    }
+
+    /// <summary>The side panels folded away, for more room.</summary>
+    public bool PanelsFolded
+    {
+        get => _state.AppSettings.DashboardPanelsFolded;
+        set
+        {
+            if (value == _state.AppSettings.DashboardPanelsFolded) return;
+            _state.AppSettings.DashboardPanelsFolded = value;
+            _state.SaveAppSettings();
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>The panels toggle: checked while they show.</summary>
+    public bool ShowPanels
+    {
+        get => !PanelsFolded;
+        set
+        {
+            PanelsFolded = !value;
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>The projects for List and Table: in the chosen order, under their groups when <see cref="GroupByGroup"/>.</summary>
+    public ICollectionView Rows { get; private set; } = new ListCollectionView(new List<ProjectCardViewModel>());
+
+    /// <summary>The Board's columns: Idea, Active, Paused and Released, and Archived when the status filter asks for it.</summary>
+    public List<BoardColumnViewModel> Board { get; private set; } = [];
+
+    private void Group(ICollectionView view)
+    {
+        using (view.DeferRefresh())
+        {
+            view.GroupDescriptions.Clear();
+            view.SortDescriptions.Clear();
+            if (!GroupByGroup) return;
+            view.GroupDescriptions.Add(new PropertyGroupDescription(nameof(ProjectCardViewModel.DisplayGroup)));
+            // Groups in the sidebar's order; within one, the order chosen.
+            view.SortDescriptions.Add(new SortDescription(nameof(ProjectCardViewModel.GroupOrder), ListSortDirection.Ascending));
+            view.SortDescriptions.Add(new SortDescription(nameof(ProjectCardViewModel.Order), ListSortDirection.Ascending));
+        }
+    }
+
+    /// <summary>A click on a Table column's header: sorted by it (again: the other way), still under the groups.</summary>
+    public ListSortDirection SortTable(string member, ListSortDirection? current)
+    {
+        var direction = current == ListSortDirection.Ascending ? ListSortDirection.Descending : ListSortDirection.Ascending;
+        // Numbers and dates make most sense biggest or newest first.
+        if (current == null && member != nameof(ProjectCardViewModel.Name) && member != nameof(ProjectCardViewModel.DisplayGroup) &&
+            member != nameof(ProjectCardViewModel.Status) && member != nameof(ProjectCardViewModel.GitHubReleaseTag))
+            direction = ListSortDirection.Descending;
+        using (Rows.DeferRefresh())
+        {
+            Rows.SortDescriptions.Clear();
+            if (GroupByGroup) Rows.SortDescriptions.Add(new SortDescription(nameof(ProjectCardViewModel.GroupOrder), ListSortDirection.Ascending));
+            Rows.SortDescriptions.Add(new SortDescription(member, direction));
+            Rows.SortDescriptions.Add(new SortDescription(nameof(ProjectCardViewModel.Order), ListSortDirection.Ascending));
+        }
+        return direction;
+    }
+
+    /// <summary>A project shared with you stays where it is on the Board: says why.</summary>
+    public void CantMove(ProjectCardViewModel card) =>
+        _state.StatusText = $"{card.Name} is shared with you by {card.Project.Remote?.HostName}: only they change its status.";
+
+    /// <summary>A project dragged to another column of the Board takes on that status (one of yours; shared ones keep theirs).</summary>
+    public void MoveToStatus(ProjectCardViewModel card, ProjectStatus status)
+    {
+        if (card.Project.Status == status) return;
+        if (!card.CanChangeStatus)
+        {
+            CantMove(card);
+            return;
+        }
+        _main.GetProjectViewModel(card.Project).Status = status;
+        _state.StatusText = $"{card.Name} is {status.ToString().ToLowerInvariant()} now.";
+        Refresh();
+    }
     public List<RecentDoneRow> RecentDone { get; private set; } = [];
     /// <summary>Items AI agents finished that wait for the user's review, newest first.</summary>
     public List<RecentDoneRow> ToReview { get; private set; } = [];
@@ -122,8 +262,16 @@ public sealed partial class DashboardViewModel : ObservableObject
             "Progress" => cards.OrderByDescending(c => c.Stats.Progress),
             _ => cards.OrderByDescending(c => c.Stats.LastActivity),
         }).ToList();
+        for (var i = 0; i < Cards.Count; i++) Cards[i].Order = i;
         OnPropertyChanged(nameof(Cards));
         OnPropertyChanged(nameof(EmptyText));
+        var rows = new ListCollectionView(Cards);
+        Group(rows);
+        Rows = rows;
+        OnPropertyChanged(nameof(Rows));
+        var statuses = Enum.GetValues<ProjectStatus>().Where(s => s != ProjectStatus.Archived || StatusFilter is AnyStatus or nameof(ProjectStatus.Archived));
+        Board = statuses.Select(s => new BoardColumnViewModel(s, Cards.Where(c => c.Status == s).ToList())).ToList();
+        OnPropertyChanged(nameof(Board));
 
         RecentDone = PortfolioStats.RecentlyDone(_state.Projects.Where(p => !Filter.IsHidden(p)), DateTime.Now.AddDays(-7))
             .Take(40)

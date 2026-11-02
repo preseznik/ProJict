@@ -25,6 +25,214 @@
                 </Trigger>
             </DataTemplate.Triggers>
         </DataTemplate>
+
+        <!-- A project in the cards view: name, group, description, progress, chips and last activity. -->
+        <DataTemplate x:Key="CardTemplate" DataType="{x:Type vm:ProjectCardViewModel}">
+            <Border x:Name="CardRoot" Style="{StaticResource Card}" Width="290" Margin="0,0,12,12" Padding="14,12" Cursor="Hand">
+                <Border.InputBindings>
+                    <MouseBinding MouseAction="LeftClick" Command="{Binding OpenCommand}" />
+                </Border.InputBindings>
+                <Border.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="Open" Command="{Binding OpenCommand}" />
+                        <MenuItem Header="Hide" Command="{Binding HideCommand}" />
+                    </ContextMenu>
+                </Border.ContextMenu>
+                <StackPanel>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Ellipse Width="8" Height="8" Fill="{Binding Status, Converter={StaticResource StatusToBrush}}" Margin="0,0,8,0"
+                                 Visibility="{Binding HasWorkers, Converter={StaticResource InvBoolToVis}}" />
+                        <ItemsControl ItemsSource="{Binding Workers}" ItemsPanel="{StaticResource WorkerBadgePanel}" ItemTemplate="{StaticResource WorkerBadgeTemplate}"
+                                      Focusable="False" Margin="-2,0,8,0" VerticalAlignment="Center" ToolTip="{Binding WorkersToolTip}"
+                                      Visibility="{Binding HasWorkers, Converter={StaticResource BoolToVis}}" />
+                        <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Grid.Column="2" Text="{Binding Status}" Style="{StaticResource MutedText}" />
+                    </Grid>
+                    <TextBlock Text="{Binding Group}" Style="{StaticResource MutedText}" Margin="16,2,0,0" />
+                    <TextBlock Text="{Binding Description}" Style="{StaticResource MutedText}" TextWrapping="Wrap" MaxHeight="34" TextTrimming="WordEllipsis" Margin="0,6,0,0"
+                               Visibility="{Binding Description, Converter={StaticResource EmptyToVis}}" />
+                    <ProgressBar Value="{Binding ProgressPercent, Mode=OneWay}" Maximum="100" Height="4" Margin="0,10,0,4" />
+                    <TextBlock Text="{Binding ProgressText}" Style="{StaticResource MutedText}" />
+                    <WrapPanel Margin="0,8,0,0">
+                        <Border Style="{StaticResource TagChip}" Background="{DynamicResource SubtleFillColorSecondaryBrush}" Margin="0,0,4,0">
+                            <TextBlock Text="{Binding OpenText}" FontSize="11" />
+                        </Border>
+                        <Border Style="{StaticResource TagChip}" Background="{DynamicResource SubtleFillColorSecondaryBrush}" Margin="0,0,4,0"
+                                Visibility="{Binding HasInProgress, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="{Binding InProgressText}" FontSize="11" />
+                        </Border>
+                        <Border Style="{StaticResource TagChip}" Background="{DynamicResource SystemFillColorCriticalBrush}" Margin="0,0,4,0"
+                                Visibility="{Binding HasBugs, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="{Binding BugsText}" Style="{StaticResource ChipText}" />
+                        </Border>
+                        <Border Style="{StaticResource TagChip}" Background="{DynamicResource SystemFillColorCautionBrush}" Margin="0,0,4,0"
+                                Visibility="{Binding HasReview, Converter={StaticResource BoolToVis}}" ToolTip="Finished by an AI agent, waiting for your review">
+                            <TextBlock Text="{Binding ReviewText}" Style="{StaticResource ChipText}" />
+                        </Border>
+                        <Border Style="{StaticResource TagChip}" Background="{DynamicResource SubtleFillColorSecondaryBrush}" Margin="0,0,4,0"
+                                Visibility="{Binding IsPrivate, Converter={StaticResource BoolToVis}}" ToolTip="{x:Static vm:ProjectListItemViewModel.PrivateToolTip}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Style="{StaticResource Icon}" Text="&#xE72E;" FontSize="10" VerticalAlignment="Center" Margin="0,0,4,0" />
+                                <TextBlock Text="private" FontSize="11" />
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource TagChip}" Background="{DynamicResource AccentFillColorDefaultBrush}" Margin="0,0,4,0"
+                                Visibility="{Binding HasShip, Converter={StaticResource BoolToVis}}" ToolTip="{Binding ShipToolTip}">
+                            <TextBlock Text="{Binding ShipText}" Style="{StaticResource ChipText}" />
+                        </Border>
+                        <Border Style="{StaticResource TagChip}" Background="{DynamicResource SystemFillColorCautionBrush}" Margin="0,0,4,0"
+                                Visibility="{Binding IsStale, Converter={StaticResource BoolToVis}}" ToolTip="No activity for a while">
+                            <TextBlock Text="stale" Style="{StaticResource ChipText}" />
+                        </Border>
+                        <Border Style="{StaticResource TagChip}" Background="{DynamicResource AccentFillColorDefaultBrush}" Margin="0,0,4,0"
+                                Visibility="{Binding HasGitHubRelease, Converter={StaticResource BoolToVis}}" ToolTip="{Binding GitHubReleaseToolTip}">
+                            <TextBlock Text="{Binding GitHubReleaseTag}" Style="{StaticResource ChipText}" />
+                        </Border>
+                    </WrapPanel>
+                    <TextBlock Text="{Binding LastActivityText}" Style="{StaticResource MutedText}" FontSize="11" Margin="0,8,0,0" />
+                </StackPanel>
+            </Border>
+            <DataTemplate.Triggers>
+                <Trigger SourceName="CardRoot" Property="IsMouseOver" Value="True">
+                    <Setter TargetName="CardRoot" Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+                </Trigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
+        <!-- A project in the list: one compact line. -->
+        <DataTemplate x:Key="ListRowTemplate" DataType="{x:Type vm:ProjectCardViewModel}">
+            <Border x:Name="Row" Padding="8,5" Margin="0,0,0,1" CornerRadius="4" Background="Transparent" Cursor="Hand" AutomationProperties.Name="{Binding Name}">
+                <Border.InputBindings>
+                    <MouseBinding MouseAction="LeftClick" Command="{Binding OpenCommand}" />
+                </Border.InputBindings>
+                <Border.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="Open" Command="{Binding OpenCommand}" />
+                        <MenuItem Header="Hide" Command="{Binding HideCommand}" />
+                    </ContextMenu>
+                </Border.ContextMenu>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="22" />
+                        <ColumnDefinition Width="2*" MinWidth="140" />
+                        <ColumnDefinition Width="150" />
+                        <ColumnDefinition Width="160" />
+                        <ColumnDefinition Width="3*" />
+                        <ColumnDefinition Width="110" />
+                    </Grid.ColumnDefinitions>
+                    <Ellipse Width="8" Height="8" Fill="{Binding Status, Converter={StaticResource StatusToBrush}}" HorizontalAlignment="Left" ToolTip="{Binding Status}"
+                             Visibility="{Binding HasWorkers, Converter={StaticResource InvBoolToVis}}" />
+                    <ItemsControl ItemsSource="{Binding Workers}" ItemsPanel="{StaticResource WorkerBadgePanel}" ItemTemplate="{StaticResource WorkerBadgeTemplate}"
+                                  Focusable="False" Margin="-4,0,0,0" VerticalAlignment="Center" ToolTip="{Binding WorkersToolTip}"
+                                  Visibility="{Binding HasWorkers, Converter={StaticResource BoolToVis}}" />
+                    <TextBlock Grid.Column="1" Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip="{Binding Description}" />
+                    <!-- Under its group's heading, the group needn't be on every line. -->
+                    <TextBlock Grid.Column="2" Text="{Binding DisplayGroup}" Style="{StaticResource MutedText}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                               Visibility="{Binding DataContext.GroupByGroup, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource InvBoolToVis}}" />
+                    <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center" ToolTip="{Binding ProgressText}">
+                        <ProgressBar Value="{Binding ProgressPercent, Mode=OneWay}" Maximum="100" Width="90" Height="4" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding ProgressPercentText}" Style="{StaticResource MutedText}" FontSize="11.5" Margin="8,0,0,0" />
+                    </StackPanel>
+                    <WrapPanel Grid.Column="4" VerticalAlignment="Center">
+                        <Border Style="{StaticResource TagChip}" Background="{DynamicResource SubtleFillColorSecondaryBrush}" Margin="0,0,4,0">
+                            <TextBlock Text="{Binding OpenText}" FontSize="11" />
+                        </Border>
+                        <Border Style="{StaticResource TagChip}" Background="{DynamicResource SubtleFillColorSecondaryBrush}" Margin="0,0,4,0"
+                                Visibility="{Binding HasInProgress, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="{Binding InProgressText}" FontSize="11" />
+                        </Border>
+                        <Border Style="{StaticResource TagChip}" Background="{DynamicResource SystemFillColorCriticalBrush}" Margin="0,0,4,0"
+                                Visibility="{Binding HasBugs, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="{Binding BugsText}" Style="{StaticResource ChipText}" />
+                        </Border>
+                        <Border Style="{StaticResource TagChip}" Background="{DynamicResource SystemFillColorCautionBrush}" Margin="0,0,4,0"
+                                Visibility="{Binding HasReview, Converter={StaticResource BoolToVis}}" ToolTip="Finished by an AI agent, waiting for your review">
+                            <TextBlock Text="{Binding ReviewText}" Style="{StaticResource ChipText}" />
+                        </Border>
+                        <Border Style="{StaticResource TagChip}" Background="{DynamicResource AccentFillColorDefaultBrush}" Margin="0,0,4,0"
+                                Visibility="{Binding HasShip, Converter={StaticResource BoolToVis}}" ToolTip="{Binding ShipToolTip}">
+                            <TextBlock Text="{Binding ShipText}" Style="{StaticResource ChipText}" />
+                        </Border>
+                        <Border Style="{StaticResource TagChip}" Background="{DynamicResource SystemFillColorCautionBrush}" Margin="0,0,4,0"
+                                Visibility="{Binding IsStale, Converter={StaticResource BoolToVis}}" ToolTip="No activity for a while">
+                            <TextBlock Text="stale" Style="{StaticResource ChipText}" />
+                        </Border>
+                        <Border Style="{StaticResource TagChip}" Background="{DynamicResource AccentFillColorDefaultBrush}" Margin="0,0,4,0"
+                                Visibility="{Binding HasGitHubRelease, Converter={StaticResource BoolToVis}}" ToolTip="{Binding GitHubReleaseToolTip}">
+                            <TextBlock Text="{Binding GitHubReleaseTag}" Style="{StaticResource ChipText}" />
+                        </Border>
+                        <TextBlock Style="{StaticResource Icon}" Text="&#xE72E;" FontSize="11" VerticalAlignment="Center" Margin="2,0,0,0"
+                                   ToolTip="{x:Static vm:ProjectListItemViewModel.PrivateToolTip}" Visibility="{Binding IsPrivate, Converter={StaticResource BoolToVis}}" />
+                    </WrapPanel>
+                    <TextBlock Grid.Column="5" Text="{Binding LastActivityShort}" Style="{StaticResource MutedText}" FontSize="11.5" HorizontalAlignment="Right" VerticalAlignment="Center"
+                               ToolTip="{Binding LastActivityText}" />
+                </Grid>
+            </Border>
+            <DataTemplate.Triggers>
+                <Trigger SourceName="Row" Property="IsMouseOver" Value="True">
+                    <Setter TargetName="Row" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                </Trigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
+        <!-- A group's heading in the list and the table. -->
+        <DataTemplate x:Key="GroupHeaderTemplate">
+            <TextBlock Margin="6,14,0,4" FontWeight="SemiBold">
+                <Run Text="{Binding Name, Mode=OneWay}" /><Run Text="   " /><Run Text="{Binding ItemCount, Mode=OneWay}" Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+            </TextBlock>
+        </DataTemplate>
+
+        <!-- A project on the board: small, and dragged to another column to change its status. -->
+        <DataTemplate x:Key="BoardCardTemplate" DataType="{x:Type vm:ProjectCardViewModel}">
+            <Border x:Name="BoardCard" Style="{StaticResource Card}" Padding="10,8" Margin="0,0,0,8" Cursor="Hand" AutomationProperties.Name="{Binding Name}"
+                    PreviewMouseLeftButtonDown="BoardCard_MouseDown" MouseMove="BoardCard_MouseMove" MouseLeftButtonUp="BoardCard_MouseUp">
+                <Border.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="Open" Command="{Binding OpenCommand}" />
+                        <MenuItem Header="Hide" Command="{Binding HideCommand}" />
+                    </ContextMenu>
+                </Border.ContextMenu>
+                <StackPanel>
+                    <DockPanel>
+                        <ItemsControl DockPanel.Dock="Right" ItemsSource="{Binding Workers}" ItemsPanel="{StaticResource WorkerBadgePanel}" ItemTemplate="{StaticResource WorkerBadgeTemplate}"
+                                      Focusable="False" VerticalAlignment="Center" ToolTip="{Binding WorkersToolTip}"
+                                      Visibility="{Binding HasWorkers, Converter={StaticResource BoolToVis}}" />
+                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding Description}" />
+                    </DockPanel>
+                    <TextBlock Text="{Binding DisplayGroup}" Style="{StaticResource MutedText}" FontSize="11.5" TextTrimming="CharacterEllipsis" />
+                    <ProgressBar Value="{Binding ProgressPercent, Mode=OneWay}" Maximum="100" Height="3" Margin="0,7,0,5" ToolTip="{Binding ProgressText}" />
+                    <WrapPanel>
+                        <TextBlock Text="{Binding OpenText}" Style="{StaticResource MutedText}" FontSize="11" Margin="0,0,8,0" />
+                        <Border Style="{StaticResource TagChip}" Background="{DynamicResource SystemFillColorCriticalBrush}" Margin="0,0,4,0"
+                                Visibility="{Binding HasBugs, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="{Binding BugsText}" Style="{StaticResource ChipText}" />
+                        </Border>
+                        <Border Style="{StaticResource TagChip}" Background="{DynamicResource SystemFillColorCautionBrush}" Margin="0,0,4,0"
+                                Visibility="{Binding HasReview, Converter={StaticResource BoolToVis}}" ToolTip="Finished by an AI agent, waiting for your review">
+                            <TextBlock Text="{Binding ReviewText}" Style="{StaticResource ChipText}" />
+                        </Border>
+                        <TextBlock Style="{StaticResource Icon}" Text="&#xE72E;" FontSize="10" VerticalAlignment="Center"
+                                   ToolTip="{x:Static vm:ProjectListItemViewModel.PrivateToolTip}" Visibility="{Binding IsPrivate, Converter={StaticResource BoolToVis}}" />
+                    </WrapPanel>
+                </StackPanel>
+            </Border>
+            <DataTemplate.Triggers>
+                <Trigger SourceName="BoardCard" Property="IsMouseOver" Value="True">
+                    <Setter TargetName="BoardCard" Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+                </Trigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
+        <Style x:Key="ModeButton" TargetType="RadioButton" BasedOn="{StaticResource SubtleToggle}">
+            <Setter Property="Padding" Value="10,4" />
+            <Setter Property="Margin" Value="0,0,2,0" />
+            <Setter Property="GroupName" Value="DashboardMode" />
+        </Style>
     </UserControl.Resources>
     <Grid Margin="28,20,20,12">
         <Grid.RowDefinitions>
@@ -38,111 +246,159 @@
             <TextBlock Text="{Binding Summary}" Style="{StaticResource MutedText}" FontSize="13" Margin="0,4,0,0" />
         </StackPanel>
 
-        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,14,0,12">
-            <local:ProjectFilterBar DataContext="{Binding Filter}" Width="300" Margin="0,0,8,0" />
-            <ComboBox ItemsSource="{Binding GroupFilters}" SelectedItem="{Binding GroupFilter}" Width="160" />
-            <ComboBox ItemsSource="{Binding StatusFilters}" SelectedItem="{Binding StatusFilter}" Width="170" Margin="8,0,0,0" />
-            <TextBlock Text="Sort" Style="{StaticResource MutedText}" Margin="18,0,8,0" />
-            <ComboBox ItemsSource="{Binding SortOptions}" SelectedItem="{Binding Sort}" Width="150" />
-        </StackPanel>
+        <WrapPanel Grid.Row="1" Margin="0,14,0,12">
+            <StackPanel Orientation="Horizontal" Margin="0,0,24,4">
+                <local:ProjectFilterBar DataContext="{Binding Filter}" Width="300" Margin="0,0,8,0" />
+                <ComboBox ItemsSource="{Binding GroupFilters}" SelectedItem="{Binding GroupFilter}" Width="160" />
+                <ComboBox ItemsSource="{Binding StatusFilters}" SelectedItem="{Binding StatusFilter}" Width="170" Margin="8,0,0,0" />
+                <TextBlock Text="Sort" Style="{StaticResource MutedText}" Margin="18,0,8,0" VerticalAlignment="Center" />
+                <ComboBox ItemsSource="{Binding SortOptions}" SelectedItem="{Binding Sort}" Width="150" />
+            </StackPanel>
+            <!-- How projects show: remembered on this computer. -->
+            <StackPanel x:Name="ModeSwitch" Orientation="Horizontal" Margin="0,0,0,4" VerticalAlignment="Center">
+                <RadioButton Style="{StaticResource ModeButton}" Content="Cards" IsChecked="{Binding IsCards}" ToolTip="A card for each project" AutomationProperties.Name="Cards" />
+                <RadioButton Style="{StaticResource ModeButton}" Content="List" IsChecked="{Binding IsList}" ToolTip="A line for each project, under its group" AutomationProperties.Name="List" />
+                <RadioButton Style="{StaticResource ModeButton}" Content="Table" IsChecked="{Binding IsTable}" ToolTip="Every number in columns; click a heading to sort by it" AutomationProperties.Name="Table" />
+                <RadioButton Style="{StaticResource ModeButton}" Content="Board" IsChecked="{Binding IsBoard}" ToolTip="A column for each status; drag a project to change its status" AutomationProperties.Name="Board" />
+                <CheckBox Content="In groups" IsChecked="{Binding GroupByGroup}" Margin="14,0,0,0" VerticalAlignment="Center"
+                          ToolTip="Show projects under their groups (Personal, Work, …), like the sidebar"
+                          Visibility="{Binding ShowsGroupToggle, Converter={StaticResource BoolToVis}}" />
+                <ToggleButton Style="{StaticResource SubtleToggle}" IsChecked="{Binding ShowPanels}" Padding="8,4" Margin="14,0,0,0"
+                              ToolTip="Show or fold away the panels on the right (waiting for review, agent activity, done this week)" AutomationProperties.Name="Side panels">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource Icon}" Text="&#xE89F;" FontSize="12" VerticalAlignment="Center" />
+                        <TextBlock Text="Panels" Margin="6,0,0,0" />
+                    </StackPanel>
+                </ToggleButton>
+            </StackPanel>
+        </WrapPanel>
 
         <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="340" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
             <TextBlock Text="{Binding EmptyText}" Style="{StaticResource MutedText}" VerticalAlignment="Top" Margin="2,4,0,0" TextWrapping="Wrap" MaxWidth="520" HorizontalAlignment="Left"
                        Visibility="{Binding Cards, Converter={StaticResource InvEmptyToVis}}" />
-            <ScrollViewer VerticalScrollBarVisibility="Auto">
-                <ItemsControl ItemsSource="{Binding Cards}">
+
+            <!-- Cards -->
+            <ScrollViewer x:Name="CardsView" VerticalScrollBarVisibility="Auto" Visibility="{Binding IsCards, Converter={StaticResource BoolToVis}}">
+                <ItemsControl ItemsSource="{Binding Cards}" ItemTemplate="{StaticResource CardTemplate}">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
                             <WrapPanel />
                         </ItemsPanelTemplate>
                     </ItemsControl.ItemsPanel>
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate DataType="{x:Type vm:ProjectCardViewModel}">
-                            <Border x:Name="CardRoot" Style="{StaticResource Card}" Width="290" Margin="0,0,12,12" Padding="14,12" Cursor="Hand">
-                                <Border.InputBindings>
-                                    <MouseBinding MouseAction="LeftClick" Command="{Binding OpenCommand}" />
-                                </Border.InputBindings>
-                                <Border.ContextMenu>
-                                    <ContextMenu>
-                                        <MenuItem Header="Open" Command="{Binding OpenCommand}" />
-                                        <MenuItem Header="Hide" Command="{Binding HideCommand}" />
-                                    </ContextMenu>
-                                </Border.ContextMenu>
-                                <StackPanel>
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-                                        <Ellipse Width="8" Height="8" Fill="{Binding Status, Converter={StaticResource StatusToBrush}}" Margin="0,0,8,0"
-                                                 Visibility="{Binding HasWorkers, Converter={StaticResource InvBoolToVis}}" />
-                                        <ItemsControl ItemsSource="{Binding Workers}" ItemsPanel="{StaticResource WorkerBadgePanel}" ItemTemplate="{StaticResource WorkerBadgeTemplate}"
-                                                      Focusable="False" Margin="-2,0,8,0" VerticalAlignment="Center" ToolTip="{Binding WorkersToolTip}"
-                                                      Visibility="{Binding HasWorkers, Converter={StaticResource BoolToVis}}" />
-                                        <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                                        <TextBlock Grid.Column="2" Text="{Binding Status}" Style="{StaticResource MutedText}" />
-                                    </Grid>
-                                    <TextBlock Text="{Binding Group}" Style="{StaticResource MutedText}" Margin="16,2,0,0" />
-                                    <TextBlock Text="{Binding Description}" Style="{StaticResource MutedText}" TextWrapping="Wrap" MaxHeight="34" TextTrimming="WordEllipsis" Margin="0,6,0,0"
-                                               Visibility="{Binding Description, Converter={StaticResource EmptyToVis}}" />
-                                    <ProgressBar Value="{Binding ProgressPercent, Mode=OneWay}" Maximum="100" Height="4" Margin="0,10,0,4" />
-                                    <TextBlock Text="{Binding ProgressText}" Style="{StaticResource MutedText}" />
-                                    <WrapPanel Margin="0,8,0,0">
-                                        <Border Style="{StaticResource TagChip}" Background="{DynamicResource SubtleFillColorSecondaryBrush}" Margin="0,0,4,0">
-                                            <TextBlock Text="{Binding OpenText}" FontSize="11" />
-                                        </Border>
-                                        <Border Style="{StaticResource TagChip}" Background="{DynamicResource SubtleFillColorSecondaryBrush}" Margin="0,0,4,0"
-                                                Visibility="{Binding HasInProgress, Converter={StaticResource BoolToVis}}">
-                                            <TextBlock Text="{Binding InProgressText}" FontSize="11" />
-                                        </Border>
-                                        <Border Style="{StaticResource TagChip}" Background="{DynamicResource SystemFillColorCriticalBrush}" Margin="0,0,4,0"
-                                                Visibility="{Binding HasBugs, Converter={StaticResource BoolToVis}}">
-                                            <TextBlock Text="{Binding BugsText}" Style="{StaticResource ChipText}" />
-                                        </Border>
-                                        <Border Style="{StaticResource TagChip}" Background="{DynamicResource SystemFillColorCautionBrush}" Margin="0,0,4,0"
-                                                Visibility="{Binding HasReview, Converter={StaticResource BoolToVis}}" ToolTip="Finished by an AI agent, waiting for your review">
-                                            <TextBlock Text="{Binding ReviewText}" Style="{StaticResource ChipText}" />
-                                        </Border>
-                                        <Border Style="{StaticResource TagChip}" Background="{DynamicResource SubtleFillColorSecondaryBrush}" Margin="0,0,4,0"
-                                                Visibility="{Binding IsPrivate, Converter={StaticResource BoolToVis}}" ToolTip="{x:Static vm:ProjectListItemViewModel.PrivateToolTip}">
-                                            <StackPanel Orientation="Horizontal">
-                                                <TextBlock Style="{StaticResource Icon}" Text="&#xE72E;" FontSize="10" VerticalAlignment="Center" Margin="0,0,4,0" />
-                                                <TextBlock Text="private" FontSize="11" />
-                                            </StackPanel>
-                                        </Border>
-                                        <Border Style="{StaticResource TagChip}" Background="{DynamicResource AccentFillColorDefaultBrush}" Margin="0,0,4,0"
-                                                Visibility="{Binding HasShip, Converter={StaticResource BoolToVis}}" ToolTip="{Binding ShipToolTip}">
-                                            <TextBlock Text="{Binding ShipText}" Style="{StaticResource ChipText}" />
-                                        </Border>
-                                        <Border Style="{StaticResource TagChip}" Background="{DynamicResource SystemFillColorCautionBrush}" Margin="0,0,4,0"
-                                                Visibility="{Binding IsStale, Converter={StaticResource BoolToVis}}" ToolTip="No activity for a while">
-                                            <TextBlock Text="stale" Style="{StaticResource ChipText}" />
-                                        </Border>
-                                        <Border Style="{StaticResource TagChip}" Background="{DynamicResource AccentFillColorDefaultBrush}" Margin="0,0,4,0"
-                                                Visibility="{Binding HasGitHubRelease, Converter={StaticResource BoolToVis}}" ToolTip="{Binding GitHubReleaseToolTip}">
-                                            <TextBlock Text="{Binding GitHubReleaseTag}" Style="{StaticResource ChipText}" />
-                                        </Border>
-                                    </WrapPanel>
-                                    <TextBlock Text="{Binding LastActivityText}" Style="{StaticResource MutedText}" FontSize="11" Margin="0,8,0,0" />
+                </ItemsControl>
+            </ScrollViewer>
+
+            <!-- List: a line each, under their groups -->
+            <ScrollViewer x:Name="ListPane" VerticalScrollBarVisibility="Auto" Visibility="{Binding IsList, Converter={StaticResource BoolToVis}}">
+                <ItemsControl ItemsSource="{Binding Rows}" ItemTemplate="{StaticResource ListRowTemplate}" Margin="0,0,8,0" AutomationProperties.Name="Projects">
+                    <ItemsControl.GroupStyle>
+                        <GroupStyle HeaderTemplate="{StaticResource GroupHeaderTemplate}" />
+                    </ItemsControl.GroupStyle>
+                </ItemsControl>
+            </ScrollViewer>
+
+            <!-- Table: every number in columns, sorted by a click on a heading -->
+            <DataGrid x:Name="TableView" ItemsSource="{Binding Rows}" Visibility="{Binding IsTable, Converter={StaticResource BoolToVis}}"
+                      AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" CanUserDeleteRows="False" CanUserReorderColumns="True"
+                      CanUserResizeColumns="True" CanUserSortColumns="True" HeadersVisibility="Column" GridLinesVisibility="Horizontal"
+                      SelectionMode="Single" SelectionUnit="FullRow" IsSynchronizedWithCurrentItem="False" Sorting="Table_Sorting" Margin="0,0,0,12" AutomationProperties.Name="Projects">
+                <DataGrid.Resources>
+                    <!-- Text in the cells lines up with the name and the progress bar. -->
+                    <Style x:Key="CellText" TargetType="TextBlock">
+                        <Setter Property="VerticalAlignment" Value="Center" />
+                        <Setter Property="Margin" Value="4,0" />
+                    </Style>
+                </DataGrid.Resources>
+                <DataGrid.GroupStyle>
+                    <GroupStyle HeaderTemplate="{StaticResource GroupHeaderTemplate}" />
+                </DataGrid.GroupStyle>
+                <DataGrid.RowStyle>
+                    <Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
+                        <Setter Property="Cursor" Value="Hand" />
+                        <Setter Property="ToolTip" Value="Click to open" />
+                        <EventSetter Event="MouseLeftButtonUp" Handler="TableRow_Click" />
+                    </Style>
+                </DataGrid.RowStyle>
+                <DataGrid.Columns>
+                    <DataGridTemplateColumn Header="Name" SortMemberPath="Name" Width="2*" MinWidth="170">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate DataType="{x:Type vm:ProjectCardViewModel}">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Ellipse Width="8" Height="8" Fill="{Binding Status, Converter={StaticResource StatusToBrush}}" Margin="4,0,8,0" />
+                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Style="{StaticResource Icon}" Text="&#xE72E;" FontSize="10" Margin="6,0,0,0" VerticalAlignment="Center"
+                                               ToolTip="{x:Static vm:ProjectListItemViewModel.PrivateToolTip}" Visibility="{Binding IsPrivate, Converter={StaticResource BoolToVis}}" />
                                 </StackPanel>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTextColumn Header="Group" Binding="{Binding DisplayGroup}" SortMemberPath="DisplayGroup" Width="*" MinWidth="110"  ElementStyle="{StaticResource CellText}" />
+                    <DataGridTextColumn Header="Status" Binding="{Binding Status}" SortMemberPath="Status" Width="Auto"  ElementStyle="{StaticResource CellText}" />
+                    <DataGridTextColumn Header="Open" Binding="{Binding Stats.Open}" SortMemberPath="Stats.Open" Width="Auto"  ElementStyle="{StaticResource CellText}" />
+                    <DataGridTextColumn Header="In progress" Binding="{Binding Stats.InProgress}" SortMemberPath="Stats.InProgress" Width="Auto"  ElementStyle="{StaticResource CellText}" />
+                    <DataGridTextColumn Header="Done" Binding="{Binding Stats.Done}" SortMemberPath="Stats.Done" Width="Auto"  ElementStyle="{StaticResource CellText}" />
+                    <DataGridTextColumn Header="Bugs" Binding="{Binding Stats.OpenBugs}" SortMemberPath="Stats.OpenBugs" Width="Auto"  ElementStyle="{StaticResource CellText}" />
+                    <DataGridTextColumn Header="To review" Binding="{Binding Stats.ToReview}" SortMemberPath="Stats.ToReview" Width="Auto"  ElementStyle="{StaticResource CellText}" />
+                    <DataGridTemplateColumn Header="Progress" SortMemberPath="Stats.Progress" Width="130">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate DataType="{x:Type vm:ProjectCardViewModel}">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" ToolTip="{Binding ProgressText}">
+                                    <ProgressBar Value="{Binding ProgressPercent, Mode=OneWay}" Maximum="100" Width="64" Height="4" VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding ProgressPercentText}" FontSize="12" Margin="8,0,0,0" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTextColumn Header="Last activity" Binding="{Binding LastActivityShort}" SortMemberPath="Stats.LastActivity" Width="Auto"  ElementStyle="{StaticResource CellText}" />
+                    <DataGridTextColumn Header="Release" Binding="{Binding GitHubReleaseTag}" SortMemberPath="GitHubReleaseTag" Width="Auto"  ElementStyle="{StaticResource CellText}" />
+                    <DataGridTemplateColumn Header="Agents" CanUserSort="False" Width="Auto">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate DataType="{x:Type vm:ProjectCardViewModel}">
+                                <ItemsControl ItemsSource="{Binding Workers}" ItemsPanel="{StaticResource WorkerBadgePanel}" ItemTemplate="{StaticResource WorkerBadgeTemplate}"
+                                              Focusable="False" VerticalAlignment="Center" ToolTip="{Binding WorkersToolTip}" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                </DataGrid.Columns>
+            </DataGrid>
+
+            <!-- Board: a column for each status; drag a project to another to change its status -->
+            <ScrollViewer x:Name="BoardView" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled"
+                          Visibility="{Binding IsBoard, Converter={StaticResource BoolToVis}}">
+                <ItemsControl ItemsSource="{Binding Board}" Focusable="False">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:BoardColumnViewModel}">
+                            <Border x:Name="Column" Width="225" Margin="0,0,10,12" Padding="10,8" CornerRadius="8" Background="{DynamicResource SubtleFillColorSecondaryBrush}"
+                                    AllowDrop="True" DragEnter="BoardColumn_DragEnter" DragOver="BoardColumn_DragOver" DragLeave="BoardColumn_DragLeave" Drop="BoardColumn_Drop"
+                                    AutomationProperties.Name="{Binding Title}">
+                                <DockPanel>
+                                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="2,0,0,8">
+                                        <Ellipse Width="8" Height="8" Fill="{Binding Status, Converter={StaticResource StatusToBrush}}" Margin="0,0,8,0" VerticalAlignment="Center" />
+                                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
+                                        <TextBlock Text="{Binding Count}" Style="{StaticResource MutedText}" Margin="8,0,0,0" />
+                                    </StackPanel>
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                        <ItemsControl ItemsSource="{Binding Cards}" ItemTemplate="{StaticResource BoardCardTemplate}" Focusable="False" />
+                                    </ScrollViewer>
+                                </DockPanel>
                             </Border>
-                            <DataTemplate.Triggers>
-                                <Trigger SourceName="CardRoot" Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="CardRoot" Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}" />
-                                </Trigger>
-                            </DataTemplate.Triggers>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
             </ScrollViewer>
 
-            <Border Grid.Column="1" Style="{StaticResource Card}" Margin="8,0,0,12" VerticalAlignment="Stretch">
+            <Border x:Name="SidePanels" Grid.Column="1" Style="{StaticResource Card}" Width="340" Margin="8,0,0,12" VerticalAlignment="Stretch"
+                    Visibility="{Binding ShowPanels, Converter={StaticResource BoolToVis}}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel>
                         <!-- What AI agents finished; a click opens the item, where its review chip accepts it. -->

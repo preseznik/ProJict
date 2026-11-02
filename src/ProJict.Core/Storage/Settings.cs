@@ -43,6 +43,9 @@ public sealed class NotificationSettings
 }
 
 /// <summary>Machine-local bootstrap settings (%LocalAppData%\ProJict\settings.json).</summary>
+/// <summary>How the dashboard shows projects (its switch, top right).</summary>
+public enum DashboardMode { Cards, List, Table, Board }
+
 public sealed class AppSettings
 {
     public string? DataRoot { get; set; }
@@ -74,6 +77,12 @@ public sealed class AppSettings
     public DateTime? UnreadSince { get; set; }
     /// <summary>The Settings sections you left open, opened again next time.</summary>
     public List<string>? OpenSettingsSections { get; set; }
+    /// <summary>How the dashboard shows projects: cards, a list, a table or a board by status.</summary>
+    public DashboardMode DashboardMode { get; set; }
+    /// <summary>The dashboard's List and Table show projects under their groups (Personal, Work, …), like the sidebar.</summary>
+    public bool DashboardGroupByGroup { get; set; } = true;
+    /// <summary>The dashboard's side panels (waiting for review, agent activity, done this week) are folded away.</summary>
+    public bool DashboardPanelsFolded { get; set; }
     /// <summary>Windows notifications for what needs you (Settings › Notifications).</summary>
     public NotificationSettings Notifications { get; set; } = new();
     /// <summary>How the Feed groups what happened: by day, week or month.</summary>

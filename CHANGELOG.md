@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.36
+
+- **The dashboard as a list, a table or a board.** A switch at the top right of the dashboard shows projects as **Cards** (as before), a **List** (a line each, about three times as many on screen), a **Table** (every number in columns: click a heading to sort by it) or a **Board** with a column per status (Idea, Active, Paused, Released; drag a project to another column to change its status). List and Table show projects under their groups, like the sidebar, unless you untick **In groups**. **Panels** folds away the panels on the right for more room. ProJict remembers your choices on this computer.
+
 ## 0.1.35 (2026-11-02)
 
 - **Updates install cleanly with agents connected.** Agents kept starting ProJict again while its installer ran, so it couldn't replace ProJict's files ("Access is denied"). Now the installer holds a lock while it runs: nothing starts ProJict meanwhile (not ProJict.exe, the agents' bridge, or agents still set up the old way), and the agents' bridges wait and say ProJict is being updated. The installer closes what still uses ProJict's files, also the agents' windowless ones, and starts ProJict once when it's done. Agents still set up with `ProJict.exe --mcp` are closed by the installer and lose ProJict until their session reconnects; add ProJict to them again with the command in **Settings → AI agents** to stay connected through updates.
