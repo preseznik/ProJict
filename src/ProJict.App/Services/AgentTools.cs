@@ -171,6 +171,7 @@ public sealed partial class AgentTools : IMcpToolHost
             FinishShip);
         AddChatTools();
         AddWikiTools();
+        AddToolTools();
         AddCleanupTools();
     }
 
@@ -273,7 +274,9 @@ public sealed partial class AgentTools : IMcpToolHost
         "When a result says asleep, the user put every agent to sleep: finish what you're doing, then stop and stay idle until you're told you're " +
         "woken (claim_item is refused meanwhile). " +
         "When a project shows a studio (a game or film studio), the user hires agents to its roles: if you have one, work as it expects, and agree with the " +
-        "team in the studio's channel who takes what, volunteering for what suits your model and tools. " +
+        "team in the studio's channel who takes what, volunteering for what suits your model and tools. If you're its lead and the user lets the lead " +
+        "review wiki pages, you're told which pages wait for you: accept them or send them back with review_wiki. " +
+        "Outside tools the user set up for agents (such as ElevenLabs or Suno) are in list_tools; use_tool_key gets one's API key once the user allows it. " +
         "When a project shows a cleanupRequest, the user wants its repo folder cleaned up: read it with cleanup_request, scan the folder and post your plan " +
         "with plan_cleanup; ProJict moves what they approve to the Recycle Bin, so never remove files yourself, and do no other work there until it's decided. " +
         "The user and agents also talk live in Chat #channels (list_channels, join_channel to read one, read_channel, post_message, create_channel), and privately: " +
@@ -428,6 +431,7 @@ public sealed partial class AgentTools : IMcpToolHost
             {
                 "list_wiki" => "Looked through the wiki",
                 "read_wiki" => $"Read the wiki page {name}",
+                "review_wiki" => args.String("decision") == "send_back" ? $"Sent the wiki page {name} back" : $"Accepted the wiki page {name}",
                 _ => $"Wrote the wiki page {name}",
             };
             Remember(session, new AgentAction(DateTime.Now, wikiText, page?.ProjectId, null, tool));
@@ -517,6 +521,11 @@ public sealed partial class AgentTools : IMcpToolHost
         _main.Agents.WorkingIn(session, match.Project);
         var json = WithStudio(ProjectJson(match.Project), match.Project, session);
         json["matchedBy"] = match.How;
+        if (ProjectToolsJson(match.Project) is { } tools)
+        {
+            json["tools"] = tools;
+            json["toolsNote"] = "Outside tools set up for this project; list_tools says how to reach each (and use_tool_key gets an API key, with the user's OK).";
+        }
         if (!string.IsNullOrWhiteSpace(match.Project.PromptPreamble)) json["instructions"] = match.Project.PromptPreamble.Trim();
         json["agentsMayWorkOn"] = (AgentAccess.Describe(RulesFor(match.Project).Allowed) ?? "no items at the moment (you can still read, comment and add items)") +
                                   "; never items on hold";

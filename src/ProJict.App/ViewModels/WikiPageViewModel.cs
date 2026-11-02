@@ -8,6 +8,7 @@ using CommunityToolkit.Mvvm.Input;
 using ProJict.App.Services;
 using ProJict.App.Services.Sharing;
 using ProJict.App.Views;
+using ProJict.Core.Features;
 using ProJict.Core.Model;
 using ProJict.Core.Wiki;
 
@@ -150,7 +151,52 @@ public sealed partial class WikiPageViewModel : ObservableObject
     // ───────────── Review and clashes ─────────────
 
     public bool NeedsReview => IsOwn && Model.NeedsReview;
-    public string ReviewText => $"Changed by {Model.UpdatedBy} since you last checked (version {Model.ReviewedVersion ?? 0}): it waits for your review.";
+
+    public string ReviewText
+    {
+        get
+        {
+            var since = $"since you last checked (version {Model.ReviewedVersion ?? 0})";
+            if (Model.SentBackReview is { } back)
+                return $"{back.Who} sent the changes {since} back: “{back.Note}”{(back.Note is [.., '.' or '!' or '?'] ? "" : ".")} " +
+                       $"It waits for {string.Join(", ", LeadReview.Authors(Model))} to change it, or for your review.";
+            if (LeadReview.ReviewerOf(_owner.ProjectOf(Model), Model) is { } reviewer)
+                return $"Changed by {Model.UpdatedBy} {since}: {reviewer.Lead} ({reviewer.Role}) reviews it for you, or you can.";
+            return $"Changed by {Model.UpdatedBy} {since}: it waits for your review.";
+        }
+    }
+
+    /// <summary>A studio's lead accepted the page as it is now, for you.</summary>
+    public bool IsAccepted => IsOwn && Model.AcceptedReview != null;
+
+    public string AcceptedText => Model.AcceptedReview is { } review
+        ? $"Accepted by {review.Who}, {review.At.ToString("d MMM, HH:mm", CultureInfo.CurrentCulture)}: the changes since " +
+          (review.Since > 0 ? $"version {review.Since}" : "the page was new") + (review.Note != null ? $" (“{review.Note}”)" : "") + "."
+        : "";
+
+    /// <summary>The history, showing what the lead accepted.</summary>
+    [RelayCommand]
+    private void ShowAcceptedChanges()
+    {
+        if (Model.AcceptedReview is not { } review) return;
+        ShowHistory();
+        var since = review.Since > 0 ? Model.VersionAt(review.Since) : null;
+        SelectedVersion = Versions.FirstOrDefault();
+        ShowDiff(since?.Text ?? "", Model.Text, $"What {review.By} accepted: the changes since {(since != null ? $"version {since.Number}" : "the page was new")}");
+    }
+
+    /// <summary>You don't go along with what the lead accepted: it waits for a review again, theirs or yours.</summary>
+    [RelayCommand]
+    private void Reopen()
+    {
+        if (!IsOwn || Model.AcceptedReview is not { } review) return;
+        try
+        {
+            State.Wiki.Reopen(Model, State.WikiMe);
+            State.StatusText = $"“{Model.Title}” waits for a review again: {review.By}'s, or yours.";
+        }
+        catch (WikiException ex) { State.StatusText = ex.Message; }
+    }
 
     [RelayCommand]
     private void Accept()
@@ -389,7 +435,8 @@ public sealed partial class WikiPageViewModel : ObservableObject
     // ───────────── History ─────────────
 
     public IReadOnlyList<WikiVersionRowViewModel> Versions =>
-        Model.Versions.Select((v, i) => new WikiVersionRowViewModel(v, i > 0 ? Model.Versions[i - 1] : null, i == Model.Versions.Count - 1)).Reverse().ToList();
+        Model.Versions.Select((v, i) => new WikiVersionRowViewModel(v, i > 0 ? Model.Versions[i - 1] : null, i == Model.Versions.Count - 1,
+            Model.Reviews?.Where(r => r.Version == v.Number).ToList())).Reverse().ToList();
 
     [ObservableProperty] private WikiVersionRowViewModel? _selectedVersion;
     [ObservableProperty] private IReadOnlyList<DiffLineViewModel> _diff = [];
@@ -625,7 +672,7 @@ public sealed partial class WikiPageViewModel : ObservableObject
         foreach (var name in new[]
                  {
                      nameof(Title), nameof(FolderText), nameof(InfoText), nameof(LinkText), nameof(Project), nameof(ProjectChoices), nameof(ProjectName), nameof(IsLinked),
-                     nameof(CanShareWithEveryone), nameof(SharedWithEveryone), nameof(SharingText), nameof(NeedsReview), nameof(ReviewText), nameof(Clashes),
+                     nameof(CanShareWithEveryone), nameof(SharedWithEveryone), nameof(SharingText), nameof(NeedsReview), nameof(ReviewText), nameof(IsAccepted), nameof(AcceptedText), nameof(Clashes),
                      nameof(HasClashes), nameof(Document), nameof(LinkedFrom), nameof(HasLinkedFrom), nameof(EditNotice), nameof(Files), nameof(HasFiles),
                      nameof(CanEdit), nameof(IsReadOnly), nameof(ReadOnlyText), nameof(Versions), nameof(CanRestore),
                  })

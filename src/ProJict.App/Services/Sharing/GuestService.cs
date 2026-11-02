@@ -403,6 +403,9 @@ public sealed partial class GuestService
             case "wiki" or "wikiPage" or "wikiGone" or "wikiError":
                 HandleWiki(connection, (string)message["type"]!, message);
                 break;
+            case "presence":
+                TakePresence(connection, message);
+                break;
         }
     }
 
@@ -435,6 +438,7 @@ public sealed partial class GuestService
         SetConnected(connection, true);
         _state.StatusText = $"Connected to {connection.HostName}'s ProJict.";
         _main.SendViewing();
+        SendPresence();
         Changed?.Invoke();
     }
 

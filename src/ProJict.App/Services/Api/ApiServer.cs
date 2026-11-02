@@ -359,8 +359,8 @@ public sealed class ApiServer
         if (ApiRoutes.Match(method, path) is not { } match)
         {
             var allowed = ApiRoutes.MethodsFor(path);
-            if (allowed.Count > 0) await NotAllowed(context, string.Join(", ", allowed));
-            else await Problem(context, 404, $"No such endpoint: {method} {ApiRoutes.Base}{path}. See {ApiRoutes.Base}/openapi.json.");
+            if (allowed.Count > 0) context.Response.Headers.Allow = string.Join(", ", allowed);
+            await Problem(context, allowed.Count > 0 ? 405 : 404, ApiRoutes.WrongEndpoint(method, path, allowed));
             return;
         }
         var (route, values) = match;
@@ -434,6 +434,9 @@ public sealed class ApiServer
             ["projict"] = _version,
             ["openApi"] = $"{baseUrl}{ApiRoutes.Base}/openapi.json",
             ["mcp"] = baseUrl + McpPath,
+            ["endpoints"] = ApiRoutes.Index(),
+            ["howTo"] = "Each endpoint runs one of the agent tools, with the same rules; openApi describes them and their arguments, and mcp gives the same " +
+                        "tools over MCP (the simplest for AI agents). Chat: GET /chat/channels, then POST /chat/channels/{channel}/messages.",
         };
     }
 

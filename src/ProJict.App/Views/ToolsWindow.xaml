@@ -1,0 +1,139 @@
+<Window x:Class="ProJict.App.Views.ToolsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:ProJict.App.ViewModels"
+        Title="Tools" Width="900" Height="720" MinWidth="680" MinHeight="460"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+    <Window.Resources>
+        <Style x:Key="Label" TargetType="TextBlock" BasedOn="{StaticResource MutedText}">
+            <Setter Property="Margin" Value="2,14,0,4" />
+            <Setter Property="FontSize" Value="12" />
+        </Style>
+        <Style x:Key="Problem" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Margin" Value="2,4,0,0" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+    </Window.Resources>
+    <DockPanel Margin="22,16">
+        <TextBlock DockPanel.Dock="Top" Text="Tools" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,4" />
+        <TextBlock DockPanel.Dock="Top" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,12"
+                   Text="Outside tools your AI agents may use for your work, such as ElevenLabs for voices or Suno for music. Agents see them with list_tools, and get an API key only when you allow it. They're kept on this computer: never in the workspace, its mirror or backups, or shared with anyone." />
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+            <Button Content="Close" IsCancel="True" MinWidth="90" Click="Close_Click" />
+        </StackPanel>
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="230" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- The tools -->
+            <DockPanel Margin="0,0,16,0">
+                <Button x:Name="AddTool" DockPanel.Dock="Bottom" Content="Add a tool…" HorizontalAlignment="Stretch" Margin="0,8,0,0" Command="{Binding AddToolCommand}" />
+                <ListBox x:Name="ToolList" ItemsSource="{Binding Tools}" SelectedItem="{Binding Selected}" AutomationProperties.Name="Tools"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:ToolEditorViewModel}">
+                            <StackPanel Margin="0,3">
+                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="{Binding Subtitle}" Style="{StaticResource MutedText}" FontSize="12" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
+
+            <!-- The chosen tool -->
+            <TextBlock Grid.Column="1" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="2,4,0,0"
+                       Text="No tools yet: Add a tool… puts one in."
+                       Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVis}}" />
+            <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto" Padding="0,0,10,0" DataContext="{Binding Selected}"
+                          Visibility="{Binding Converter={StaticResource EmptyToVis}}">
+                <StackPanel x:Name="Editor">
+                    <TextBlock Text="Name" Style="{StaticResource Label}" Margin="2,0,0,4" />
+                    <TextBox x:Name="ToolName" Text="{Binding Name, UpdateSourceTrigger=LostFocus}" FontWeight="SemiBold" AutomationProperties.Name="Name" />
+                    <TextBlock Text="{Binding NameProblem}" Style="{StaticResource Problem}" Visibility="{Binding NameProblem, Converter={StaticResource EmptyToVis}}" />
+
+                    <TextBlock Text="What it's for (agents read this to pick the right tool)" Style="{StaticResource Label}" />
+                    <TextBox Text="{Binding Purpose, UpdateSourceTrigger=LostFocus}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="54"
+                             VerticalContentAlignment="Top" AutomationProperties.Name="What it's for" />
+
+                    <TextBlock Text="Website" Style="{StaticResource Label}" />
+                    <DockPanel>
+                        <Button DockPanel.Dock="Right" Content="Open" Margin="8,0,0,0" Command="{Binding OpenWebsiteCommand}"
+                                IsEnabled="{Binding HasWebsite}" ToolTip="Opens it in your browser" />
+                        <TextBox Text="{Binding Website, UpdateSourceTrigger=LostFocus}" AutomationProperties.Name="Website" />
+                    </DockPanel>
+                    <TextBlock Text="{Binding WebsiteProblem}" Style="{StaticResource Problem}" Visibility="{Binding WebsiteProblem, Converter={StaticResource EmptyToVis}}" />
+
+                    <TextBlock Text="Agents reach it" Style="{StaticResource Label}" />
+                    <StackPanel Orientation="Horizontal">
+                        <RadioButton x:Name="ByApi" Content="Through its API, with a key" IsChecked="{Binding IsApi}" Margin="0,0,18,0" />
+                        <RadioButton x:Name="ByBrowser" Content="In the browser" IsChecked="{Binding IsBrowser}" />
+                    </StackPanel>
+
+                    <!-- API: the key -->
+                    <StackPanel Visibility="{Binding IsApi, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Text="API key" Style="{StaticResource Label}" />
+                        <DockPanel>
+                            <Button DockPanel.Dock="Right" Content="Remove key" Margin="8,0,0,0" Command="{Binding RemoveKeyCommand}"
+                                    Visibility="{Binding HasKey, Converter={StaticResource BoolToVis}}" />
+                            <Button x:Name="SaveKey" DockPanel.Dock="Right" Content="Save key" Margin="8,0,0,0" Click="SaveKey_Click" />
+                            <PasswordBox x:Name="KeyBox" AutomationProperties.Name="API key" />
+                        </DockPanel>
+                        <TextBlock Text="{Binding KeyText}" Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap" Margin="2,4,0,0" />
+                    </StackPanel>
+
+                    <!-- Browser: how you're signed in -->
+                    <StackPanel Visibility="{Binding IsBrowser, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Text="How you're signed in there (agents are told; you sign in yourself)" Style="{StaticResource Label}" />
+                        <TextBox Text="{Binding SignIn, UpdateSourceTrigger=LostFocus}" AutomationProperties.Name="How you're signed in" />
+                    </StackPanel>
+
+                    <TextBlock Text="Budget (agents are told it; ProJict doesn't count what's used)" Style="{StaticResource Label}" />
+                    <TextBox Text="{Binding Budget, UpdateSourceTrigger=LostFocus}" AutomationProperties.Name="Budget" />
+
+                    <TextBlock Text="Set up for these projects (also ticked in a project's Details)" Style="{StaticResource Label}" />
+                    <Border BorderThickness="1" CornerRadius="4" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}" MaxHeight="180">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <ItemsControl ItemsSource="{Binding Projects}" Margin="8,4" Focusable="False">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:ToolProjectChoice}">
+                                        <CheckBox Content="{Binding Name}" IsChecked="{Binding IsChecked}" Width="190" Margin="0,2" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Border>
+
+                    <StackPanel Visibility="{Binding IsApi, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Text="Agents that may always have the key" Style="{StaticResource Label}" />
+                        <TextBlock Text="{Binding AllowedHint}" Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap" Margin="2,0,0,4" />
+                        <ItemsControl ItemsSource="{Binding Allowed}" Focusable="False">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:ToolAllowedAgent}">
+                                    <DockPanel Margin="2,2">
+                                        <Button DockPanel.Dock="Right" Style="{StaticResource SubtleButton}" Content="Ask me again" Command="{Binding RemoveCommand}"
+                                                ToolTip="It asks you for the key again next time" />
+                                        <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+                                    </DockPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+
+                    <Button Content="{Binding DataContext.RemoveText, RelativeSource={RelativeSource AncestorType=Window}}"
+                            Command="{Binding DataContext.RemoveToolCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                            HorizontalAlignment="Left" Margin="0,18,0,4" />
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+    </DockPanel>
+</Window>

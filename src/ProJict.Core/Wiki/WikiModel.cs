@@ -38,6 +38,31 @@ public sealed class WikiClash
     public int AgainstVersion { get; set; }
 }
 
+public enum WikiReviewOutcome { Accepted, SentBack, Reopened }
+
+/// <summary>
+/// A review by someone you let review for you (a studio's lead): they accepted what changed since you last checked, or
+/// sent it back with a note; or you reopened what they accepted, so it waits for a review again.
+/// </summary>
+public sealed class WikiReview
+{
+    public DateTime At { get; set; } = DateTime.Now;
+    public string By { get; set; } = "";
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Agent { get; set; }
+    /// <summary>What they review as: "Lead designer".</summary>
+    public string? Role { get; set; }
+    public WikiReviewOutcome Outcome { get; set; }
+    /// <summary>The version reviewed.</summary>
+    public int Version { get; set; }
+    /// <summary>The version last checked before it (0: the page was new); what changed since is what was reviewed.</summary>
+    public int Since { get; set; }
+    public string? Note { get; set; }
+
+    /// <summary>"Ada (Lead designer)".</summary>
+    [JsonIgnore] public string Who => Role != null ? $"{By} ({Role})" : By;
+}
+
 /// <summary>Who saves: a person (you, or someone you share with) or an AI agent, by the name they sign with.</summary>
 public sealed record WikiAuthor(string Name, bool Agent = false);
 
@@ -73,8 +98,17 @@ public sealed class WikiPage
     public List<WikiVersion> Versions { get; set; } = [];
     /// <summary>Saves that clashed with another, waiting for you to pick; null while there are none.</summary>
     public List<WikiClash>? Clashes { get; set; }
+    /// <summary>Reviews by a studio's lead (and your reopening them), oldest first; null while there are none.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<WikiReview>? Reviews { get; set; }
 
     [JsonIgnore] public int Version => Versions.Count > 0 ? Versions[^1].Number : 0;
+    /// <summary>The lead's acceptance of the page as it is now, if that's how it was last checked.</summary>
+    [JsonIgnore] public WikiReview? AcceptedReview =>
+        !NeedsReview && Reviews?.LastOrDefault() is { Outcome: WikiReviewOutcome.Accepted } review && review.Version == Version ? review : null;
+    /// <summary>The lead sent the page as it is now back to whoever changed it.</summary>
+    [JsonIgnore] public WikiReview? SentBackReview =>
+        NeedsReview && Reviews?.LastOrDefault() is { Outcome: WikiReviewOutcome.SentBack } review && review.Version == Version ? review : null;
     [JsonIgnore] public string Title => WikiPaths.Title(Path);
     [JsonIgnore] public string Folder => WikiPaths.Folder(Path);
     [JsonIgnore] public bool HasClashes => Clashes is { Count: > 0 };
@@ -87,6 +121,7 @@ public sealed class WikiPage
         copy.Attachments = Attachments?.ToList();
         copy.Versions = Versions.Select(v => v.Clone()).ToList();
         copy.Clashes = Clashes?.ToList();
+        copy.Reviews = Reviews?.ToList();
         return copy;
     }
 }

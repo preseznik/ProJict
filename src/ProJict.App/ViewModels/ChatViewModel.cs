@@ -417,12 +417,30 @@ public sealed partial class ChatViewModel : ObservableObject
                      nameof(CanInvite), nameof(ShowChannelPane), nameof(ShowEmptyPane), nameof(IsOwner) })
             OnPropertyChanged(name);
         RefreshInviteChoices();
+        RefreshPresence();
+        SyncMessages();
+        SendCommand.NotifyCanExecuteChanged();
+    }
+
+    /// <summary>The open channel's members, with who's online, away or offline now.</summary>
+    public void RefreshPresence()
+    {
         Members = Channel == null ? [] : Channel.Members
             .OrderByDescending(m => !m.Agent && Here.Room.IsOwner(m.Name)).ThenByDescending(m => m.Moderator).ThenBy(m => m.Name, StringComparer.CurrentCultureIgnoreCase)
             .Select(m => new ChatMemberViewModel(m, Channel, this)).ToList();
         OnPropertyChanged(nameof(Members));
-        SyncMessages();
-        SendCommand.NotifyCanExecuteChanged();
+    }
+
+    /// <summary>
+    /// Whether a member is online, away or offline: here, as this ProJict knows it; in another ProJict's channel, as that
+    /// one last said (you as you are; everyone offline while it isn't connected).
+    /// </summary>
+    internal PresenceState PresenceOf(ChatPlace place, ChatMember member)
+    {
+        if (place.Host is not { } host) return _main.Agents.StateOf(member.Name);
+        if (!member.Agent && string.Equals(member.Name, place.Me.Name, StringComparison.OrdinalIgnoreCase)) return _main.Agents.MyState;
+        if (host.State != ConnectionState.Connected) return PresenceState.Offline;
+        return host.Presence.TryGetValue(member.Name, out var state) ? state : PresenceState.Offline;
     }
 
     /// <summary>The newest messages (more with Show earlier); new ones are appended, edited ones refreshed.</summary>
@@ -1134,12 +1152,24 @@ public sealed partial class ChatMemberViewModel(ChatMember model, ChatChannel ch
     private ChatViewModel.ChatPlace Place => owner.PlaceOf(channel);
     private bool IsOwner => !model.Agent && Place.Room.IsOwner(model.Name);
     private bool IsMe => string.Equals(model.Name, Place.Me.Name, StringComparison.OrdinalIgnoreCase);
-    public string RoleText => IsOwner ? (Place.Me.Owner ? "you · owner" : "owner")
-        : string.Join(" · ", new[]
-        {
-            IsMe ? "you" : null, model.Agent ? owner.ClientOf(model.Name) : Place.Host == null && owner.IsGuestName(model.Name) ? "guest" : null,
-            model.Moderator ? "moderator" : null,
-        }.Where(s => s != null));
+    public string RoleText => string.Join(" · ", new[]
+    {
+        IsOwner ? (Place.Me.Owner ? "you · owner" : "owner") : null,
+        !IsOwner && IsMe ? "you" : null, IsOwner ? null : model.Agent ? owner.ClientOf(model.Name) : Place.Host == null && owner.IsGuestName(model.Name) ? "guest" : null,
+        !IsOwner && model.Moderator ? "moderator" : null,
+        Presence != PresenceState.Online ? Core.Chat.Presence.Word(Presence) : null,
+    }.Where(s => s != null));
+
+    /// <summary>Online, away (idle a while) or offline (not connected), worked out when the members were listed.</summary>
+    public PresenceState Presence { get; } = owner.PresenceOf(owner.PlaceOf(channel), model);
+    public bool IsAway => Presence == PresenceState.Away;
+    public bool IsOffline => Presence == PresenceState.Offline;
+    public string PresenceText => Presence switch
+    {
+        PresenceState.Online => "Online",
+        PresenceState.Away => model.Agent ? "Away: hasn't used ProJict's tools for a while" : "Away: hasn't done anything on their computer for a while",
+        _ => model.Agent ? "Offline: not connected to ProJict" : "Offline: their ProJict isn't connected",
+    };
     public string? MutedText => Place.Room.MutedUntil(channel, model.Name) is { } until
         ? until == DateTime.MaxValue ? "muted until unmuted" : $"muted until {until.ToString("HH:mm", CultureInfo.CurrentCulture)}" : null;
     public bool IsMuted => MutedText != null;

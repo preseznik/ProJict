@@ -46,6 +46,15 @@ public sealed class Studio
     /// <summary>The studio's channel, where the team talks: the project's Open channel, made with the studio if it had none.</summary>
     public Guid? ChannelId { get; set; }
     public List<StudioHire> Hires { get; set; } = [];
+    /// <summary>
+    /// The lead (Lead designer, or Director) reviews the wiki pages about the project that the studio's other agents
+    /// change, instead of you: accepts them or sends them back.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool LeadReviewsWiki { get; set; }
+    /// <summary>Only pages in this folder (and below), e.g. "GRID2VR/Design"; null: every page about the project.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? LeadReviewFolder { get; set; }
     /// <summary>Hires that ended lately (fired, or someone else took the role), so the agent hears it.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<StudioHire>? Ended { get; set; }

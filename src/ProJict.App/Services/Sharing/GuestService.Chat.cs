@@ -15,6 +15,10 @@ public sealed partial class HostConnection
     public string? MyName { get; internal set; }
     /// <summary>What the host refused that an agent here sent it (by the agent's name), until the agent hears it.</summary>
     internal List<(string Agent, string Why)> AgentRefusals { get; } = [];
+    /// <summary>Who's online or away in the host's ProJict, as it last said; everyone else there is offline.</summary>
+    public IReadOnlyDictionary<string, PresenceState> Presence { get; internal set; } = new Dictionary<string, PresenceState>();
+    /// <summary>Whether you're away and which agents are here, as the host last heard it.</summary>
+    internal string? PresenceSent { get; set; }
 }
 
 /// <summary>
@@ -66,8 +70,39 @@ public sealed partial class GuestService
     /// <summary>While disconnected the host's channels are gone; connecting again brings them all back.</summary>
     private void DropChat(HostConnection connection)
     {
+        connection.PresenceSent = null;
+        if (connection.Presence.Count > 0)
+        {
+            connection.Presence = new Dictionary<string, PresenceState>();
+            PresenceChanged?.Invoke(connection);
+        }
         if (connection.Chat is not { } room) return;
         foreach (var id in room.Channels.Select(c => c.Id).ToList()) room.Drop(id);
+    }
+
+    /// <summary>Who's online or away in a host's ProJict changed (UI thread).</summary>
+    public event Action<HostConnection>? PresenceChanged;
+
+    private void TakePresence(HostConnection connection, JsonObject message)
+    {
+        connection.Presence = Presence.FromJson(message["people"]);
+        PresenceChanged?.Invoke(connection);
+    }
+
+    /// <summary>
+    /// Tells each host you're connected to whether you're away, and which of your agents are here (online or away), when
+    /// that changed since it last heard: its Chat then shows you and them as you are.
+    /// </summary>
+    public void SendPresence()
+    {
+        var agents = _main.Agents.AgentsHere();
+        var away = _main.Agents.MyState == PresenceState.Away;
+        var signature = $"{away}|{Presence.Signature(agents)}";
+        foreach (var connection in Connections.Where(c => c.State == ConnectionState.Connected && c.PresenceSent != signature))
+        {
+            connection.PresenceSent = signature;
+            connection.Send(Wire.Message("presence", ("away", away), ("agents", Presence.ToJson(agents))));
+        }
     }
 
     /// <summary>The connection a channel came from, or null for your own.</summary>

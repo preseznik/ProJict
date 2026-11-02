@@ -22,7 +22,8 @@ public sealed class WikiException(string message) : InvalidOperationException(me
 /// <summary>
 /// The workspace's wiki: its pages and what may happen to them. Every save is a version (who and when); saving on top
 /// of an older version merges by paragraph with what changed since, and a real clash keeps both. Pages AI agents change
-/// wait for the owner's review. Each change raises <see cref="Changed"/> (for saving, sharing and the views).
+/// wait for the owner's review (or a studio lead's, see <see cref="Features.LeadReview"/>). Each change raises
+/// <see cref="Changed"/> (for saving, sharing and the views).
 /// </summary>
 public sealed class WikiBook
 {
@@ -288,6 +289,51 @@ public sealed class WikiBook
         Changed?.Invoke(page);
     }
 
+    /// <summary>Reviews kept per page (the oldest go).</summary>
+    public const int KeptReviews = 100;
+
+    /// <summary>
+    /// Someone who reviews for you (a studio's lead) accepted what changed since you last checked: the review mark goes,
+    /// and the page's history says who accepted it.
+    /// </summary>
+    public void AcceptFor(WikiPage page, WikiAuthor by, string? role, string? note = null)
+    {
+        if (!page.NeedsReview) throw new WikiException("The page doesn't wait for a review: nothing changed since it was last checked.");
+        if (page.HasClashes) throw new WikiException("Two edits of the page clashed: the user picks which to keep.");
+        AddReview(page, by, role, WikiReviewOutcome.Accepted, page.ReviewedVersion ?? 0, note);
+        page.NeedsReview = false;
+        page.ReviewedVersion = null;
+        Changed?.Invoke(page);
+    }
+
+    /// <summary>They send what changed back, with a note: the page keeps waiting for a review (yours too).</summary>
+    public void SendBack(WikiPage page, WikiAuthor by, string? role, string note)
+    {
+        if (!page.NeedsReview) throw new WikiException("The page doesn't wait for a review: nothing changed since it was last checked.");
+        AddReview(page, by, role, WikiReviewOutcome.SentBack, page.ReviewedVersion ?? 0, note);
+        Changed?.Invoke(page);
+    }
+
+    /// <summary>You don't go along with what the lead accepted: the page waits for a review again, of the same changes.</summary>
+    public void Reopen(WikiPage page, WikiAuthor by, string? note = null)
+    {
+        if (page.AcceptedReview is not { } accepted) throw new WikiException("Nobody accepted the page as it is now.");
+        page.NeedsReview = true;
+        page.ReviewedVersion = accepted.Since;
+        AddReview(page, by, null, WikiReviewOutcome.Reopened, accepted.Since, note);
+        Changed?.Invoke(page);
+    }
+
+    private void AddReview(WikiPage page, WikiAuthor by, string? role, WikiReviewOutcome outcome, int since, string? note)
+    {
+        (page.Reviews ??= []).Add(new WikiReview
+        {
+            At = Now, By = by.Name, Agent = by.Agent, Role = role, Outcome = outcome, Version = page.Version, Since = since,
+            Note = string.IsNullOrWhiteSpace(note) ? null : note.Trim(),
+        });
+        if (page.Reviews.Count > KeptReviews) page.Reviews.RemoveRange(0, page.Reviews.Count - KeptReviews);
+    }
+
     public void Attach(WikiPage page, IEnumerable<Attachment> files)
     {
         var added = false;
@@ -329,6 +375,7 @@ public sealed class WikiBook
             existing.Attachments = incoming.Attachments;
             existing.Versions = incoming.Versions;
             existing.Clashes = incoming.Clashes;
+            existing.Reviews = incoming.Reviews;
         }
         Changed?.Invoke(existing);
         return existing;

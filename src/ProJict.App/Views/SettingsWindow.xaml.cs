@@ -105,6 +105,7 @@ public partial class SettingsWindow : Window
         AgentsSummary.Text = AllowAgents.IsChecked != true ? "Off: agents can't connect"
             : "On · they may work on " + (AgentAccess.Describe(priorities) ?? "no items (they can still read and comment)");
         ApiSummary.Text = ApiStatus.Text;
+        ToolsSummary.Text = ToolsSummaryOf(App.Current.MainVm.Tools.Tools);
         var kinds = NotifyKinds.Children.OfType<CheckBox>().Where(b => b.IsChecked == true).Select(b => (string)b.Content).ToList();
         NotificationsSummary.Text = NotifyEnabled.IsChecked != true ? "Off" : kinds.Count == 0 ? "On, but nothing is chosen" : "On · " + string.Join(", ", kinds);
         BoardSummary.Text = $"{(Theme.SelectedItem as ComboBoxItem)?.Content} theme · stale after {StaleDays.Text.Trim()} days" +
@@ -203,6 +204,18 @@ public partial class SettingsWindow : Window
         RefreshSummaries();
     }
 
+    private void OpenTools_Click(object sender, RoutedEventArgs e)
+    {
+        new ToolsWindow(App.Current.MainVm) { Owner = this }.ShowDialog();
+        RefreshSummaries();
+    }
+
+    /// <summary>"3 tools · ElevenLabs (API, key set), Suno, Tripo3D".</summary>
+    public static string ToolsSummaryOf(IReadOnlyList<ProJict.Core.Tools.ExternalTool> tools) =>
+        tools.Count == 0 ? "None yet"
+            : $"{tools.Count} {(tools.Count == 1 ? "tool" : "tools")} · " + string.Join(", ", tools.Select(t =>
+                t.Access == ProJict.Core.Tools.ToolAccess.Api ? $"{t.Name} (API{(t.HasKey ? ", key set" : ", no key yet")})" : t.Name));
+
     /// <summary>How to add ProJict to one AI agent: what to run or paste, and where.</summary>
     public sealed record AgentSetup(string Client, string Text, string Where);
 
@@ -257,16 +270,17 @@ public partial class SettingsWindow : Window
     }
 
     /// <summary>
-    /// The connected agents still on the old ProJict.exe --mcp, which an update of ProJict cuts off, with what to do; null
-    /// when there are none (or no bridge to move to, in a development build).
+    /// The agents connected to this ProJict on this computer that still use the old ProJict.exe --mcp, which an update of
+    /// ProJict cuts off, with what to do; null when there are none (or no bridge to move to, in a development build). It's
+    /// worked out from who is connected right now, so nobody else sees it, and it goes once they've moved.
     /// </summary>
     public static string? OldBridgeText(IEnumerable<ProJict.Core.Agents.McpSession> sessions)
     {
         var old = sessions.Where(s => s.OldBridge).Select(s => s.AgentName).Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.CurrentCultureIgnoreCase).ToList();
         if (old.Count == 0 || BridgeInstaller.BridgePath == null) return null;
-        return $"{string.Join(", ", old)} {(old.Count == 1 ? "reaches" : "reach")} ProJict through the old ProJict.exe --mcp, which a ProJict update cuts off. " +
-               "Add ProJict to them again with the command above (it starts ProJictBridge.exe, which stays connected through updates and keeps their names), " +
-               "then restart them or reconnect ProJict in them (/mcp in Claude Code).";
+        return $"On this computer, {string.Join(", ", old)} {(old.Count == 1 ? "reaches" : "reach")} ProJict through the old ProJict.exe --mcp, which a ProJict update " +
+               "cuts off. Add ProJict to them again with the command above (it starts ProJictBridge.exe, which stays connected through updates and keeps their " +
+               "names), then restart them or reconnect ProJict in them (/mcp in Claude Code). This note is only about your agents here, and goes once they've moved.";
     }
 
     /// <summary>The Claude Code command (kept for checks that look for it).</summary>

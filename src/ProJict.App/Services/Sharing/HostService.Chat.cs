@@ -74,6 +74,22 @@ public sealed partial class HostService
         }
     }
 
+    /// <summary>
+    /// Who's online or away here (you, your agents, and the people connected with their agents), to each guest when it
+    /// changed, so their Chat shows the members of your channels as they are; whoever isn't said is offline.
+    /// </summary>
+    public void SendPresence()
+    {
+        if (_sessions.Count == 0) return;
+        var everyone = _main.Agents.Everyone();
+        var signature = Presence.Signature(everyone);
+        foreach (var session in _sessions.Where(s => s.PresenceSent != signature))
+        {
+            session.PresenceSent = signature;
+            session.Send(Wire.Message("presence", ("people", Presence.ToJson(everyone))));
+        }
+    }
+
     /// <summary>Projects moved between groups: guests get the channels they may now see and lose the others.</summary>
     private void SyncChat()
     {

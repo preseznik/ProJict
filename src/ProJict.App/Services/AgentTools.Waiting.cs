@@ -51,6 +51,8 @@ public sealed partial class AgentTools
             lines.Add($"You reach ProJict through \"ProJict.exe --mcp\", which a ProJict update cuts off (you'd lose ProJict until your client " +
                       $"reconnects). Ask the user to add ProJict to your client again with \"{bridge}\" --mcp instead (ProJict's Settings › AI agents " +
                       "has the exact command): it stays connected through updates and keeps your name.");
+        foreach (var (key, line) in ToolKeyLines(session))
+            if (session.Noticed.Add(key)) lines.Add(line);
         if (session.RenamedBy is { } renamer && session.Noticed.Add($"renamed:{session.AgentName}"))
             lines.Add($"{renamer} renamed you {session.AgentName}: everything you do is now signed {session.AgentName}. " +
                       $"Go by that name, also in Chat, and pick it again with set_name {session.AgentName} when you come back.");
@@ -88,6 +90,8 @@ public sealed partial class AgentTools
             foreach (var (key, line) in CleanupLines(session, project))
                 if (session.Noticed.Add(key)) lines.Add(line);
             foreach (var (key, line) in StudioLines(session, project))
+                if (session.Noticed.Add(key)) lines.Add(line);
+            foreach (var (key, line) in WikiReviewLines(session, project))
                 if (session.Noticed.Add(key)) lines.Add(line);
             if (project.OpenShip is { } ship)
             {

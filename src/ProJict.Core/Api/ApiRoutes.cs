@@ -73,6 +73,8 @@ public static class ApiRoutes
         new("GET", "/wiki", "list_wiki", "listWiki", "The wiki's pages, with their folders, projects and versions"),
         new("GET", "/wiki/pages/{page}", "read_wiki", "readWikiPage", "A wiki page's Markdown and version (or one section); a path's / is written %2F"),
         new("PUT", "/wiki/pages/{page}", "write_wiki", "writeWikiPage", "Creates or changes a wiki page, or one section of it; give the version you read"),
+        new("POST", "/wiki/pages/{page}/review", "review_wiki", "reviewWikiPage",
+            "For a studio's lead, when the user lets the lead review wiki pages: accepts what the studio's other agents changed, or sends it back with a note"),
     ];
 
     /// <summary>The route for a request path (relative to <see cref="Base"/>) and its path values; null when none matches.</summary>
@@ -84,6 +86,30 @@ public static class ApiRoutes
             if (Values(route, path) is { } values) return (route, values);
         }
         return null;
+    }
+
+    /// <summary>
+    /// Every endpoint in a line ("POST /api/v1/chat/channels/{channel}/messages: Posts a message…"), for the API's front
+    /// page, so a client finds Chat and the rest without guessing.
+    /// </summary>
+    public static JsonArray Index() => new(All
+        .Select(r => $"{r.Method} {Base}{r.Template}: {r.Summary}")
+        .Concat([
+            $"GET {Base}/chat/watch: A line of text per chat message for you, as they come (keep the request open)",
+            $"GET {Base}/attachments/{{id}}: Downloads a file",
+            $"GET {Base}/openapi.json: Every endpoint with its arguments (OpenAPI 3)",
+        ])
+        .Select(line => (JsonNode)line).ToArray());
+
+    /// <summary>What a request that matched no endpoint is told: the methods the path has, and where the others are.</summary>
+    public static string WrongEndpoint(string method, string path, IReadOnlyList<string> allowed)
+    {
+        var where = $"GET {Base} lists every endpoint ({Base}/openapi.json describes them)";
+        var chat = path.Contains("chat", StringComparison.OrdinalIgnoreCase) || path.Contains("channel", StringComparison.OrdinalIgnoreCase) || method == "POST"
+            ? $"; Chat is under {Base}/chat/channels (post with POST {Base}/chat/channels/{{channel}}/messages)" : "";
+        return allowed.Count > 0
+            ? $"{method} isn't used at {Base}{path}: use {string.Join(", ", allowed)} here. {where}{chat}."
+            : $"No such endpoint: {method} {Base}{path}. {where}{chat}.";
     }
 
     /// <summary>The methods a path answers to, for "405 Method Not Allowed".</summary>

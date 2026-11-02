@@ -388,6 +388,24 @@
             </DockPanel>
         </Border>
 
+        <!-- An agent asks for an outside tool's API key (Settings › Tools) -->
+        <Border x:Name="ToolKeyBar" Padding="14,8" Background="{DynamicResource SystemFillColorAttentionBackgroundBrush}"
+                BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}" BorderThickness="0,1,0,0"
+                Visibility="{Binding HasPendingToolKey, Converter={StaticResource BoolToVis}}">
+            <DockPanel>
+                <TextBlock Style="{StaticResource Icon}" Text="&#xE8D7;" Margin="0,0,10,0" />
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <Button Style="{StaticResource AccentButtonStyle}" Content="Allow once" Command="{Binding AllowToolKeyOnceCommand}" Margin="6,0"
+                            ToolTip="It gets the key this time; it asks again next time" />
+                    <Button Style="{StaticResource SubtleButton}" Content="{Binding AlwaysForText}" Command="{Binding AllowToolKeyAlwaysCommand}"
+                            ToolTip="It gets the key whenever it asks, without asking you (Settings › Tools changes that)" />
+                    <Button Style="{StaticResource SubtleButton}" Content="No" Command="{Binding DenyToolKeyCommand}" />
+                </StackPanel>
+                <TextBlock Text="{Binding PendingToolKey.Text}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                           ToolTip="{Binding PendingToolKey.Text}" />
+            </DockPanel>
+        </Border>
+
         <!-- A code to type on your other computer, to confirm it's you -->
         <Border Padding="14,8" Background="{DynamicResource SystemFillColorAttentionBackgroundBrush}"
                 BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}" BorderThickness="0,1,0,0"

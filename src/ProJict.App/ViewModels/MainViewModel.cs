@@ -94,6 +94,9 @@ public sealed partial class MainViewModel : ObservableObject
         new(nameof(ProjectListItemViewModel.DisplayGroup), null, StringComparison.OrdinalIgnoreCase);
     private string _groupsSignature = "";
     private bool _syncingSelection;
+    /// <summary>How often who's away is looked at again (you, and the agents here).</summary>
+    private static readonly TimeSpan PresenceCheck = TimeSpan.FromSeconds(20);
+    private readonly System.Windows.Threading.DispatcherTimer _presenceTimer;
 
     public MainViewModel(AppState state)
     {
@@ -102,6 +105,13 @@ public sealed partial class MainViewModel : ObservableObject
         GitHub = new Services.GitHubService(state);
         Issues = new Services.IssueSyncService(state, this);
         Sharing = new Services.Sharing.SharingStore(state.PersistsSettings ? ProJict.Core.Sharing.SharingData.DefaultPath : null);
+        Tools = new Services.ToolService(state.PersistsSettings ? ProJict.Core.Tools.ToolData.DefaultPath : null);
+        Tools.Changed += () =>
+        {
+            OnPropertyChanged(nameof(PendingToolKey));
+            OnPropertyChanged(nameof(HasPendingToolKey));
+            OnPropertyChanged(nameof(AlwaysForText));
+        };
         Host = new Services.Sharing.HostService(state, this, Sharing);
         Guest = new Services.Sharing.GuestService(state, this, Sharing);
         AgentTools = new Services.AgentTools(state, this, System.Windows.Threading.Dispatcher.CurrentDispatcher);
@@ -128,6 +138,21 @@ public sealed partial class MainViewModel : ObservableObject
             if (e.PropertyName == nameof(ChatViewModel.Channel) && CurrentView == Chat) Arrived();
         };
         Guest.ChatChanged += connection => Chat.OnRemoteChanged(connection);
+        Guest.PresenceChanged += _ => Chat.RefreshPresence();
+        Agents.Me = state.UserName;
+        Agents.PresenceChanged += () =>
+        {
+            Chat.RefreshPresence();
+            Host.SendPresence();
+            Guest.SendPresence();
+        };
+        _presenceTimer = new System.Windows.Threading.DispatcherTimer { Interval = PresenceCheck };
+        _presenceTimer.Tick += (_, _) =>
+        {
+            Agents.Me = State.UserName;
+            Agents.Tick(Services.UserIdle.Time);
+        };
+        _presenceTimer.Start();
         Wiki = new WikiViewModel(state, this);
         Diagrams = new Services.DiagramService(state.DiagramCacheRoot, state.WebViewDataRoot, System.Windows.Threading.Dispatcher.CurrentDispatcher);
         Diagrams.Drawn += () => Wiki.Page?.RedrawDiagrams();
@@ -336,6 +361,33 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     /// <summary>The oldest request to join your ProJict, shown in a bar until you answer it.</summary>
+    // ───────────── Outside tools ─────────────
+
+    /// <summary>The outside tools agents may use (Settings › Tools), and their requests for API keys.</summary>
+    public Services.ToolService Tools { get; }
+
+    /// <summary>An agent asks for a tool's API key: the bar at the bottom asks you.</summary>
+    public Services.ToolKeyRequest? PendingToolKey => Tools.Waiting.FirstOrDefault();
+    public bool HasPendingToolKey => PendingToolKey != null;
+    public string AlwaysForText => PendingToolKey is { } r ? $"Always for {r.Agent}" : "";
+
+    [RelayCommand] private void AllowToolKeyOnce() => AnswerToolKey(Services.ToolKeyAnswer.Once);
+    [RelayCommand] private void AllowToolKeyAlways() => AnswerToolKey(Services.ToolKeyAnswer.Always);
+    [RelayCommand] private void DenyToolKey() => AnswerToolKey(Services.ToolKeyAnswer.No);
+
+    private void AnswerToolKey(Services.ToolKeyAnswer answer)
+    {
+        if (PendingToolKey is not { } request) return;
+        Tools.Answer(request, answer);
+        State.StatusText = answer switch
+        {
+            Services.ToolKeyAnswer.Once => $"{request.Agent} may have the {request.Tool.Name} key this once.",
+            Services.ToolKeyAnswer.Always => $"{request.Agent} may have the {request.Tool.Name} key whenever it needs it (Settings › Tools to change that).",
+            _ => $"{request.Agent} doesn't get the {request.Tool.Name} key.",
+        };
+        OnPropertyChanged(nameof(AlwaysForText));
+    }
+
     public Services.Sharing.JoinRequest? PendingJoin => Host.Requests.FirstOrDefault();
     public bool HasPendingJoin => Host.Requests.Count > 0;
 

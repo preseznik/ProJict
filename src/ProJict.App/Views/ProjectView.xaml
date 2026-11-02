@@ -873,6 +873,7 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
                         <Grid.Resources>
                             <Style TargetType="TextBlock" BasedOn="{StaticResource MutedText}">
@@ -987,6 +988,16 @@
                             <Button Content="{Binding RemoveStudioText}" Command="{Binding RemoveStudioCommand}" HorizontalAlignment="Left" Margin="0,0,0,8"
                                     Visibility="{Binding HasStudio, Converter={StaticResource BoolToVis}}"
                                     ToolTip="This project's room in the Agents view goes back to being the office; its roles and hires are removed" />
+                            <StackPanel x:Name="LeadReviewSettings" Margin="0,0,0,10" Visibility="{Binding HasStudio, Converter={StaticResource BoolToVis}}">
+                                <CheckBox Content="{Binding LeadReviewsWikiText}" IsChecked="{Binding LeadReviewsWiki}" />
+                                <StackPanel Orientation="Horizontal" Margin="28,4,0,0" Visibility="{Binding LeadReviewsWiki, Converter={StaticResource BoolToVis}}">
+                                    <TextBlock Text="Only pages in" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                    <ComboBox IsEditable="True" MinWidth="220" ItemsSource="{Binding WikiFolders}" AutomationProperties.Name="Only pages in this wiki folder"
+                                              Text="{Binding LeadReviewFolder, UpdateSourceTrigger=LostFocus}"
+                                              ToolTip="A wiki folder, e.g. GRID2VR/Design; leave it empty for every page about the project" />
+                                </StackPanel>
+                                <TextBlock Margin="28,4,0,0" FontSize="12" TextWrapping="Wrap" Style="{StaticResource MutedText}" Text="{Binding LeadReviewHint}" />
+                            </StackPanel>
                             <ItemsControl ItemsSource="{Binding StudioRoles}" Focusable="False" Visibility="{Binding HasStudio, Converter={StaticResource BoolToVis}}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type vm:StudioRoleRow}">
@@ -1004,6 +1015,27 @@
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
+                        </StackPanel>
+
+                        <!-- Outside tools (Settings › Tools) set up for the project -->
+                        <TextBlock Grid.Row="10" Text="Tools" Visibility="{Binding CanHaveTools, Converter={StaticResource BoolToVis}}" />
+                        <StackPanel x:Name="ToolDetails" Grid.Row="10" Grid.Column="1" Margin="0,4" Visibility="{Binding CanHaveTools, Converter={StaticResource BoolToVis}}">
+                            <ItemsControl ItemsSource="{Binding ToolChoices}" Focusable="False" Visibility="{Binding HasToolChoices, Converter={StaticResource BoolToVis}}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:ProjectToolChoice}">
+                                        <CheckBox Content="{Binding Name}" IsChecked="{Binding IsChecked}" ToolTip="{Binding ToolTip}" Margin="0,2,18,2" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <DockPanel Margin="0,4,0,0">
+                                <Button DockPanel.Dock="Right" Content="Set up tools…" Command="{Binding OpenToolsCommand}" Margin="12,0,0,0" VerticalAlignment="Top" />
+                                <TextBlock FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0" Text="{Binding ToolsHint}" />
+                            </DockPanel>
                         </StackPanel>
                     </Grid>
                 </ScrollViewer>

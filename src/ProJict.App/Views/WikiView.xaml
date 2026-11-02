@@ -185,6 +185,18 @@
                         <TextBlock Text="{Binding ReviewText}" TextWrapping="Wrap" VerticalAlignment="Center" />
                     </DockPanel>
                 </Border>
+                <!-- The studio's lead accepted it for you: what they accepted, and sending it back -->
+                <Border Margin="0,8,0,0" Padding="10,6" CornerRadius="6" Background="{DynamicResource SubtleFillColorSecondaryBrush}"
+                        Visibility="{Binding IsAccepted, Converter={StaticResource BoolToVis}}">
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                            <Button Content="What changed" Command="{Binding ShowAcceptedChangesCommand}" Margin="8,0,0,0" />
+                            <Button Content="Send back" Command="{Binding ReopenCommand}" Margin="6,0,0,0"
+                                    ToolTip="You don't go along with it: the page waits for a review again (the lead's, or yours), and the lead hears it" />
+                        </StackPanel>
+                        <TextBlock Text="{Binding AcceptedText}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                    </DockPanel>
+                </Border>
                 <!-- Saves that clashed: pick one, or merge by hand -->
                 <ItemsControl ItemsSource="{Binding Clashes}" Focusable="False" Visibility="{Binding HasClashes, Converter={StaticResource BoolToVis}}">
                     <ItemsControl.ItemTemplate>
@@ -278,7 +290,8 @@
                         <ColumnDefinition Width="260" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <ListBox x:Name="VersionList" ItemsSource="{Binding Versions}" SelectedItem="{Binding SelectedVersion}" AutomationProperties.Name="Versions">
+                    <ListBox x:Name="VersionList" ItemsSource="{Binding Versions}" SelectedItem="{Binding SelectedVersion}" AutomationProperties.Name="Versions"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                         <ListBox.ItemTemplate>
                             <DataTemplate DataType="{x:Type vm:WikiVersionRowViewModel}">
                                 <StackPanel Margin="0,2">
@@ -287,6 +300,8 @@
                                     <TextBlock Text="{Binding Changes}" Style="{StaticResource MutedText}" FontSize="11" />
                                     <TextBlock Text="{Binding Note}" FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
                                                Visibility="{Binding HasNote, Converter={StaticResource BoolToVis}}" />
+                                    <TextBlock Text="{Binding ReviewText}" FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource SystemFillColorSuccessBrush}"
+                                               Visibility="{Binding HasReview, Converter={StaticResource BoolToVis}}" />
                                 </StackPanel>
                             </DataTemplate>
                         </ListBox.ItemTemplate>

@@ -10,6 +10,8 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Windows.Threading;
 using ProJict.App.ViewModels;
+using ProJict.Core.Agents;
+using ProJict.Core.Chat;
 using ProJict.Core.Model;
 using ProJict.Core.Sharing;
 using ProJict.Core.Storage;
@@ -47,6 +49,8 @@ public sealed class GuestSession(GuestAccount account, Wire wire, string address
     internal HashSet<Guid> WikiSent { get; } = [];
     /// <summary>The agent rules the guest last heard (so it hears again only when they change).</summary>
     internal string? RulesSent { get; set; }
+    /// <summary>Who's online or away, as the guest last heard it.</summary>
+    internal string? PresenceSent { get; set; }
 
     internal void Send(JsonObject message) => _ = SendAsync(message);
 
@@ -384,6 +388,7 @@ public sealed partial class HostService
                 // Queued in order on the UI thread, so no newer version of a project can overtake these.
                 foreach (var message in Welcome(session, token)) session.Send(message);
                 _main.Agents.PersonConnected(session, NameOf(account));
+                SendPresence();
                 _state.StatusText = $"{account.Name} connected to your ProJict.";
                 Changed?.Invoke();
                 if (joined?.Self == true) StartSelf(account);
@@ -486,6 +491,12 @@ public sealed partial class HostService
             case "viewing":
                 var id = Guid.TryParse((string?)message["projectId"], out var g) ? g : (Guid?)null;
                 _main.Agents.PersonViewing(session, id is { } v && Visible(session.Account).Any(p => p.Id == v) ? v : null);
+                return null;
+            case "presence":
+                // Their agents act here as "Ada (via Alice)", or by their own names from a ProJict linked as you.
+                var agents = Presence.FromJson(message["agents"]).Take(100)
+                    .ToDictionary(a => session.Account.Self ? a.Key : AgentNaming.Via(a.Key, NameOf(session.Account)), a => a.Value, StringComparer.OrdinalIgnoreCase);
+                _main.Agents.PersonPresence(session, (bool?)message["away"] == true, agents);
                 return null;
             default:
                 return null;

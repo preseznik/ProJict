@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ProJict.Core.Features;
 using ProJict.Core.Model;
+using ProJict.Core.Wiki;
 
 namespace ProJict.App.ViewModels;
 
@@ -62,9 +63,70 @@ public sealed partial class ProjectViewModel
         _state.StatusText = $"{Project.Name} has no studio any more: the Agents view shows its agents in the office.";
     }
 
+    // ───────────── The lead reviews wiki pages ─────────────
+
+    /// <summary>"Lead designer", "Director".</summary>
+    private string LeadRoleName => Project.Studio is { } studio && LeadReview.LeadRole(studio) is { } role ? role.Name : "Lead";
+
+    public string LeadReviewsWikiText => $"The {LeadRoleName.ToLowerInvariant()} reviews wiki pages";
+
+    /// <summary>Pages about the project that the studio's other agents change wait for the lead's review instead of yours.</summary>
+    public bool LeadReviewsWiki
+    {
+        get => Project.Studio?.LeadReviewsWiki == true;
+        set
+        {
+            if (Project.Studio is not { } studio || studio.LeadReviewsWiki == value) return;
+            studio.LeadReviewsWiki = value;
+            Touch();
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(LeadReviewHint));
+            Main.Wiki.RefreshPages();
+        }
+    }
+
+    /// <summary>Only pages in this wiki folder (and below); empty: every page about the project.</summary>
+    public string LeadReviewFolder
+    {
+        get => Project.Studio?.LeadReviewFolder ?? "";
+        set
+        {
+            if (Project.Studio is not { } studio) return;
+            var folder = WikiPaths.Normalize(value ?? "") is { Length: > 0 } f ? f : null;
+            if (folder == studio.LeadReviewFolder) return;
+            studio.LeadReviewFolder = folder;
+            Touch();
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(LeadReviewHint));
+            Main.Wiki.RefreshPages();
+        }
+    }
+
+    public IReadOnlyList<string> WikiFolders => _state.Wiki.Folders();
+
+    public string LeadReviewHint
+    {
+        get
+        {
+            var lead = Project.Studio is { } studio ? LeadReview.LeadOf(studio) : null;
+            var who = lead ?? $"the {LeadRoleName} (nobody's hired yet)";
+            var pages = Project.Studio?.LeadReviewFolder is { } folder ? $"Pages in {WikiPaths.Display(folder)}" : $"Pages about {Project.Name}";
+            return LeadReviewsWiki
+                ? $"{pages} that the studio's other agents change wait for {who}'s review instead of yours: accepted, or sent back with a note. Their history " +
+                  "says who accepted them, and you can reopen one. The lead's own changes, clashing edits and other pages still wait for you."
+                : $"Off: you review every wiki page agents change. On: {pages.ToLowerInvariant()[..1]}{pages[1..]} that the studio's other agents change wait " +
+                  $"for {who} instead.";
+        }
+    }
+
     public void RefreshStudio()
     {
-        foreach (var p in new[] { nameof(CanHaveStudio), nameof(HasStudio), nameof(StudioRoles), nameof(StudioHint) }) OnPropertyChanged(p);
+        foreach (var p in new[]
+                 {
+                     nameof(CanHaveStudio), nameof(HasStudio), nameof(StudioRoles), nameof(StudioHint), nameof(LeadReviewsWikiText), nameof(LeadReviewsWiki),
+                     nameof(LeadReviewFolder), nameof(LeadReviewHint), nameof(WikiFolders),
+                 })
+            OnPropertyChanged(p);
     }
 }
 

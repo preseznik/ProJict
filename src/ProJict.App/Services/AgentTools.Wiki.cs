@@ -2,6 +2,7 @@ using System.IO;
 using System.Text.Json.Nodes;
 using ProJict.App.Services.Sharing;
 using ProJict.Core.Agents;
+using ProJict.Core.Features;
 using ProJict.Core.Model;
 using ProJict.Core.Wiki;
 
@@ -12,11 +13,12 @@ namespace ProJict.App.Services;
 /// version signed with the agent's name and waits for the user's review; writing on top of an older version merges by
 /// paragraph, and a real clash keeps both for the user to pick. An API token limited to some projects reaches only the
 /// pages about them. Pages of ProJicts that share theirs with this one are read as "Renderer (Sam's)", and written there
-/// as "Ada (via Alice)" when that ProJict lets guests' agents work and Alice is an editor there.
+/// as "Ada (via Alice)" when that ProJict lets guests' agents work and Alice is an editor there. A studio's lead can
+/// review pages for the user (review_wiki) when the user lets it.
 /// </summary>
 public sealed partial class AgentTools
 {
-    private static readonly HashSet<string> WikiTools = ["list_wiki", "read_wiki", "write_wiki"];
+    private static readonly HashSet<string> WikiTools = ["list_wiki", "read_wiki", "write_wiki", "review_wiki"];
 
     private void AddWikiTools()
     {
@@ -51,6 +53,16 @@ public sealed partial class AgentTools
                                       "defaults to the project matching your working directory.", false),
                 ("attachments", "string[]", "Files for the page, e.g. pictures it shows (absolute paths or relative to your working directory).", false)),
             WriteWiki, filesArgument: "attachments");
+        Add("review_wiki", "Review wiki page",
+            "For a studio's lead (Lead designer, or Director), when the user lets the lead review wiki pages: accept what the studio's other agents changed on a " +
+            "page about the project since the user last checked, or send it back with a note. Accepting takes the page off the user's review list and its " +
+            "history says you accepted it (the user can still reopen it); sending back keeps it waiting and tells whoever changed it, privately, with your note. " +
+            "read_wiki shows what changed (yourReview). Your own changes, clashing edits and other pages wait for the user.",
+            Schema(("page", "string", "The page: its path, its title when only one page has it, or its id.", true),
+                ("decision", "enum:accept|send_back", "accept, or send_back with a note.", true),
+                ("note", "string", "For send_back: what to change, and why. For accept: an optional remark for the history.", false),
+                ("version", "integer", "The version you reviewed (read_wiki gives it): if the page changed since, read it again first.", false)),
+            ReviewWiki);
     }
 
     /// <summary>Your own pages the caller reaches: all of them, or for an API token limited to some projects, the pages about those.</summary>
@@ -106,7 +118,7 @@ public sealed partial class AgentTools
 
     private string ProjectNameOf(Guid? id) => id is { } p ? _state.Projects.FirstOrDefault(x => x.Id == p)?.Name ?? "(a project that's gone)" : "";
 
-    private JsonObject PageSummary(WikiPage page, HostConnection? host) => new()
+    private JsonObject PageSummary(WikiPage page, HostConnection? host, McpSession? session = null) => new()
     {
         ["page"] = host != null ? SharedPageName(host, page) : page.Path,
         ["id"] = ShortId(page.Id),
@@ -116,6 +128,7 @@ public sealed partial class AgentTools
         ["updatedBy"] = page.UpdatedBy,
         ["characters"] = page.Text.Length,
         ["waitsForReview"] = page.NeedsReview ? true : null,
+        ["waitsForYourReview"] = host == null && session != null && LeadReview.WaitsFor(ProjectOf(page), page, session.AgentName) ? true : null,
         ["clashes"] = page.HasClashes ? page.Clashes!.Count : null,
         ["sharedBy"] = host != null ? $"{host.HostName}'s ProJict" : null,
     };
@@ -137,7 +150,7 @@ public sealed partial class AgentTools
         var list = pages.OrderBy(x => x.Host != null).ThenBy(x => x.Page.Path, StringComparer.OrdinalIgnoreCase).ToList();
         var result = new JsonObject
         {
-            ["pages"] = new JsonArray(list.Take(limit).Select(x => (JsonNode)PageSummary(x.Page, x.Host)).ToArray()),
+            ["pages"] = new JsonArray(list.Take(limit).Select(x => (JsonNode)PageSummary(x.Page, x.Host, session)).ToArray()),
             ["folders"] = new JsonArray(_state.Wiki.Folders().Where(x => WikiPaths.IsIn(x, folder)).Take(200).Select(x => (JsonNode)x).ToArray()),
         };
         if (list.Count > limit) result["more"] = list.Count - limit;
@@ -149,7 +162,7 @@ public sealed partial class AgentTools
     {
         var (page, host) = PageFor(session, args);
         if (page.ProjectId is { } id && _state.Projects.FirstOrDefault(p => p.Id == id) is { } project) _main.Agents.WorkingIn(session, project);
-        var json = PageSummary(page, host);
+        var json = PageSummary(page, host, session);
         if (args.String("section") is { } heading)
         {
             json["section"] = WikiText.ReadSection(page.Text, heading) ?? throw new McpToolException(
@@ -172,7 +185,114 @@ public sealed partial class AgentTools
         if (host != null) foreach (var a in page.Attachments ?? []) _main.Guest.FetchWikiFile(host, a);
         if (DiagramsJson(page.Text) is { } diagrams) json["diagrams"] = diagrams;
         if (page.HasClashes) json["note"] = "Two edits of this page clashed; the user picks which to keep. The text is the page as it is now.";
+        if (host == null && LeadReview.Problem(ProjectOf(page), page, session.AgentName) == null) json["yourReview"] = ReviewJson(page);
         return Json(json);
+    }
+
+    private Project? ProjectOf(WikiPage page) => page.ProjectId is { } id ? LocalProjects.FirstOrDefault(p => p.Id == id) : null;
+
+    /// <summary>Most characters of changes read_wiki shows a lead.</summary>
+    private const int ReviewChangesShown = 20_000;
+
+    /// <summary>For the lead: who changed the page since the user last checked, and what (the changed lines, + and −).</summary>
+    private static JsonObject ReviewJson(WikiPage page)
+    {
+        var since = page.ReviewedVersion ?? 0;
+        var from = since > 0 ? page.VersionAt(since)?.Text ?? "" : "";
+        var changes = string.Join("\n", TextMerge.Lines(from, page.Text).Where(l => l.Kind != DiffKind.Same && l.Text.Trim().Length > 0)
+            .Select(l => (l.Kind == DiffKind.Added ? "+ " : "- ") + l.Text));
+        return new JsonObject
+        {
+            ["waitsForYou"] = page.SentBackReview == null,
+            ["changedBy"] = new JsonArray(LeadReview.Authors(page).Select(a => (JsonNode)a).ToArray()),
+            ["since"] = since > 0 ? $"version {since}" : "the page is new",
+            ["changes"] = changes.Length > ReviewChangesShown ? changes[..ReviewChangesShown] + "\n…" : changes,
+            ["sentBack"] = page.SentBackReview is { } back ? $"You sent this version back: {back.Note}" : null,
+            ["note"] = "As the studio's lead you review this for the user: review_wiki accept, or send_back with a note for whoever changed it.",
+        };
+    }
+
+    private string ReviewWiki(McpSession session, Args args, List<Attachment> files)
+    {
+        var (page, host) = PageFor(session, args);
+        if (host != null)
+            throw new McpToolException($"That page is in {host.HostName}'s wiki: their studio's lead reviews it there, if they have one.", ToolProblem.Forbidden);
+        var accept = args.Required("decision") switch
+        {
+            "accept" => true,
+            "send_back" => false,
+            _ => throw new McpToolException("decision must be accept or send_back."),
+        };
+        var note = args.String("note")?.Trim() is { Length: > 0 } n ? n : null;
+        if (!accept && note == null) throw new McpToolException("Say in note what to change, and why: whoever changed the page gets it.");
+        var project = ProjectOf(page);
+        if (LeadReview.Problem(project, page, session.AgentName) is { } problem) throw new McpToolException(problem, ToolProblem.Forbidden);
+        if (args.Int("version") is { } read && read != page.Version)
+            throw new McpToolException($"The page changed since version {read} (it's version {page.Version} now): read_wiki it again and review that.", ToolProblem.Conflict);
+        _main.Agents.WorkingIn(session, project!);
+        var role = LeadReview.LeadRole(project!.Studio!)!.Name;
+        var authors = LeadReview.Authors(page);
+        var by = new WikiAuthor(session.AgentName, true);
+        try
+        {
+            if (accept)
+            {
+                _state.Wiki.AcceptFor(page, by, role, note);
+                _state.StatusText = $"{session.AgentName} ({role}) accepted the wiki page “{page.Title}”.";
+                return Json(new JsonObject
+                {
+                    ["page"] = page.Path,
+                    ["outcome"] = "accepted",
+                    ["version"] = page.Version,
+                    ["note"] = "Accepted for the user: it's off their review list, and its history says you accepted it. They can still reopen it for you.",
+                });
+            }
+            _state.Wiki.SendBack(page, by, role, note!);
+        }
+        catch (WikiException ex) { throw new McpToolException(ex.Message); }
+        var told = new List<string>();
+        if (_state.AppSettings.AgentsUseChat)
+            foreach (var author in authors)
+            {
+                try
+                {
+                    var direct = Chat.FindDirect(session.AgentName, author) ?? Chat.OpenDirect(ActorOf(session), author, true);
+                    var message = Chat.Post(direct, ActorOf(session), $"As {role} I sent back your changes to the wiki page “{page.Path}” (version {page.Version}): {note} " +
+                                                                     "Change it with write_wiki, and it comes back to me for review.");
+                    session.Noticed.Add($"chat:{message.Id}");
+                    told.Add(author);
+                }
+                catch (ProJict.Core.Chat.ChatException) { }
+            }
+        _state.StatusText = $"{session.AgentName} ({role}) sent the wiki page “{page.Title}” back.";
+        return Json(new JsonObject
+        {
+            ["page"] = page.Path,
+            ["outcome"] = "sent back",
+            ["version"] = page.Version,
+            ["told"] = new JsonArray(told.Select(a => (JsonNode)a).ToArray()),
+            ["note"] = (told.Count > 0 ? $"{string.Join(", ", told)} got your note privately. " : "Nobody could be told in Chat; say it on the page's item or in the studio's channel. ") +
+                       "The page still waits for a review: once it changes, it's yours to review again.",
+        });
+    }
+
+    /// <summary>For waitingForYou and the watcher: pages the agent reviews as its studio's lead, and ones the user reopened.</summary>
+    private IEnumerable<(string Key, string Line)> WikiReviewLines(McpSession session, Project project)
+    {
+        if (project.Studio is not { LeadReviewsWiki: true } studio || !LeadReview.IsLead(studio, session.AgentName)) yield break;
+        var role = LeadReview.LeadRole(studio)!.Name;
+        foreach (var page in _state.Wiki.LinkedTo(project.Id))
+        {
+            if (!LeadReview.WaitsFor(project, page, session.AgentName)) continue;
+            if (page.Reviews?.LastOrDefault() is { Outcome: WikiReviewOutcome.Reopened } reopened && reopened.Version == page.Version)
+                yield return ($"wikireview:{page.Id}:{page.Version}:{reopened.At.Ticks}",
+                    $"{reopened.By} reopened the wiki page “{page.Path}” you accepted{(reopened.Note != null ? $": {reopened.Note}" : "")}. " +
+                    "It waits for your review again: read_wiki shows what changed, then review_wiki.");
+            else
+                yield return ($"wikireview:{page.Id}:{page.Version}",
+                    $"{string.Join(", ", LeadReview.Authors(page))} changed the wiki page “{page.Path}” (version {page.Version}), and as {role} you review it for the user: " +
+                    "read_wiki shows what changed since they last checked; then review_wiki accept, or send_back with a note.");
+        }
     }
 
     private string WriteWiki(McpSession session, Args args, List<Attachment> files)

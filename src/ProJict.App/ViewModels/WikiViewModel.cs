@@ -3,6 +3,7 @@ using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ProJict.App.Services.Sharing;
+using ProJict.Core.Features;
 using ProJict.Core.Model;
 using ProJict.Core.Wiki;
 
@@ -134,6 +135,22 @@ public sealed partial class WikiViewModel : ObservableObject
         OnPropertyChanged(nameof(ReviewToolTip));
         _main.RefreshWikiChips();
     }
+
+    /// <summary>Who reviews pages changed (a studio's lead now does, or not): what shows them follows.</summary>
+    public void RefreshPages()
+    {
+        if (_shown) RebuildTree();
+        Page?.Refresh();
+    }
+
+    /// <summary>A page of yours about one of your projects, as the project is now.</summary>
+    internal Project? ProjectOf(WikiPage page) => page.ProjectId is { } id ? _state.Projects.FirstOrDefault(p => p.Id == id && p.Remote == null) : null;
+
+    /// <summary>"waits for your review", or for the studio lead's who reviews it for you.</summary>
+    internal string WaitsText(WikiPage page) =>
+        LeadReview.ReviewerOf(ProjectOf(page), page) is not { } reviewer ? "waits for your review"
+        : page.SentBackReview != null ? $"{reviewer.Lead} sent it back: it waits for a change, or your review"
+        : $"waits for {reviewer.Lead}'s review ({reviewer.Role}), or yours";
 
     private void Removed(WikiPage page)
     {
@@ -322,7 +339,7 @@ public sealed partial class WikiNodeViewModel(WikiViewModel owner, string name, 
     public string Glyph => IsHost ? "" : Page != null ? "" : "";
     public bool NeedsAttention => Page is { } p && Host == null && (p.NeedsReview || p.HasClashes);
     public string? ToolTip => Page is { } p
-        ? WikiPaths.Display(p.Path) + (p.HasClashes ? "\nTwo edits clashed: pick one" : p.NeedsReview ? $"\nChanged by {p.UpdatedBy}: waits for your review" : "")
+        ? WikiPaths.Display(p.Path) + (p.HasClashes ? "\nTwo edits clashed: pick one" : p.NeedsReview ? $"\nChanged by {p.UpdatedBy}: {owner.WaitsText(p)}" : "")
         : IsHost ? $"Pages {Host!.HostName} shares with you" : WikiPaths.Display(Path);
 
     partial void OnIsExpandedChanged(bool value) => owner.Expanded(this, value);
@@ -350,7 +367,7 @@ public sealed record WikiProjectChoice(Guid? Id, string Name)
 }
 
 /// <summary>A version in a page's history: who saved it and when, what it changed.</summary>
-public sealed class WikiVersionRowViewModel(WikiVersion version, WikiVersion? previous, bool current)
+public sealed class WikiVersionRowViewModel(WikiVersion version, WikiVersion? previous, bool current, IReadOnlyList<WikiReview>? reviews = null)
 {
     public WikiVersion Model => version;
     public WikiVersion? Previous => previous;
@@ -359,6 +376,22 @@ public sealed class WikiVersionRowViewModel(WikiVersion version, WikiVersion? pr
     public string When => version.At.ToString("d MMM yyyy, HH:mm", CultureInfo.CurrentCulture);
     public string? Note => version.Note;
     public bool HasNote => version.Note != null;
+
+    /// <summary>What a studio's lead (or you) decided about this version: "Accepted by Ada (Lead designer), 2 Nov, 10:42".</summary>
+    public string? ReviewText => reviews is { Count: > 0 } ? string.Join("\n", reviews.Select(Describe)) : null;
+    public bool HasReview => reviews is { Count: > 0 };
+
+    private static string Describe(WikiReview review)
+    {
+        var when = review.At.ToString("d MMM, HH:mm", CultureInfo.CurrentCulture);
+        var note = review.Note != null ? $": “{review.Note}”" : "";
+        return review.Outcome switch
+        {
+            WikiReviewOutcome.Accepted => $"Accepted by {review.Who}, {when}{note}",
+            WikiReviewOutcome.SentBack => $"Sent back by {review.Who}, {when}{note}",
+            _ => $"Reopened by {review.Who}, {when}{note}",
+        };
+    }
     public string Changes
     {
         get
@@ -412,7 +445,8 @@ public sealed partial class WikiPageChip(WikiPage page, MainViewModel main)
     public WikiPage Page => page;
     public string Text => page.Title;
     public bool NeedsAttention => page.NeedsReview || page.HasClashes;
-    public string ToolTip => $"Open “{WikiPaths.Display(page.Path)}” in the wiki" + (NeedsAttention ? $"\nChanged by {page.UpdatedBy}: waits for your review" : "");
+    public string ToolTip => $"Open “{WikiPaths.Display(page.Path)}” in the wiki" +
+                             (page.HasClashes ? "\nTwo edits clashed: pick one" : page.NeedsReview ? $"\nChanged by {page.UpdatedBy}: {main.Wiki.WaitsText(page)}" : "");
 
     [RelayCommand] private void Open() => main.ShowWikiPage(page);
 }

@@ -264,9 +264,37 @@
                 <Button DockPanel.Dock="Right" Style="{StaticResource SubtleIconButton}" Content="&#xE712;" FontSize="12" Padding="5,3" VerticalAlignment="Center"
                         ToolTip="Mute, remove or make moderator" AutomationProperties.Name="Moderate" Click="MemberMore_Click"
                         Visibility="{Binding CanModerate, Converter={StaticResource BoolToVis}}" />
-                <Border DockPanel.Dock="Left" Width="26" Height="26" CornerRadius="13" Background="{Binding Badge.Background}" Margin="0,0,10,0" VerticalAlignment="Center">
-                    <TextBlock Text="{Binding Badge.Initials}" Foreground="White" FontWeight="SemiBold" FontSize="10.5" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                </Border>
+                <!-- Their badge, with a dot for online (green), away (amber) or offline (grey, and the badge faded) -->
+                <Grid DockPanel.Dock="Left" Margin="0,0,10,0" VerticalAlignment="Center" ToolTip="{Binding PresenceText}">
+                    <Border Width="26" Height="26" CornerRadius="13" Background="{Binding Badge.Background}">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsOffline}" Value="True">
+                                        <Setter Property="Opacity" Value="0.45" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <TextBlock Text="{Binding Badge.Initials}" Foreground="White" FontWeight="SemiBold" FontSize="10.5" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <Ellipse x:Name="PresenceDot" Width="10" Height="10" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-2,-2" StrokeThickness="2"
+                             Stroke="{DynamicResource SolidBackgroundFillColorBaseBrush}" AutomationProperties.Name="{Binding PresenceText}">
+                        <Ellipse.Style>
+                            <Style TargetType="Ellipse">
+                                <Setter Property="Fill" Value="{DynamicResource SystemFillColorSuccessBrush}" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsAway}" Value="True">
+                                        <Setter Property="Fill" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding IsOffline}" Value="True">
+                                        <Setter Property="Fill" Value="{DynamicResource TextFillColorTertiaryBrush}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Ellipse.Style>
+                    </Ellipse>
+                </Grid>
                 <StackPanel VerticalAlignment="Center">
                     <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
                     <TextBlock Text="{Binding RoleText}" Style="{StaticResource MutedText}" FontSize="11" Visibility="{Binding RoleText, Converter={StaticResource EmptyToVis}}" />
