@@ -6,6 +6,7 @@ using System.Windows.Input;
 using System.Windows.Threading;
 using ProJict.App.Services;
 using ProJict.App.ViewModels;
+using ProJict.Core.Wiki;
 
 namespace ProJict.App.Views;
 
@@ -124,6 +125,28 @@ public partial class WikiView : UserControl
         Editor.SelectedText = before + text + "\n";
         Editor.CaretIndex = at + before.Length + text.Length + 1;
         Editor.Focus();
+    }
+
+    private void Diagram_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button) return;
+        var menu = DiagramMenu();
+        menu.PlacementTarget = button;
+        menu.Placement = PlacementMode.Bottom;
+        menu.IsOpen = true;
+    }
+
+    /// <summary>The Diagram menu: a starter of each kind, put where you're writing (Ctrl+Z in the box takes it out again).</summary>
+    internal ContextMenu DiagramMenu()
+    {
+        var menu = new ContextMenu();
+        foreach (var starter in DiagramStarters.All())
+        {
+            var item = new MenuItem { Header = starter.Name };
+            item.Click += (_, _) => Insert(starter.Text);
+            menu.Items.Add(item);
+        }
+        return menu;
     }
 
     private void Editor_SelectionChanged(object sender, RoutedEventArgs e)

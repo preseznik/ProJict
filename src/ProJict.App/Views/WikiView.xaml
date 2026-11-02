@@ -134,6 +134,12 @@
                 <TextBlock Text="{Binding FolderText}" Style="{StaticResource MutedText}" FontSize="12" Margin="3,0,0,0" />
                 <DockPanel>
                     <StackPanel x:Name="PageButtons" DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                        <!-- While editing: a starter diagram where you're writing (the button has the text font, so its menu reads). -->
+                        <Button x:Name="DiagramButton" Style="{StaticResource SubtleButton}" Click="Diagram_Click" Margin="0,0,6,0" AutomationProperties.Name="Diagram"
+                                ToolTip="Put a diagram where you're writing: a flowchart, a sequence, a Gantt chart… It's text you change, drawn in the preview."
+                                Visibility="{Binding IsEditing, Converter={StaticResource BoolToVis}}">
+                            <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource Icon}" Text="&#xE9D2;" /><TextBlock Text="Diagram" Margin="6,0,0,0" /></StackPanel>
+                        </Button>
                         <Button Style="{StaticResource AccentButtonStyle}" Command="{Binding SaveCommand}" Padding="12,4" Margin="0,0,6,0" ToolTip="Save as a new version (Ctrl+S)"
                                 AutomationProperties.Name="Save" Visibility="{Binding IsEditing, Converter={StaticResource BoolToVis}}">
                             <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource Icon}" Text="&#xE74E;" FontSize="12" VerticalAlignment="Center" /><TextBlock Text="Save" Margin="6,0,0,0" /></StackPanel>
@@ -148,8 +154,10 @@
                                       ToolTip="Every version: who saved it and when, what it changed, and Restore" AutomationProperties.Name="History">
                             <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource Icon}" Text="&#xE81C;" /><TextBlock Text="History" Margin="6,0,0,0" /></StackPanel>
                         </ToggleButton>
-                        <Button x:Name="MoreButton" Style="{StaticResource SubtleIconButton}" Content="&#xE712;" Click="More_Click" ToolTip="Move, copy its link, delete"
+                        <!-- The glyph has the icon font, not the button: its menu would inherit it and show boxes for letters. -->
+                        <Button x:Name="MoreButton" Style="{StaticResource SubtleButton}" Click="More_Click" ToolTip="Move, copy its link, delete"
                                 AutomationProperties.Name="More">
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE712;" FontSize="14" />
                             <Button.ContextMenu>
                                 <ContextMenu>
                                     <MenuItem Header="Copy link to this page" Command="{Binding CopyLinkCommand}" />
