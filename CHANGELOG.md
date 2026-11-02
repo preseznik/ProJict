@@ -2,6 +2,7 @@
 
 ## 0.1.37
 
+- **More of a ComfyUI workflow can be filled in.** ProJict found prompts only in CLIP Text Encode nodes, so a video workflow with its prompt in a **Text (Multiline)** node offered agents just a seed. Now a text node that feeds a prompt is the prompt, a prompt typed into the node that uses it counts too, and number nodes (Float, Int) are inputs named by their title, such as "duration" for **Float (duration)**, which takes decimals. Every seed can be "random", not just the first.
 - **Wiki History stays on as you go from page to page.** Turn on **History** and every page you open shows its own versions, until you turn it off or start editing.
 - **The dashboard's Table reads in the dark theme.** Its rows were painted white with white text, so the dark theme showed blank white rows. They now take the page's colours, and so do the rows in the import wizard's list of files.
 - **A typed API key isn't lost.** In **Settings → Tools**, a key was kept only when you clicked **Save key**: pressing Enter, picking another tool or closing the window dropped it without a word, so agents were told no key was set. Now all of those keep it, for the tool you typed it for.
