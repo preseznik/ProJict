@@ -12,7 +12,8 @@ namespace ProJict.App.Services;
 /// Chat while it's idle or busy with other things. Its other news comes the same way: ship requests and your decision on
 /// its plan, your comments on its work, and work you sent back. Agents on this computer start
 /// <c>ProJict.exe --watch-chat --as Ada</c>; API tokens GET /api/v1/chat/watch. What a watcher prints counts as told, so
-/// waitingForYou doesn't repeat it (and the other way round).
+/// waitingForYou doesn't repeat it (and the other way round). When several watchers run for one agent (one left over from
+/// an earlier session, say), each prints every line, so none takes some for itself.
 /// </summary>
 public sealed partial class AgentTools
 {
@@ -22,6 +23,54 @@ public sealed partial class AgentTools
     private static readonly TimeSpan WatchRecheck = TimeSpan.FromSeconds(30);
 
     private readonly Dictionary<string, int> _watchers = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>How long lines stay in an agent's feed for its watchers that haven't printed them yet.</summary>
+    private static readonly TimeSpan FeedKeptFor = TimeSpan.FromMinutes(10);
+
+    /// <summary>
+    /// The lines found for an agent's watchers, numbered, so every watcher for the agent prints each of them; and what
+    /// counts as told for them all.
+    /// </summary>
+    private sealed class WatchFeed
+    {
+        public readonly List<(long Number, DateTime At, string Line)> Lines = [];
+        public long Next;
+        public readonly HashSet<string> Noticed = [];
+        public TaskCompletionSource Added = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    }
+
+    private readonly Dictionary<string, WatchFeed> _feeds = new(StringComparer.OrdinalIgnoreCase);
+
+    private WatchFeed FeedOf(string agent)
+    {
+        lock (_feeds)
+        {
+            if (!_feeds.TryGetValue(agent, out var feed)) _feeds[agent] = feed = new WatchFeed();
+            return feed;
+        }
+    }
+
+    /// <summary>Adds lines to the agent's feed and wakes its other watchers.</summary>
+    private static void Publish(WatchFeed feed, IReadOnlyCollection<string> lines)
+    {
+        if (lines.Count == 0) return;
+        TaskCompletionSource added;
+        lock (feed)
+        {
+            var now = DateTime.Now;
+            foreach (var line in lines) feed.Lines.Add((feed.Next++, now, line));
+            feed.Lines.RemoveAll(l => now - l.At > FeedKeptFor);
+            added = feed.Added;
+            feed.Added = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        }
+        added.TrySetResult();
+    }
+
+    /// <summary>The feed's lines from <paramref name="from"/> on, and where the next ones start.</summary>
+    private static (List<string> Lines, long Next) Take(WatchFeed feed, long from)
+    {
+        lock (feed) return ([.. feed.Lines.Where(l => l.Number >= from).Select(l => l.Line)], feed.Next);
+    }
 
     /// <summary>Whether a chat watcher runs for the agent now.</summary>
     public bool IsWatched(string agent)
@@ -46,15 +95,29 @@ public sealed partial class AgentTools
         var agent = identity.AgentName;
         // What it was told before ProJict restarted (or by its sessions) isn't printed again.
         Recall(identity);
-        lock (_watchers) _watchers[agent] = _watchers.GetValueOrDefault(agent) + 1;
+        WatchFeed feed;
+        int watching;
+        // Counted and fed together, so a watcher stopping meanwhile can't take the feed away from under it.
+        lock (_watchers)
+        {
+            watching = _watchers[agent] = _watchers.GetValueOrDefault(agent) + 1;
+            feed = FeedOf(agent);
+        }
+        long next;
+        lock (feed) next = feed.Next;
         await _dispatcher.InvokeAsync(() => _main.Agents.Renamed());
         try
         {
             await write($"Watching ProJict Chat for {agent}: a line for each message for you (reply with post_message, the line says where), " +
                         "and for ship requests, your ship plan's approval, comments on your work and work sent back.");
+            if (watching > 1)
+                Publish(feed, [$"[ProJict] {watching} chat watchers run for {agent} now; each prints every line. If one is left over from an earlier " +
+                               "session, stop it (you'd hear things twice)."]);
             var saidOff = false;
             while (!stop.IsCancellationRequested)
             {
+                Task fed;
+                lock (feed) fed = feed.Added.Task;
                 var changed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                 Action<ChatChannel> listener = _ => changed.TrySetResult();
                 // A change in a project (a comment, a ship decision) wakes it too.
@@ -70,6 +133,8 @@ public sealed partial class AgentTools
                     // Other ProJicts' channels too: a message there wakes it as well.
                     rooms.AddRange(SharedRooms(identity));
                     foreach (var room in rooms) room.Changed += listener;
+                    // What its other watchers printed counts as told for this one too.
+                    identity.Noticed.UnionWith(feed.Noticed);
                     var found = WatchSleepLines(identity);
                     // Asleep: only that; chat and other news wait until it's woken.
                     if (IsAsleep) return found;
@@ -89,12 +154,17 @@ public sealed partial class AgentTools
                         found.AddRange(WatchAnswerLines(identity));
                     }
                     found.AddRange(WatchWorkLines(identity));
+                    feed.Noticed.UnionWith(identity.Noticed);
                     return found;
                 });
                 try
                 {
-                    foreach (var line in lines) await write(line);
-                    if (lines.Count == 0) await Task.WhenAny(changed.Task, Task.Delay(WatchRecheck, stop));
+                    // Whichever watcher found them, every one of the agent's watchers prints them.
+                    Publish(feed, lines);
+                    var (mine, after) = Take(feed, next);
+                    next = after;
+                    foreach (var line in mine) await write(line);
+                    if (mine.Count == 0) await Task.WhenAny(changed.Task, fed, Task.Delay(WatchRecheck, stop));
                 }
                 finally
                 {
@@ -111,7 +181,11 @@ public sealed partial class AgentTools
         finally
         {
             lock (_watchers)
-                if (--_watchers[agent] == 0) _watchers.Remove(agent);
+                if (--_watchers[agent] == 0)
+                {
+                    _watchers.Remove(agent);
+                    lock (_feeds) _feeds.Remove(agent);
+                }
             if (!_dispatcher.HasShutdownStarted) await _dispatcher.InvokeAsync(() => _main.Agents.Renamed());
         }
     }
