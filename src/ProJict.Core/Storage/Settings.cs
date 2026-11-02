@@ -205,6 +205,22 @@ public sealed class WorkspaceSettings
     /// <summary>The names agents picked for themselves, and the client each runs in ("Ada" → "Claude Code").</summary>
     public Dictionary<string, string>? AgentNames { get; set; }
 
+    /// <summary>How much of its usage each agent has used, by name, as it last reported (or you set it); null while none.</summary>
+    public Dictionary<string, ProJict.Core.Agents.AgentUsage>? AgentUsage { get; set; }
+
+    /// <summary>An agent's usage, whatever the case of its name.</summary>
+    public ProJict.Core.Agents.AgentUsage? UsageOf(string agent) =>
+        AgentUsage?.FirstOrDefault(u => string.Equals(u.Key, agent.Trim(), StringComparison.OrdinalIgnoreCase)).Value;
+
+    /// <summary>Keeps an agent's usage (replacing what it had), or with null forgets it.</summary>
+    public void SetUsage(string agent, ProJict.Core.Agents.AgentUsage? usage)
+    {
+        if (AgentUsage != null)
+            foreach (var key in AgentUsage.Keys.Where(k => string.Equals(k, agent.Trim(), StringComparison.OrdinalIgnoreCase)).ToList()) AgentUsage.Remove(key);
+        if (usage != null) (AgentUsage ??= [])[agent.Trim()] = usage;
+        if (AgentUsage is { Count: 0 }) AgentUsage = null;
+    }
+
     public static bool IsDefaultGroup(string? name) =>
         string.Equals(name?.Trim(), PersonalGroup, StringComparison.OrdinalIgnoreCase) ||
         string.Equals(name?.Trim(), WorkGroup, StringComparison.OrdinalIgnoreCase);

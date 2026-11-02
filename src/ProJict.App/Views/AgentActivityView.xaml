@@ -4,6 +4,32 @@
              xmlns:vm="clr-namespace:ProJict.App.ViewModels"
              xmlns:local="clr-namespace:ProJict.App.Views">
     <UserControl.Resources>
+        <!-- How much of its usage an agent has used: grey, amber from 75%, red from 90%; faded when the report is over a day old. -->
+        <Style x:Key="UsageRingStyle" TargetType="local:UsageRing">
+            <Setter Property="Width" Value="14" />
+            <Setter Property="Height" Value="14" />
+            <Setter Property="Thickness" Value="2.5" />
+            <Setter Property="Margin" Value="8,0,0,0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Fraction" Value="{Binding Usage.Fraction}" />
+            <Setter Property="ToolTip" Value="{Binding Usage.ToolTip}" />
+            <Setter Property="Track" Value="{DynamicResource ControlStrokeColorDefaultBrush}" />
+            <Setter Property="Stroke" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+            <Setter Property="Visibility" Value="{Binding Usage.HasUsage, Converter={StaticResource BoolToVis}}" />
+            <Setter Property="AutomationProperties.Name" Value="{Binding Usage.ToolTip}" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Usage.Level}" Value="Most">
+                    <Setter Property="Stroke" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Usage.Level}" Value="NearlyAll">
+                    <Setter Property="Stroke" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Usage.IsStale}" Value="True">
+                    <Setter Property="Opacity" Value="0.4" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
         <!-- Three dots that light up in turn while an agent is busy. -->
         <Style x:Key="Dot" TargetType="Ellipse">
             <Setter Property="Width" Value="6" />
@@ -18,6 +44,7 @@
                 <Border.ContextMenu>
                     <ContextMenu>
                         <MenuItem Header="Private message" Command="{Binding PrivateMessageCommand}" ToolTip="Write to this agent in Chat, just the two of you" />
+                        <MenuItem Header="Usage…" Command="{Binding SetUsageCommand}" ToolTip="How much of its usage it has used (it can report it itself with report_usage)" />
                     </ContextMenu>
                 </Border.ContextMenu>
                 <StackPanel>
@@ -34,7 +61,10 @@
                                    Background="Transparent" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" ToolTip="{Binding HearsChatToolTip}"
                                    AutomationProperties.Name="Listening to Chat" Visibility="{Binding HearsChat, Converter={StaticResource BoolToVis}}" />
                         <StackPanel>
-                            <TextBlock Text="{Binding Name}" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding Name}" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                <local:UsageRing x:Name="CardUsage" Style="{StaticResource UsageRingStyle}" />
+                            </StackPanel>
                             <TextBlock Text="{Binding Where}" Style="{StaticResource MutedText}" FontSize="12" TextTrimming="CharacterEllipsis" Margin="0,1,0,0" />
                         </StackPanel>
                     </DockPanel>
@@ -182,6 +212,7 @@
                         <MenuItem Header="Invite to channel" ItemsSource="{Binding InviteTargets}" DisplayMemberPath="Title" IsEnabled="{Binding HasInviteTargets}"
                                   Click="InviteTarget_Click" ToolTipService.ShowOnDisabled="True" ToolTip="Your channels it isn't in yet" />
                         <MenuItem Header="Rename…" Command="{Binding StartRenameCommand}" ToolTip="{Binding RenameToolTip}" ToolTipService.ShowOnDisabled="True" />
+                        <MenuItem Header="Usage…" Command="{Binding SetUsageCommand}" ToolTip="How much of its usage it has used (it can report it itself with report_usage)" />
                         <Separator />
                         <MenuItem Header="Show its card" Command="{Binding ShowCardCommand}" />
                         <MenuItem Header="Show its work in the Feed" Command="{Binding ShowWorkCommand}" />
@@ -196,7 +227,10 @@
                                  Stroke="{DynamicResource CardBackgroundFillColorDefaultBrush}" StrokeThickness="1.5" Visibility="{Binding ShowsDot, Converter={StaticResource BoolToVis}}" />
                     </Grid>
                     <StackPanel>
-                        <TextBlock x:Name="NameText" Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                        <StackPanel x:Name="NameText" Orientation="Horizontal">
+                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                            <local:UsageRing x:Name="RowUsage" Style="{StaticResource UsageRingStyle}" Width="12" Height="12" Thickness="2" />
+                        </StackPanel>
                         <TextBox x:Name="RenameBox" Text="{Binding RenameText, UpdateSourceTrigger=PropertyChanged}" Visibility="Collapsed" MaxLength="20" Margin="0,0,0,2"
                                  AutomationProperties.Name="New name" IsVisibleChanged="RenameBox_IsVisibleChanged" LostKeyboardFocus="RenameBox_LostKeyboardFocus">
                             <TextBox.InputBindings>

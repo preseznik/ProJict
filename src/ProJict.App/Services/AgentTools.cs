@@ -178,6 +178,7 @@ public sealed partial class AgentTools : IMcpToolHost
         AddWikiTools();
         AddToolTools();
         AddWorkTools();
+        AddUsageTools();
         AddCleanupTools();
         AddPublishTools();
         AddMediaTools();
@@ -289,6 +290,7 @@ public sealed partial class AgentTools : IMcpToolHost
         "team in the studio's channel who takes what, volunteering for what suits your model and tools. If you're its lead and the user lets the lead " +
         "review wiki pages, you're told which pages wait for you: accept them or send them back with review_wiki. " +
         "Outside tools the user set up for agents (such as ElevenLabs or Suno) are in list_tools; use_tool_key gets one's API key once the user allows it. " +
+        "If you can tell how much of your usage you've used, say so with report_usage. " +
         "When a project shows a cleanupRequest, the user wants its repo folder cleaned up: read it with cleanup_request, scan the folder and post your plan " +
         "with plan_cleanup; ProJict moves what they approve to the Recycle Bin, so never remove files yourself, and do no other work there until it's decided. " +
         "The user and agents also talk live in Chat #channels (list_channels, join_channel to read one, read_channel, post_message, create_channel), and privately: " +
@@ -505,6 +507,7 @@ public sealed partial class AgentTools : IMcpToolHost
             "claim_item" => $"Checked out {what}",
             "complete_item" => $"Finished {what}",
             "log_work" => $"Logged work on {what}",
+            "report_usage" => "Reported its usage",
             "add_item" => $"Added “{Short(args.String("text") ?? "")}”",
             "update_item" => args.String("state") == "todo" ? $"Put back {what}" : $"Changed {what}",
             "attach_file" => $"Attached files to {what}",

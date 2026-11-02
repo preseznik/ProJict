@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.37
+
+- **How much of its usage each agent has used.** A small ring by an agent's name, on its card and in **All agents**, fills as its usage is used up: grey, amber from 75%, red from 90%, faded when the figure is over a day old. Its tooltip says what was used ("62% of the weekly limit used · resets Thu 09:00 · reported 10 min ago"). ProJict can't read a subscription or an API balance, so agents report it themselves with the new `report_usage` (a share of their limit, or money spent of a budget), or you set it: right-click the agent › **Usage…** ("62%", "$14 of $50"; empty clears it). At 90% the agent is told to finish what it's on and hand over.
+
 ## 0.1.36 (2026-11-02)
 
 - **The dashboard as a list, a table or a board.** A switch at the top right of the dashboard shows projects as **Cards** (as before), a **List** (a line each, about three times as many on screen), a **Table** (every number in columns: click a heading to sort by it) or a **Board** with a column per status (Idea, Active, Paused, Released; drag a project to another column to change its status). List and Table show projects under their groups, like the sidebar, unless you untick **In groups**. **Panels** folds away the panels on the right for more room. ProJict remembers your choices on this computer.
