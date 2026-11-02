@@ -114,7 +114,9 @@ public sealed partial class AgentTools : IMcpToolHost
             Schema(ProjectArg, ("text", "string", "The item text; a prefix like \"BUG: \" becomes its tag.", true),
                 ("category", "string", "Category name (required unless parent is given).", false),
                 ("tag", "string", "Tag such as BUG, ADD, CHANGE, FIX, IDEA.", false),
-                PriorityArg,
+                ("priority", "enum:urgent|high|medium|low|hold|none",
+                    "Required, chosen on purpose: how pressing it is (urgent, high, medium, low), hold to park it (agents then leave it alone), or none to " +
+                    "leave it without one for the user to decide (a sub-item with none follows its parent's).", true),
                 ("parent", "string", "Id of an item to add this under as a sub-item.", false), ForceArg),
             AddItem);
         Add("update_item", "Update item",
@@ -278,7 +280,7 @@ public sealed partial class AgentTools : IMcpToolHost
         "the others and items on hold are off limits: list_items leaves them out, and you may read and comment on them but not check them out, " +
         "change or complete them. Ask the user questions or report progress with add_comment (offering options? give them as choices, which the user " +
         "answers with a click), and check list_comments for their " +
-        "answers. File problems you notice with add_item, and put documentation or reports for people in a note with write_doc. " +
+        "answers. File problems you notice with add_item, choosing each one's priority, and put documentation or reports for people in a note with write_doc. " +
         "Knowledge that lasts (architecture, how things work, decisions) goes in the wiki: list_wiki, read_wiki and write_wiki (a whole page, or a section by heading, " +
         "in Markdown with [[Page name]] links); pass the version you read so your change merges with others', and what you write waits for the user's review. " +
         "Keep a project's details (repo folder, GitHub link, description, instructions, how it's shipped) up to date with update_project, and set its test_build when you make a build worth trying (the user runs it from the project page). " +
@@ -892,6 +894,10 @@ public sealed partial class AgentTools : IMcpToolHost
     private string AddItem(McpSession session, Args args, List<Attachment> files)
     {
         var text = args.Required("text").Trim();
+        // Every item an agent adds says how pressing it is, chosen on purpose ("none" too): asked before anything else
+        // happens, such as checking out the parent.
+        var priority = PriorityArgument(args) ?? throw new McpToolException(PriorityNeeded(
+            args.String("parent") is { } under ? FindItem(session, under).Project : ProjectFor(session, args), subItem: args.String("parent") != null));
         Project project;
         Guid? parentId = null;
         if (args.String("parent") is { } parentText)
@@ -913,12 +919,18 @@ public sealed partial class AgentTools : IMcpToolHost
 
         var (parsedTag, parsedText) = TxtListParser.SplitTag(text);
         var tag = args.String("tag") is { } explicitTag ? (explicitTag.Trim().Length == 0 ? null : explicitTag.Trim().ToUpperInvariant()) : parsedTag;
-        var item = new TodoItem { Text = parsedTag != null && parsedText.Length > 0 ? parsedText : text, Tag = tag, Priority = PriorityArgument(args) ?? Priority.None };
+        var item = new TodoItem { Text = parsedTag != null && parsedText.Length > 0 ? parsedText : text, Tag = tag, Priority = priority };
         item.AddActivity(SignAs(session, project), "Added it.", agent: true);
         _main.GetProjectViewModel(project).AgentAdd(item, category, parentId);
         _state.StatusText = $"{SignAs(session, project)} added “{Short(item.Text)}” to {project.Name}.";
         return Json(ItemJson(project.Find(item.Id)!, details: false, RulesFor(project)));
     }
+
+    /// <summary>add_item without a priority: the choices, what each means, and which the user lets agents work on.</summary>
+    private string PriorityNeeded(Project project, bool subItem) =>
+        "Choose the new item's priority (priority): urgent (needs doing now), high (next), medium (soon), low (when there's time), " +
+        "hold (parked: agents leave it alone) or " + (subItem ? "none (it follows its parent's priority)." : "none (no priority: the user decides).") +
+        $" In {project.Name}, the user lets AI agents work on {AgentAccess.Describe(RulesFor(project).Allowed) ?? "no items at the moment"}.";
 
     private string UpdateItem(McpSession session, Args args, List<Attachment> files)
     {
