@@ -17,6 +17,8 @@ public sealed partial class AgentTools
     private const int MaxWaitSeconds = 60;
     private static readonly HashSet<string> ChatTools =
         ["list_channels", "create_channel", "read_channel", "post_message", "edit_message", "join_channel", "invite_to_channel", "moderate_channel", "wait_for_messages"];
+    /// <summary>Chat's tools, for an API token that may only use Chat.</summary>
+    public static IReadOnlySet<string> ChatToolNames => ChatTools;
 
     private static readonly (string, string, string, bool) ChannelArg = ("channel", "string",
         "The channel's name, e.g. grid2vr-hud (with or without #), or @name for your private conversation with the user or an agent.", true);

@@ -63,6 +63,45 @@ public sealed partial class AgentActivityViewModel : ObservableObject, IStudioHi
             if (!channel.Direct) return;
             foreach (var card in Live.Where(c => c.IsFocused)) card.RefreshConversation();
         };
+        // Agents connected to another ProJict came, went away or left.
+        main.Agents.PresenceChanged += VisitorsChanged;
+        main.Guest.PresenceChanged += _ => VisitorsChanged();
+    }
+
+    // ───────────── Agents in other ProJicts ─────────────
+
+    /// <summary>An agent connected to another ProJict connected to this one: online or away there, and whose ProJict.</summary>
+    internal sealed record Visitor(string Name, string From, bool Away);
+
+    /// <summary>
+    /// On a host, its guests' agents; on a guest, the host's (and its other guests'), but not this one's own coming back.
+    /// Online or away only.
+    /// </summary>
+    internal IReadOnlyList<Visitor> Visitors()
+    {
+        var here = _main.Agents.Sessions.Select(s => s.AgentName).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var visitors = _main.Agents.RemoteAgents().Where(a => a.State != PresenceState.Offline && !here.Contains(a.Name))
+            .Select(a => new Visitor(a.Name, a.Through, a.State == PresenceState.Away)).ToList();
+        foreach (var host in _main.Guest.Connections)
+            foreach (var name in host.AgentsThere.Order(StringComparer.CurrentCultureIgnoreCase))
+            {
+                if (!host.Presence.TryGetValue(name, out var state) || state == PresenceState.Offline || here.Contains(name)) continue;
+                if (host.MyName is { } me && name.EndsWith($" (via {me})", StringComparison.OrdinalIgnoreCase)) continue;
+                if (visitors.Any(v => string.Equals(v.Name, name, StringComparison.OrdinalIgnoreCase))) continue;
+                visitors.Add(new Visitor(name, host.HostName, state == PresenceState.Away));
+            }
+        return visitors;
+    }
+
+    private void VisitorsChanged()
+    {
+        if (!_clock.Dispatcher.CheckAccess())
+        {
+            _clock.Dispatcher.BeginInvoke(VisitorsChanged);
+            return;
+        }
+        RefreshAgentList();
+        UpdateOffice();
     }
 
     private AgentsViewSettings View => _state.AppSettings.AgentsView;
@@ -183,6 +222,7 @@ public sealed partial class AgentActivityViewModel : ObservableObject, IStudioHi
         foreach (var (name, at) in _seenLive) if (!seen.TryGetValue(name, out var last) || at > last) seen[name] = at;
         // A connected agent's earlier names (it picked another, or you renamed it) are the same agent.
         var liveNames = live.SelectMany(s => s.FormerNames.Append(s.AgentName)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var visitors = Visitors().Where(v => !liveNames.Contains(v.Name)).ToList();
         string? ClientOf(string name) => registry.FirstOrDefault(n => string.Equals(n.Key, name, StringComparison.OrdinalIgnoreCase)).Value;
         // Rows stay as long as their agent does (connected, or not), so the list doesn't flicker and a rename under way stays.
         AgentListRow RowFor(string name, McpSession? session, string? client, DateTime? at)
@@ -192,12 +232,21 @@ public sealed partial class AgentActivityViewModel : ObservableObject, IStudioHi
             row.Seen(client, at);
             return row;
         }
+        // Then agents connected to other ProJicts (online, then away), then the rest.
         List<AgentListRow> rows =
         [
             .. live.Select(s => RowFor(s.AgentName, s, s.Client, AgentsViewSettings.LastSeen(s))),
-            .. seen.Where(n => !liveNames.Contains(n.Key)).OrderByDescending(n => n.Value).ThenBy(n => n.Key, StringComparer.CurrentCultureIgnoreCase)
+            .. visitors.OrderBy(v => v.Away).Select(v =>
+            {
+                var row = RowFor(v.Name, null, ClientOf(v.Name), seen.TryGetValue(v.Name, out var at) && at != DateTime.MinValue ? at : null);
+                row.Visiting(v.From, v.Away);
+                return row;
+            }),
+            .. seen.Where(n => !liveNames.Contains(n.Key) && !visitors.Any(v => string.Equals(v.Name, n.Key, StringComparison.OrdinalIgnoreCase)))
+                .OrderByDescending(n => n.Value).ThenBy(n => n.Key, StringComparer.CurrentCultureIgnoreCase)
                 .Select(n => RowFor(n.Key, null, ClientOf(n.Key), n.Value == DateTime.MinValue ? null : n.Value)),
         ];
+        foreach (var row in rows.Where(r => r.IsVisitor && !visitors.Any(v => string.Equals(v.Name, r.Name, StringComparison.OrdinalIgnoreCase)))) row.Visiting(null, false);
         for (var i = 0; i < rows.Count; i++)
         {
             if (i < AllAgents.Count && AllAgents[i] == rows[i]) continue;
@@ -206,7 +255,8 @@ public sealed partial class AgentActivityViewModel : ObservableObject, IStudioHi
             else AllAgents.Insert(i, rows[i]);
         }
         while (AllAgents.Count > rows.Count) AllAgents.RemoveAt(AllAgents.Count - 1);
-        AgentListCount = live.Count == rows.Count ? (live.Count == 1 ? "1 connected" : $"{live.Count} connected") : $"{live.Count} connected · {rows.Count} in all";
+        var connected = (live.Count == 1 ? "1 connected" : $"{live.Count} connected") + (visitors.Count > 0 ? $" · {visitors.Count} in other ProJicts" : "");
+        AgentListCount = live.Count + visitors.Count == rows.Count ? connected : $"{connected} · {rows.Count} in all";
         TickAgentList(DateTime.Now);
         OnPropertyChanged(nameof(AgentListCount));
     }
@@ -510,6 +560,7 @@ public sealed partial class AgentActivityViewModel : ObservableObject, IStudioHi
             : "In studios: " + string.Join("; ", inStudios.GroupBy(c => StudioOf(c.Session)!.Name).Select(g => $"{string.Join(", ", g.Select(c => c.Name))} ({g.Key})"));
         Office.Update(inStudios.Count == 0 ? Live : [.. Live.Except(inStudios)], DateTime.Now, s => s.Claimed.Count > 0 && CheckedOut(s, project).Count > 0,
             IsWatching, LastSaid, Studio, IsAsleep);
+        Office.SetVisitors(Visitors(), MessagePrivately);
     }
 
     // ───────────── Everyone to sleep ─────────────

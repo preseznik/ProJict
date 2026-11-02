@@ -10,7 +10,7 @@
     <AssemblyName>ProJict</AssemblyName>
     <RootNamespace>ProJict.App</RootNamespace>
     <ApplicationIcon>Assets\ProJict.ico</ApplicationIcon>
-    <Version>0.1.35</Version>
+    <Version>0.1.36</Version>
     <Product>ProJict</Product>
     <Description>Project TODO / DONE lists for Windows</Description>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>

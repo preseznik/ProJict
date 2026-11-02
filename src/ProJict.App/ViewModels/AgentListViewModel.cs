@@ -33,14 +33,32 @@ public sealed partial class AgentListRow : ObservableObject
     {
         Client = client;
         LastSeen = lastSeen;
-        if (!IsConnected) Detail = OfflineDetail(DateTime.Now);
+        if (!IsConnected && !IsVisitor) Detail = OfflineDetail(DateTime.Now);
     }
     public WorkerBadge Badge => WorkerBadge.For([Name])[0];
     public bool IsConnected => Session != null;
+
+    /// <summary>Connected to another ProJict that's connected to this one: whose, and whether it's away there.</summary>
+    public string? VisitingFrom { get; private set; }
+    public bool IsVisitor => VisitingFrom != null;
+    public bool IsAway { get; private set; }
+    /// <summary>The green (or amber, away) dot: connected here, or to another ProJict.</summary>
+    public bool ShowsDot => IsConnected || IsVisitor;
+
+    internal void Visiting(string? from, bool away)
+    {
+        if (VisitingFrom == from && IsAway == away) return;
+        VisitingFrom = from;
+        IsAway = away;
+        if (from != null) Detail = $"AI agent connected to {from}'s ProJict · {(away ? "away" : "online")}";
+        else if (!IsConnected) Detail = OfflineDetail(DateTime.Now);
+        foreach (var name in new[] { nameof(VisitingFrom), nameof(IsVisitor), nameof(IsAway), nameof(ShowsDot), nameof(ToolTip) }) OnPropertyChanged(name);
+    }
     /// <summary>"Claude Code · Building · in GRID2VR", or "Codex · last seen 3 Oct".</summary>
     [ObservableProperty] private string _detail = "";
     public string ToolTip => IsConnected
         ? $"{Session!.FullName}, connected since {Session.ConnectedAt.ToString(Session.ConnectedAt.Date == DateTime.Today ? "HH:mm" : "d MMM HH:mm", CultureInfo.CurrentCulture)}.\nClick to show its card; right-click for more."
+        : IsVisitor ? $"{Name} is an AI agent connected to {VisitingFrom}'s ProJict ({(IsAway ? "away" : "online")}).\nRight-click to write to it or invite it to a channel."
         : $"{Name} isn't connected now.\nRight-click to write to it or invite it: it gets the message when it comes back as {Name}.";
 
     /// <summary>What it's doing now (connected), refreshed every second while the view shows.</summary>

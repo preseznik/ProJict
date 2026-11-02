@@ -77,6 +77,12 @@ public sealed partial class ItemRowViewModel : ObservableObject
         (Item.Attachments ?? []).Select(a => new AttachmentViewModel(Owner, a, () => Owner.RemoveAttachment(this, a), copy => Owner.AttachToItem(Item.Id, copy))).ToList();
     public bool HasAttachments => Item.HasAttachments;
 
+    private IReadOnlyList<MediaLinkViewModel>? _media;
+    /// <summary>Big files linked where they are (captures, edits, exports).</summary>
+    public IReadOnlyList<MediaLinkViewModel> Media => _media ??=
+        (Item.Media ?? []).Select(m => new MediaLinkViewModel(Owner.Project, m, () => Owner.UnlinkMedia(this, m))).ToList();
+    public bool HasMedia => Item.Media is { Count: > 0 };
+
     /// <summary>The agent working on the item, shown as a chip while it is in progress.</summary>
     public string? ClaimedBy => Item.State == ItemState.InProgress ? Item.ClaimedBy : null;
     public bool NeedsReview => Item.NeedsReview;
@@ -213,6 +219,7 @@ public sealed partial class ItemRowViewModel : ObservableObject
     [RelayCommand] private void AddChild() => Owner.AddChild(this);
     [RelayCommand] private void Attach() => Owner.BrowseAttachments(this);
     [RelayCommand] private void LogTime() => Owner.LogTime(this);
+    [RelayCommand] private void LinkMedia() => Owner.BrowseMedia(this);
     [RelayCommand] private void PasteAttachments() => Owner.PasteAttachments(this);
     [RelayCommand] private void AcceptReview() => Owner.AcceptReview(this);
     [RelayCommand] private void SetPriority(Priority priority) => Owner.SetPriority(this, priority);

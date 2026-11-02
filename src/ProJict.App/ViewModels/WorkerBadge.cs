@@ -19,10 +19,12 @@ public sealed record WorkerBadge(string Name, string Initials, Brush Background)
         return badges;
     }
 
-    /// <summary>"Claude Code · login fix" → "CC", "Codex" → "C".</summary>
+    /// <summary>"Claude Code · login fix" → "CC", "Codex" → "C", "Hermes (via alice)" → "H" (where it's from isn't part of its name).</summary>
     public static string InitialsOf(string name)
     {
-        var words = name.Split('·')[0].Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var own = name.Split('·')[0];
+        if (own.IndexOf(" (via ", StringComparison.Ordinal) is > 0 and var via) own = own[..via];
+        var words = own.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         return string.Concat(words.Take(2).Select(w => char.ToUpperInvariant(w[0])));
     }
 

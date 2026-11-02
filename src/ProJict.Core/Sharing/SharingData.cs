@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json.Serialization;
 using ProJict.Core.Storage;
 
 namespace ProJict.Core.Sharing;
@@ -28,12 +29,15 @@ public sealed class GuestAccount
     public bool Sees(string group) => Groups == null || Groups.Contains(group, StringComparer.OrdinalIgnoreCase);
 }
 
-/// <summary>A one-time code to give someone; whoever joins with it still needs your approval.</summary>
+/// <summary>A one-time code to give someone; whoever joins with it needs your approval, unless you let them in with it.</summary>
 public sealed class Invite
 {
     public string Code { get; set; } = "";
     public GuestRole Role { get; set; }
     public List<string>? Groups { get; set; }
+    /// <summary>Whoever joins with it is in at once, with its role and groups, without asking you (you chose so when making it).</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool LetsIn { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.Now;
     public DateTime ExpiresAt { get; set; }
 

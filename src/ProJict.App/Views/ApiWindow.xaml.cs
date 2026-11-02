@@ -19,6 +19,11 @@ public partial class ApiWindow : Window
 
     public ApiViewModel ViewModel => _vm;
 
+    private void CopySetup_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_vm.CopySetup()) MessageBox.Show(this, "The clipboard is busy; select the text and press Ctrl+C.", "ProJict", MessageBoxButton.OK, MessageBoxImage.Information);
+    }
+
     private void CopySecret_Click(object sender, RoutedEventArgs e)
     {
         if (!_vm.CopySecret()) MessageBox.Show(this, "The clipboard is busy; select the token and press Ctrl+C.", "ProJict", MessageBoxButton.OK, MessageBoxImage.Information);

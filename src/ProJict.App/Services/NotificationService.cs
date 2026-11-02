@@ -144,6 +144,10 @@ public sealed class NotificationService
         if (project.OpenShip is { State: ShipState.Planned } ship)
             events.Add(new Event(NotificationKind.ShipPlan, $"ship:{ship.Id}", project.Id, where, "A ship plan waits for your approval",
                 $"{ship.PlannedBy ?? "An AI agent"} planned shipping {where}{(ship.Version is { } v ? " " + v : "")}.", () => _main.OpenProject(project).RevealShip(ship)));
+        // Like a ship plan: something goes out once you approve it.
+        foreach (var plan in (project.Publishes ?? []).Where(p => p.State == PublishState.Planned))
+            events.Add(new Event(NotificationKind.ShipPlan, $"publish:{plan.Id}:{plan.PlannedAt.Ticks}", project.Id, where, "A publish plan waits for your decision",
+                $"{plan.PlannedBy} planned publishing “{plan.Title}” ({where}).", () => _main.OpenProject(project).RevealPublish(plan)));
         return events;
     }
 

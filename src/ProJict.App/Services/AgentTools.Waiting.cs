@@ -97,6 +97,8 @@ public sealed partial class AgentTools
                 if (session.Noticed.Add(key)) lines.Add(line);
             foreach (var (key, line) in WikiReviewLines(session, project))
                 if (session.Noticed.Add(key)) lines.Add(line);
+            foreach (var (key, line) in PublishLines(session, project))
+                if (session.Noticed.Add(key)) lines.Add(line);
             if (project.OpenShip is { } ship)
             {
                 if (ship.State == ShipState.Requested && session.Noticed.Add($"ship:{ship.Id}:requested"))

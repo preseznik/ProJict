@@ -41,6 +41,7 @@ public sealed partial class ProjectViewModel : ObservableObject
         _sortByPriority = state.Settings.SortByPriority;
         RebuildAll();
         ReloadSideLists();
+        RefreshPublish();
         state.ProjectReplaced += p =>
         {
             if (p != Project) return;
@@ -346,6 +347,7 @@ public sealed partial class ProjectViewModel : ObservableObject
             OnPropertyChanged(p);
         RefreshIssueSync();
         RefreshShip();
+        RefreshPublish();
         RefreshTestBuild();
         RefreshCleanup();
         RefreshStudio();
@@ -1157,6 +1159,14 @@ public sealed partial class ProjectViewModel : ObservableObject
     /// <summary>Copies the files into the data folder (off the UI thread, they may be large) and attaches them to the row's item.</summary>
     public async Task AttachFiles(ItemRowViewModel row, IReadOnlyList<string> paths)
     {
+        // Video and audio are big: linked where they are rather than copied.
+        var big = paths.Where(p => File.Exists(p) && MediaLinks.IsBig(p)).ToList();
+        if (big.Count > 0)
+        {
+            LinkMedia(row, big);
+            paths = paths.Except(big).ToList();
+            if (paths.Count == 0) return;
+        }
         var files = paths.Where(File.Exists).ToList();
         if (files.Count == 0)
         {

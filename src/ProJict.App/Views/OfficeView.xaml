@@ -320,6 +320,60 @@
             </DataTemplate.Triggers>
         </DataTemplate>
 
+        <!-- An agent visiting from another ProJict: at the back with a suitcase, asleep when it's away there. Hover for who; click to write to it. -->
+        <DataTemplate DataType="{x:Type vm:OfficeVisitorViewModel}">
+            <Canvas x:Name="Root" Background="Transparent" Cursor="Hand" ToolTip="{Binding ToolTip}">
+                <Canvas.RenderTransform>
+                    <TransformGroup>
+                        <ScaleTransform ScaleX="{Binding Scale}" ScaleY="{Binding Scale}" />
+                        <TranslateTransform X="{Binding X}" Y="{Binding Y}" />
+                    </TransformGroup>
+                </Canvas.RenderTransform>
+                <Canvas.InputBindings>
+                    <MouseBinding MouseAction="LeftClick" Command="{Binding MessageCommand}" />
+                </Canvas.InputBindings>
+                <Rectangle Canvas.Left="-20" Canvas.Top="-80" Width="44" Height="106" Fill="Transparent" />
+                <Ellipse Canvas.Left="-17" Canvas.Top="20" Width="34" Height="7" Fill="Black" Opacity="0.13" />
+                <!-- Legs -->
+                <Rectangle Canvas.Left="3" Canvas.Top="-2" Width="8" Height="24" RadiusX="3" RadiusY="3" Fill="{StaticResource Metal}" />
+                <Rectangle Canvas.Left="2" Canvas.Top="19" Width="12" Height="5" RadiusX="2" RadiusY="2" Fill="{StaticResource Ink}" />
+                <Rectangle Canvas.Left="-11" Canvas.Top="-2" Width="8" Height="24" RadiusX="3" RadiusY="3" Fill="{StaticResource Metal}" />
+                <Rectangle Canvas.Left="-14" Canvas.Top="19" Width="12" Height="5" RadiusX="2" RadiusY="2" Fill="{StaticResource Ink}" />
+                <!-- Body with its initials -->
+                <Rectangle Canvas.Left="-15" Canvas.Top="-32" Width="30" Height="32" RadiusX="8" RadiusY="8" Fill="{Binding Badge.Background}" />
+                <Rectangle Canvas.Left="-15" Canvas.Top="-32" Width="30" Height="32" RadiusX="8" RadiusY="8" Fill="Black" Opacity="0.12" />
+                <TextBlock Canvas.Left="-15" Canvas.Top="-25" Width="30" TextAlignment="Center" Text="{Binding Badge.Initials}" FontSize="10" FontWeight="Bold" Foreground="White" />
+                <!-- A suitcase: it's visiting -->
+                <Rectangle Canvas.Left="14" Canvas.Top="-15" Width="3" Height="10" Fill="{Binding Badge.Background}" />
+                <Path Data="M 15,-4 L 15,-8 L 23,-8 L 23,-4" Stroke="#5B4636" StrokeThickness="1.6" />
+                <Rectangle Canvas.Left="11" Canvas.Top="-4" Width="17" Height="13" RadiusX="2" RadiusY="2" Fill="#A0784C" Stroke="#5B4636" StrokeThickness="1" />
+                <Rectangle Canvas.Left="11" Canvas.Top="1" Width="17" Height="1.4" Fill="#5B4636" />
+                <!-- Head -->
+                <Line X1="0" Y1="-64" X2="0" Y2="-72" Stroke="{Binding Badge.Background}" StrokeThickness="2" />
+                <Ellipse x:Name="Antenna" Canvas.Left="-3.5" Canvas.Top="-77" Width="7" Height="7" Fill="#60A5FA" />
+                <Rectangle Canvas.Left="-18" Canvas.Top="-65" Width="36" Height="30" RadiusX="9" RadiusY="9" Fill="{Binding Badge.Background}" />
+                <Rectangle Canvas.Left="-15" Canvas.Top="-60" Width="27" Height="19" RadiusX="6" RadiusY="6" Fill="#E8F1FF" />
+                <Canvas x:Name="Eyes">
+                    <Ellipse Canvas.Left="-11" Canvas.Top="-54" Width="5" Height="7" Fill="{StaticResource Ink}" />
+                    <Ellipse Canvas.Left="-1" Canvas.Top="-54" Width="5" Height="7" Fill="{StaticResource Ink}" />
+                </Canvas>
+                <Canvas x:Name="Shut" Visibility="Collapsed">
+                    <Rectangle Canvas.Left="-12" Canvas.Top="-50" Width="7" Height="1.6" Fill="{StaticResource Ink}" />
+                    <Rectangle Canvas.Left="-2" Canvas.Top="-50" Width="7" Height="1.6" Fill="{StaticResource Ink}" />
+                </Canvas>
+                <Rectangle Canvas.Left="-6" Canvas.Top="-45" Width="9" Height="1.6" Fill="{StaticResource Ink}" />
+                <TextBlock x:Name="Zzz" Canvas.Left="6" Canvas.Top="-92" Text="z z Z" FontSize="12" FontWeight="Bold" Foreground="#60A5FA" Visibility="Collapsed" />
+            </Canvas>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding Away}" Value="True">
+                    <Setter TargetName="Eyes" Property="Visibility" Value="Collapsed" />
+                    <Setter TargetName="Shut" Property="Visibility" Value="Visible" />
+                    <Setter TargetName="Zzz" Property="Visibility" Value="Visible" />
+                    <Setter TargetName="Antenna" Property="Fill" Value="#94A3B8" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
         <!-- The water cooler at the front, drawn by depth: its base is at (X, Y). -->
         <DataTemplate DataType="{x:Type vm:OfficeCoolerViewModel}">
             <Canvas IsHitTestVisible="False">
@@ -645,6 +699,8 @@
             </Button>
             <TextBlock DockPanel.Dock="Right" Text="{Binding MoreText}" Style="{StaticResource MutedText}" FontSize="12" Margin="12,0,0,0"
                        Visibility="{Binding MoreText, Converter={StaticResource EmptyToVis}}" />
+            <TextBlock DockPanel.Dock="Bottom" Text="{Binding VisitorsText}" Style="{StaticResource MutedText}" FontSize="12" Margin="0,2,0,0" TextWrapping="Wrap"
+                       Visibility="{Binding VisitorsText, Converter={StaticResource EmptyToVis}}" />
             <TextBlock DockPanel.Dock="Bottom" Text="{Binding Elsewhere}" Style="{StaticResource MutedText}" FontSize="12" Margin="0,2,0,0" TextWrapping="Wrap"
                        ToolTip="Agents hired in a project's studio work there: choose the project at the top to see its studio"
                        Visibility="{Binding Elsewhere, Converter={StaticResource EmptyToVis}}" />

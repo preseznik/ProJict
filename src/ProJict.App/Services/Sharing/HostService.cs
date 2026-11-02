@@ -195,10 +195,11 @@ public sealed partial class HostService
 
     // ───────────── Invites and guests ─────────────
 
-    public Invite CreateInvite(GuestRole role, List<string>? groups)
+    /// <param name="letsIn">Whoever joins with it is in at once, without asking you.</param>
+    public Invite CreateInvite(GuestRole role, List<string>? groups, bool letsIn = false)
     {
         Data.Invites.RemoveAll(i => !i.IsValid(DateTime.Now));
-        var invite = new Invite { Code = SharingData.NewInviteCode(), Role = role, Groups = groups, ExpiresAt = DateTime.Now.AddHours(24) };
+        var invite = new Invite { Code = SharingData.NewInviteCode(), Role = role, Groups = groups, LetsIn = letsIn, ExpiresAt = DateTime.Now.AddHours(24) };
         Data.Invites.Add(invite);
         _store.Save();
         Changed?.Invoke();
@@ -318,6 +319,13 @@ public sealed partial class HostService
                             return null;
                         }
                         var r = new JoinRequest(name, device, address, invite);
+                        if (invite.LetsIn)
+                        {
+                            // You let them in when you made the code: no asking.
+                            r.Answer.TrySetResult(JoinAnswer.Approve);
+                            _state.StatusText = $"{name} ({device}) joined with invite {invite.Code} as {invite.Role.ToString().ToLowerInvariant()}.";
+                            return r;
+                        }
                         Requests.Add(r);
                         _state.StatusText = r.Text;
                         Changed?.Invoke();
@@ -328,7 +336,7 @@ public sealed partial class HostService
                         await wire.SendAsync(Denied("That invite code isn't valid. Codes work once, for 24 hours."), ct).ConfigureAwait(false);
                         return;
                     }
-                    await wire.SendAsync(Wire.Message("pending", ("host", _state.UserName)), ct).ConfigureAwait(false);
+                    if (!request.Invite.LetsIn) await wire.SendAsync(Wire.Message("pending", ("host", _state.UserName)), ct).ConfigureAwait(false);
                     // Wait for your answer; the guest may give up meanwhile (its connection closes).
                     pendingRead = wire.ReadAsync(ct);
                     var giveUp = Task.Delay(TimeSpan.FromMinutes(15), ct);
