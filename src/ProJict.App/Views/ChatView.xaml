@@ -563,6 +563,24 @@
                                 <TextBlock Text="{Binding AccessText}" FontSize="11" />
                             </StackPanel>
                         </Border>
+                        <!-- Its project: a click opens the board; not linked yet but named after one, an offer to link it. -->
+                        <Button x:Name="ProjectButton" Style="{StaticResource SubtleButton}" Margin="10,0,0,0" Padding="8,3" VerticalAlignment="Center"
+                                Command="{Binding OpenLinkCommand}" ToolTip="{Binding LinkedProjectToolTip}" AutomationProperties.Name="Open the project"
+                                Visibility="{Binding HasLinkedProject, Converter={StaticResource BoolToVis}}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Style="{StaticResource Icon}" Text="&#xE8B7;" FontSize="13" Margin="0,1,6,0" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                                <TextBlock Text="{Binding LinkedProjectName}" FontWeight="SemiBold" />
+                                <TextBlock Style="{StaticResource Icon}" Text="&#xE8A7;" FontSize="10" Margin="6,2,0,0" Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="SuggestLinkButton" Style="{StaticResource SubtleButton}" Margin="8,0,0,0" Padding="8,3" VerticalAlignment="Center"
+                                Command="{Binding LinkToSuggestedCommand}" ToolTip="{Binding SuggestLinkToolTip}" AutomationProperties.Name="{Binding SuggestLinkText}"
+                                Visibility="{Binding HasSuggestedProject, Converter={StaticResource BoolToVis}}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Style="{StaticResource Icon}" Text="&#xE71B;" FontSize="12" Margin="0,1,6,0" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                <TextBlock Text="{Binding SuggestLinkText}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                            </StackPanel>
+                        </Button>
                     </StackPanel>
                     <TextBox x:Name="TopicBox" Style="{StaticResource HoverHintTextBox}" Tag="topic…" Margin="-2,2,0,0" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                              Text="{Binding TopicText, UpdateSourceTrigger=LostFocus}" IsReadOnly="{Binding IsModerator, Converter={StaticResource InvBool}}"

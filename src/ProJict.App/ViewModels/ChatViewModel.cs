@@ -461,6 +461,7 @@ public sealed partial class ChatViewModel : ObservableObject
             OnPropertyChanged(name);
         RefreshInviteChoices();
         RefreshPresence();
+        SyncLink();
         SyncMessages();
         SendCommand.NotifyCanExecuteChanged();
     }

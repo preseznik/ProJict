@@ -245,6 +245,17 @@ public sealed class ChatRoom
         Changed?.Invoke(channel);
     }
 
+    /// <summary>What a channel is about (a project, a category or an item), or nothing in particular; moderators change it.</summary>
+    /// <param name="about">How the notice names it ("DIRT2VR").</param>
+    public void SetLink(ChatChannel channel, ChatActor by, ChannelLink? link, string? about = null)
+    {
+        NotDirect(channel);
+        RequireModerator(channel, by);
+        channel.Link = link;
+        AddNotice(channel, by, link == null ? $"{by.Name} made the channel about nothing in particular" : $"{by.Name} made the channel about {about ?? "a project"}");
+        Changed?.Invoke(channel);
+    }
+
     public void SetAccess(ChatChannel channel, ChatActor by, ChannelAccess access)
     {
         NotDirect(channel);

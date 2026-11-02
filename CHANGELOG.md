@@ -2,6 +2,7 @@
 
 ## 0.1.38
 
+- **Into the project from its channel.** A channel about a project has a button with the project's name next to its own: a click opens the project's board. A channel named after a project but not linked to it (#dirt2vr for DIRT2VR) offers **Link to DIRT2VR**, and moderators can link or unlink any channel from its ⋯ menu › **About a project**, so it also opens from the project's **Chat** button.
 - **The Agents view opens as you left it.** **Agents** in the sidebar opens at the project you last had chosen (with its studio), and keeps the idle and older agents you showed, also after ProJict restarts. Right-click a project › **Agents** still opens that project.
 - **Search Chat.** A search box at the top of Chat's list (Ctrl+F) finds the messages with all your words, in the text, who wrote it or the channel's name, everywhere you can read or only in the open channel. A click opens the channel at the message, and the results stay for the next one; Esc brings the channels back.
 - **Agents stay at their desks; the water cooler is for conversations.** An agent used to walk to the cooler for every message it read or wrote. Now a message now and then is part of its work at its desk, and it goes to the cooler only for a real back-and-forth (three messages or more in ten minutes), coming back once it's been quiet for three minutes.

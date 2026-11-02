@@ -216,6 +216,26 @@ public partial class ChatView : UserControl
             menu.Items.Add(new Separator());
             menu.Items.Add(new MenuItem { Header = _vm.IsInviteOnly ? "Open it to everyone who can see its project" : "Make it invite only", Command = _vm.ToggleAccessCommand });
         }
+        if (_vm.CanLink)
+        {
+            // What it's about: a project (it opens from there, and the project from here), or nothing in particular.
+            var about = new MenuItem { Header = "About a project" };
+            var current = _vm.Channel.Link?.ProjectId;
+            foreach (var project in _vm.LinkableProjects)
+            {
+                var item = new MenuItem { Header = project.Name.Replace("_", "__"), IsCheckable = true, IsChecked = project.Id == current };
+                item.Click += (_, _) => _vm.LinkTo(project);
+                about.Items.Add(item);
+            }
+            if (current != null)
+            {
+                about.Items.Add(new Separator());
+                var none = new MenuItem { Header = "Not about a project" };
+                none.Click += (_, _) => _vm.LinkTo(null);
+                about.Items.Add(none);
+            }
+            menu.Items.Add(about);
+        }
         if (_vm.IsOwner)
         {
             menu.Items.Add(new Separator());
