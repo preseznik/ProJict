@@ -171,6 +171,14 @@
                             </Button>
                             <ItemsControl DockPanel.Dock="Left" ItemsSource="{Binding Channels}" ItemTemplate="{StaticResource ChannelChipTemplate}" ItemsPanel="{StaticResource HorizontalPanel}"
                                           Focusable="False" Margin="0,0,2,0" Visibility="{Binding HasChannels, Converter={StaticResource BoolToVis}}" />
+                            <!-- Time spent on it (in progress, or logged), with what agents used in the tooltip -->
+                            <Border DockPanel.Dock="Left" Style="{StaticResource TagChip}" Background="{DynamicResource SubtleFillColorSecondaryBrush}" Margin="0,0,6,0"
+                                    ToolTip="{Binding TimeText}" Visibility="{Binding TimeChip, Converter={StaticResource EmptyToVis}}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Style="{StaticResource Icon}" Text="&#xE916;" FontSize="10" Margin="0,1,4,0" />
+                                    <TextBlock Text="{Binding TimeChip}" FontSize="11" />
+                                </StackPanel>
+                            </Border>
                             <TextBlock Text="{Binding ActivityText}" ToolTip="{Binding ActivityToolTip}" Style="{StaticResource MutedText}" FontSize="11.5"
                                        TextTrimming="CharacterEllipsis" Margin="2,0,0,0" Visibility="{Binding ActivityText, Converter={StaticResource EmptyToVis}}" />
                         </DockPanel>
@@ -1038,6 +1046,147 @@
                             </DockPanel>
                         </StackPanel>
                     </Grid>
+                </ScrollViewer>
+            </TabItem>
+            <!-- Time: how long was spent here, by whom, week by week, and the longest items -->
+            <TabItem x:Name="TimeTab" Header="Time" IsSelected="{Binding IsTimeShown, Mode=OneWayToSource}"
+                     Visibility="{Binding IsNotInbox, Converter={StaticResource BoolToVis}}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="4,12,12,12">
+                    <StackPanel MaxWidth="980" HorizontalAlignment="Left">
+                        <TextBlock Text="{Binding TimeHint}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,12" />
+                        <TextBlock Text="No time yet: it counts while items are in progress, and when you log it." Style="{StaticResource MutedText}"
+                                   Visibility="{Binding HasTime, Converter={StaticResource InvBoolToVis}}" />
+                        <StackPanel Visibility="{Binding HasTime, Converter={StaticResource BoolToVis}}">
+                            <ItemsControl ItemsSource="{Binding TimeTiles}" Focusable="False">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:StatTile}">
+                                        <Border Style="{StaticResource Card}" Padding="14,10" Margin="0,0,10,10" MinWidth="130" ToolTip="{Binding ToolTip}">
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding Value}" FontSize="22" FontWeight="SemiBold" />
+                                                <TextBlock Text="{Binding Label}" Style="{StaticResource MutedText}" />
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <DockPanel Margin="0,8,0,8">
+                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Border Width="8" Height="8" CornerRadius="2" Background="{DynamicResource AccentFillColorDefaultBrush}" Margin="0,0,5,0" />
+                                    <TextBlock Text="People" Style="{StaticResource MutedText}" Margin="0,0,12,0" />
+                                    <Border Width="8" Height="8" CornerRadius="2" Background="{StaticResource AgentActivityBrush}" Margin="0,0,5,0" />
+                                    <TextBlock Text="AI agents" Style="{StaticResource MutedText}" />
+                                </StackPanel>
+                                <TextBlock Text="Week by week" Style="{StaticResource SectionTitle}" Margin="0" />
+                            </DockPanel>
+                            <ItemsControl x:Name="TimeChart" ItemsSource="{Binding TimeBars}" Height="110" Focusable="False">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <UniformGrid Rows="1" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:ChartBar}">
+                                        <Grid Margin="3,0" Background="Transparent" ToolTip="{Binding ToolTip}">
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="{Binding Rest}" />
+                                                <RowDefinition Height="{Binding Agents}" />
+                                                <RowDefinition Height="{Binding People}" />
+                                            </Grid.RowDefinitions>
+                                            <Border Grid.Row="1" Background="{StaticResource AgentActivityBrush}" CornerRadius="1" />
+                                            <Border Grid.Row="2" Background="{DynamicResource AccentFillColorDefaultBrush}" CornerRadius="1" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <Border Height="1" Background="{DynamicResource ControlStrokeColorDefaultBrush}" />
+                            <ItemsControl ItemsSource="{Binding TimeBars}" Focusable="False" Margin="0,3,0,0">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <UniformGrid Rows="1" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:ChartBar}">
+                                        <TextBlock Text="{Binding Label}" Style="{StaticResource MutedText}" FontSize="10" HorizontalAlignment="Center" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <TextBlock Text="Who" Style="{StaticResource SectionTitle}" Margin="0,20,0,6" />
+                            <Grid Margin="0,0,0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="2*" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Name" Style="{StaticResource MutedText}" FontSize="12" />
+                                <TextBlock Grid.Column="1" Text="Items done" Style="{StaticResource MutedText}" FontSize="12" />
+                                <TextBlock Grid.Column="2" Text="Time" Style="{StaticResource MutedText}" FontSize="12" />
+                                <TextBlock Grid.Column="3" Text="Tokens" Style="{StaticResource MutedText}" FontSize="12" />
+                                <TextBlock Grid.Column="4" Text="Cost" Style="{StaticResource MutedText}" FontSize="12" />
+                            </Grid>
+                            <ItemsControl x:Name="TimeWho" ItemsSource="{Binding TimeWorkers}" Focusable="False">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:TimeWorkerRow}">
+                                        <Border BorderThickness="0,1,0,0" BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}" Padding="0,5">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="2*" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock><Run Text="{Binding Name, Mode=OneWay}" FontWeight="SemiBold" /><Run Text=" · " /><Run Text="{Binding Kind, Mode=OneWay}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" /></TextBlock>
+                                                <TextBlock Grid.Column="1" Text="{Binding ItemsDone}" />
+                                                <TextBlock Grid.Column="2" Text="{Binding Time}" />
+                                                <TextBlock Grid.Column="3" Text="{Binding Tokens}" />
+                                                <TextBlock Grid.Column="4" Text="{Binding Cost}" />
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <TextBlock Text="Took longest" Style="{StaticResource SectionTitle}" Margin="0,20,0,6" />
+                            <ItemsControl x:Name="TimeLongest" ItemsSource="{Binding TimeLongest}" Focusable="False">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:TimeItemRow}">
+                                        <Border Padding="6,5" CornerRadius="4" Cursor="Hand" ToolTip="Show it on the board" AutomationProperties.Name="{Binding Text}"
+                                                BorderThickness="0,1,0,0" BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Background" Value="Transparent" />
+                                                    <Style.Triggers>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                                                        </Trigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                            <Border.InputBindings>
+                                                <MouseBinding MouseAction="LeftClick" Command="{Binding ShowCommand}" />
+                                            </Border.InputBindings>
+                                            <DockPanel>
+                                                <TextBlock DockPanel.Dock="Right" Text="{Binding Time}" FontWeight="SemiBold" Margin="12,0,0,0" />
+                                                <TextBlock DockPanel.Dock="Right" Text="{Binding Usage}" Style="{StaticResource MutedText}" Margin="12,0,0,0" />
+                                                <TextBlock DockPanel.Dock="Right" Text="{Binding Category}" Style="{StaticResource MutedText}" Margin="12,0,0,0" />
+                                                <TextBlock Text="{Binding Text}" TextTrimming="CharacterEllipsis" />
+                                            </DockPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </StackPanel>
                 </ScrollViewer>
             </TabItem>
         </TabControl>

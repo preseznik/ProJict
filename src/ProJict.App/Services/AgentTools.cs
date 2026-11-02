@@ -103,7 +103,9 @@ public sealed partial class AgentTools : IMcpToolHost
             "Marks an item done once you finished it, with a short resolution (what changed, commit id) and optional evidence files such as screenshots. " +
             "The user reviews it afterwards.",
             Schema(IdArg, ("resolution", "string", "What you did, for the user.", true),
-                ("attachments", "string[]", "Files to attach, e.g. screenshots or logs (absolute paths or relative to your working directory).", false), ForceArg),
+                ("attachments", "string[]", "Files to attach, e.g. screenshots or logs (absolute paths or relative to your working directory).", false),
+                ("tokens", "integer", "Tokens you used on it, if you can tell (they add up in the project's Time tab).", false),
+                ("cost", "string", "What it cost in dollars, if you can tell, e.g. 1.40.", false), ForceArg),
             CompleteItem, filesArgument: "attachments");
         Add("add_item", "Add item", "Adds a new item, e.g. a bug you found. The category is created if it doesn't exist.",
             Schema(ProjectArg, ("text", "string", "The item text; a prefix like \"BUG: \" becomes its tag.", true),
@@ -172,6 +174,7 @@ public sealed partial class AgentTools : IMcpToolHost
         AddChatTools();
         AddWikiTools();
         AddToolTools();
+        AddWorkTools();
         AddCleanupTools();
     }
 
@@ -256,7 +259,8 @@ public sealed partial class AgentTools : IMcpToolHost
         "ProJict is the user's to-do list app: projects contain categories, categories contain items (with sub-items, tags such as BUG or ADD, " +
         "attachments, discussions, and a state: todo, in_progress or done). To work on items: current_project (or list_projects) to find the project, " +
         "list_items to see what is open, claim_item to check an item out before you start (other agents then can't change it), then complete_item " +
-        "with a short resolution and evidence such as screenshots. Everything you do is signed with your name: when you start, pick a short name " +
+        "with a short resolution and evidence such as screenshots (and the tokens and cost you used, if you can tell; ProJict counts your time from " +
+        "the check-out). Everything you do is signed with your name: when you start, pick a short name " +
         "of your own with set_name (one word, e.g. Ada), the same one as before if you had one here, so your earlier work stays yours; " +
         "set_label says what you're working on. Everything you complete waits for the user's review, so only complete what you really finished; use " +
         "update_item with state todo if you stop. The user decides which items agents may work on, by priority (current_project says which); " +
@@ -463,6 +467,7 @@ public sealed partial class AgentTools : IMcpToolHost
             "get_item" => $"Read {what}",
             "claim_item" => $"Checked out {what}",
             "complete_item" => $"Finished {what}",
+            "log_work" => $"Logged work on {what}",
             "add_item" => $"Added “{Short(args.String("text") ?? "")}”",
             "update_item" => args.String("state") == "todo" ? $"Put back {what}" : $"Changed {what}",
             "attach_file" => $"Attached files to {what}",
@@ -786,8 +791,14 @@ public sealed partial class AgentTools : IMcpToolHost
         var note = args.String("note");
         Edit(project, item.Id, i =>
         {
-            if (takenFrom != null) i.AddActivity(agent, $"Took it over from {takenFrom}.", agent: true);
+            if (takenFrom != null)
+            {
+                i.AddActivity(agent, $"Took it over from {takenFrom}.", agent: true);
+                i.StopWork(takenFrom);
+            }
             if (i.State != ItemState.InProgress) i.SetState(ItemState.InProgress);
+            // Its time on the item counts from now (alongside a person's who had it in progress).
+            i.StartWork(agent, agent: true);
             i.ClaimedBy = agent;
             i.AddActivity(agent, string.IsNullOrWhiteSpace(note) ? "Checked it out." : "Checked it out: " + note.Trim(), agent: true);
         });
@@ -800,6 +811,7 @@ public sealed partial class AgentTools : IMcpToolHost
     {
         var (project, loc) = FindItem(session, args.Required("id"));
         var resolution = args.Required("resolution").Trim();
+        var (tokens, cost) = UsageArgs(args);
         MayChange(project, Change.Edit);
         CheckMayWork(project, loc.Item);
         var takenFrom = CheckOut(session, project, loc.Item, args);
@@ -810,6 +822,7 @@ public sealed partial class AgentTools : IMcpToolHost
             if (!i.IsDone) i.SetState(ItemState.Done);
             i.NeedsReview = true;
             i.AddActivity(agent, "Done: " + resolution, agent: true);
+            WorkLog.Report(i, agent, tokens, cost);
             if (files.Count > 0) (i.Attachments ??= []).AddRange(files);
         });
         session.Claimed.Remove(loc.Item.Id);
@@ -901,7 +914,7 @@ public sealed partial class AgentTools : IMcpToolHost
                 }
                 if (state is { } s && s != i.State)
                 {
-                    i.SetState(s);
+                    i.SetState(s, agent, agent: true);
                     if (s == ItemState.InProgress) i.ClaimedBy = agent;
                     if (s == ItemState.Done) i.NeedsReview = true;
                     i.AddActivity(agent, s switch { ItemState.Done => "Marked it done.", ItemState.InProgress => "Checked it out.", _ => "Put it back to do." }, agent: true);
@@ -1403,6 +1416,7 @@ public sealed partial class AgentTools : IMcpToolHost
         {
             if (item.Activity is { Count: > 0 } log)
                 json["history"] = new JsonArray(log.Select(a => (JsonNode)$"{a.At.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)} {a.By}: {a.Text}").ToArray());
+            if (TimeText(item) is { } time) json["time"] = time;
             if (item.Comments is { Count: > 0 } threads)
                 json["discussion"] = new JsonArray(threads.Select(c => (JsonNode)CommentJson(c, nested: true, rules.Project)).ToArray());
             if (item.Children.Count > 0)

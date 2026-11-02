@@ -13,6 +13,14 @@ public sealed partial class ProjectCardViewModel(Project project, ProjectStats s
 {
     public Project Project { get; } = project;
     public ProjectStats Stats { get; } = stats;
+
+    // Time spent and tokens reported (the project's Time tab), for the Table; worked out when first shown.
+    private ProjectTime? _time;
+    private ProjectTime TimeSpent => _time ??= WorkLog.Of(Project, DateTime.Now);
+    public double TimeMinutes => TimeSpent.Total.TotalMinutes;
+    public string TimeText => TimeSpent.Total > TimeSpan.Zero ? WorkLog.Format(TimeSpent.Total) : "";
+    public long Tokens => TimeSpent.Tokens;
+    public string TokensText => Tokens > 0 ? WorkLog.FormatTokens(Tokens) : "";
     public string Name => Project.Name;
     public string Group => string.IsNullOrWhiteSpace(Project.Group) ? "Personal" : Project.Group;
     /// <summary>The group as the sidebar shows it ("Sam's Work" for a shared one), and where it comes there.</summary>

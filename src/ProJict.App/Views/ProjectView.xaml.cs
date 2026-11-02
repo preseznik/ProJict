@@ -381,6 +381,7 @@ public partial class ProjectView : UserControl
         menu.Items.Add(Item(row.IsInProgress ? "Not in progress" : "In progress", row.ToggleInProgressCommand, gesture: "Ctrl+I"));
         menu.Items.Add(Item("Add sub-item", row.AddChildCommand));
         menu.Items.Add(Item("Attach files…", row.AttachCommand));
+        menu.Items.Add(Item(row.TimeChip is { } spent ? $"Log time… ({spent} so far)" : "Log time…", row.LogTimeCommand));
         if (ClipboardAttachments.HasAttachment()) menu.Items.Add(Item("Paste as attachment", row.PasteAttachmentsCommand, gesture: "Ctrl+V"));
 
         var priority = new MenuItem { Header = "Priority" };

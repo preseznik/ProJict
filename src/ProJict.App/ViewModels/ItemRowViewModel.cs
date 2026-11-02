@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using ProJict.Core.Features;
 using ProJict.Core.Model;
 
 namespace ProJict.App.ViewModels;
@@ -88,7 +89,14 @@ public sealed partial class ItemRowViewModel : ObservableObject
         ? $"{last.By} · {When(last.At)} · {last.Text.Replace("\r\n", " ").Replace('\n', ' ')}"
         : null;
     public string? ActivityToolTip => Item.Activity is { Count: > 0 } log
-        ? string.Join("\n\n", log.Select(a => $"{a.At.ToString("d MMM yyyy HH:mm", CultureInfo.CurrentCulture)} · {a.By}\n{a.Text}"))
+        ? (TimeText is { } time ? $"Time: {time}\n\n" : "") + string.Join("\n\n", log.Select(a => $"{a.At.ToString("d MMM yyyy HH:mm", CultureInfo.CurrentCulture)} · {a.By}\n{a.Text}"))
+        : null;
+
+    /// <summary>Time spent on it and what agents used: "3h 20m (Ada) · 182k tokens"; null when none.</summary>
+    public string? TimeText => Services.AgentTools.TimeText(Item);
+    /// <summary>The short version on the row: "3h 20m".</summary>
+    public string? TimeChip => WorkLog.SpansOf(Item) is { Count: > 0 } spans
+        ? WorkLog.Format(spans.Aggregate(TimeSpan.Zero, (sum, s) => sum + s.Length(DateTime.Now)))
         : null;
 
     /// <summary>Everyone (agents and people) who wrote in the item's history or discussion; a click filters the board by them.</summary>
@@ -119,7 +127,7 @@ public sealed partial class ItemRowViewModel : ObservableObject
         _ => "New comments",
     };
     /// <summary>The second line shows when there is something on it.</summary>
-    public bool HasDetails => Item.Activity is { Count: > 0 } || CommentCount > 0 || HasChannels;
+    public bool HasDetails => Item.Activity is { Count: > 0 } || CommentCount > 0 || HasChannels || Item.Work is { Count: > 0 };
 
     /// <summary>Chat channels about this item.</summary>
     public List<ChannelChip> Channels => Owner.Main.ChannelChips(Owner.Project.Id, itemId: Item.Id);
@@ -204,6 +212,7 @@ public sealed partial class ItemRowViewModel : ObservableObject
     [RelayCommand] private void ToggleSelected() => IsSelected = !IsSelected;
     [RelayCommand] private void AddChild() => Owner.AddChild(this);
     [RelayCommand] private void Attach() => Owner.BrowseAttachments(this);
+    [RelayCommand] private void LogTime() => Owner.LogTime(this);
     [RelayCommand] private void PasteAttachments() => Owner.PasteAttachments(this);
     [RelayCommand] private void AcceptReview() => Owner.AcceptReview(this);
     [RelayCommand] private void SetPriority(Priority priority) => Owner.SetPriority(this, priority);

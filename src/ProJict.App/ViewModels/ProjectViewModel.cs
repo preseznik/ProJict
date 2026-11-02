@@ -906,7 +906,7 @@ public sealed partial class ProjectViewModel : ObservableObject
         var sentBack = row.Item.NeedsReview && state != ItemState.Done;
         Mutate(() =>
         {
-            row.Item.SetState(state);
+            row.Item.SetState(state, _state.UserName);
             if (sentBack) row.Item.AddActivity(_state.UserName, $"{ActivityEntry.SentBack}: not accepted yet.", agent: false);
         }, [row.Category], focus);
     }
@@ -1323,6 +1323,24 @@ public sealed partial class ProjectViewModel : ObservableObject
             row.Item.AddActivity(_state.UserName, "Accepted the work.", agent: false);
         }, [row.Category]);
         _state.StatusText = $"Accepted “{Shorten(row.Item.Text)}”.";
+    }
+
+    /// <summary>Asks how long you spent on an item ("1h 30m"); tests answer for you. Null when cancelled.</summary>
+    public Func<string, string?> AskTime { get; set; } = prompt =>
+        Views.InputDialog.Ask(Application.Current.MainWindow!, "Log time", prompt, "");
+
+    /// <summary>Time you spent on an item, by hand ("1h 30m"): it counts in the project's Time tab.</summary>
+    public void LogTime(ItemRowViewModel row)
+    {
+        if (AskTime($"How long did you spend on “{Shorten(row.Item.Text)}”? For example 1h 30m, 45m or 2:15.") is not { } typed) return;
+        if (WorkLog.ParseMinutes(typed) is not { } minutes || minutes is <= 0 or > 24 * 60)
+        {
+            _state.StatusText = $"“{typed.Trim()}” isn't a length of time up to a day; try 1h 30m, 45m or 2:15.";
+            return;
+        }
+        Mutate(() => WorkLog.Log(row.Item, _state.UserName, agent: false, minutes), [row.Category], row.Item.Id);
+        _state.StatusText = $"Logged {WorkLog.Format(TimeSpan.FromMinutes(minutes))} on “{Shorten(row.Item.Text)}”.";
+        RefreshTime();
     }
 
     /// <summary>Frees an item an agent left checked out: back to do, so any agent can pick it up.</summary>

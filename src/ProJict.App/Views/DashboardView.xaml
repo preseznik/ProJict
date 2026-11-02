@@ -355,6 +355,8 @@
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
                     <DataGridTextColumn Header="Last activity" Binding="{Binding LastActivityShort}" SortMemberPath="Stats.LastActivity" Width="Auto"  ElementStyle="{StaticResource CellText}" />
+                    <DataGridTextColumn Header="Time" Binding="{Binding TimeText}" SortMemberPath="TimeMinutes" Width="Auto"  ElementStyle="{StaticResource CellText}" />
+                    <DataGridTextColumn Header="Tokens" Binding="{Binding TokensText}" SortMemberPath="Tokens" Width="Auto"  ElementStyle="{StaticResource CellText}" />
                     <DataGridTextColumn Header="Release" Binding="{Binding GitHubReleaseTag}" SortMemberPath="GitHubReleaseTag" Width="Auto"  ElementStyle="{StaticResource CellText}" />
                     <DataGridTemplateColumn Header="Agents" CanUserSort="False" Width="Auto">
                         <DataGridTemplateColumn.CellTemplate>

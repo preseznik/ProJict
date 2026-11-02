@@ -42,13 +42,21 @@ public sealed class TodoItem
     public List<Comment>? Comments { get; set; }
     /// <summary>The GitHub issue the item was imported from; null for items of your own.</summary>
     public IssueLink? Issue { get; set; }
+    /// <summary>Time spent on it (while it was in progress, or logged by hand) and what agents used; null while none.</summary>
+    public List<WorkSpan>? Work { get; set; }
 
     [JsonIgnore] public bool IsDone => State == ItemState.Done;
     [JsonIgnore] public bool HasAttachments => Attachments is { Count: > 0 };
 
-    public void SetState(ItemState state)
+    /// <summary>
+    /// Changes the state. Leaving "in progress" ends the time anyone was spending on it; going into progress with
+    /// <paramref name="by"/> starts theirs.
+    /// </summary>
+    public void SetState(ItemState state, string? by = null, bool agent = false)
     {
         if (State == state) return;
+        if (State == ItemState.InProgress) StopWork();
+        if (state == ItemState.InProgress && !string.IsNullOrWhiteSpace(by)) StartWork(by, agent);
         State = state;
         DoneAt = state == ItemState.Done ? DateTime.Now : null;
         if (state != ItemState.Done) ReleaseId = null;
@@ -66,7 +74,23 @@ public sealed class TodoItem
         copy.Activity = Activity?.ToList();
         copy.Comments = Comments?.Select(c => c.DeepClone()).ToList();
         copy.Issue = Issue?.DeepClone();
+        copy.Work = Work?.Select(w => w.Clone()).ToList();
         return copy;
+    }
+
+    /// <summary>Starts counting time someone spends on the item (once: if they already are, it goes on).</summary>
+    public void StartWork(string by, bool agent, DateTime? at = null)
+    {
+        if (Work?.Any(w => w.End == null && w.Minutes == null && string.Equals(w.By, by, StringComparison.OrdinalIgnoreCase)) == true) return;
+        (Work ??= []).Add(new WorkSpan { By = by, Agent = agent, Start = at ?? DateTime.Now });
+    }
+
+    /// <summary>Stops counting the time someone (or, without a name, everyone) is spending on it.</summary>
+    public void StopWork(string? by = null, DateTime? at = null)
+    {
+        foreach (var span in Work ?? [])
+            if (span.End == null && span.Minutes == null && (by == null || string.Equals(span.By, by, StringComparison.OrdinalIgnoreCase)))
+                span.End = at ?? DateTime.Now;
     }
 
     public void AddActivity(string by, string text, bool agent) =>

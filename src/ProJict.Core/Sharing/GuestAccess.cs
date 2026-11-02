@@ -152,6 +152,11 @@ public static class GuestAccess
                         !AgentAccess.Allows(agentPriorities, governing.GetValueOrDefault(id)))
                         return "This ProJict keeps that item off limits to AI agents.";
                 }
+            // Time they spent (or logged) is in their name, or their agent's, too.
+            var knownWork = (was?["work"] as JsonArray)?.Count ?? 0;
+            if (item["work"] is JsonArray work)
+                for (var i = knownWork; i < work.Count; i++)
+                    if (work[i] is JsonObject span && Sign(span, "by", guestName, agentsAllowed, self) is { } refused) return refused;
             // Only the guest or its agent checks things out in its name; you on another computer, as here.
             var claimed = (string?)item["claimedBy"];
             if (!self && claimed != null && claimed != (string?)was?["claimedBy"] &&
