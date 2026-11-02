@@ -54,6 +54,15 @@ public sealed partial class AgentActivityViewModel : ObservableObject, IStudioHi
         Units = units;
         _selectedUnit = units.First(u => u.Unit == View.ActiveWithinUnit);
         _selectedEarlier = EarlierChoices.FirstOrDefault(c => c.Days == View.EarlierDays) ?? EarlierChoices[1];
+        Office.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(OfficeViewModel.Focused)) SyncFocusedCard();
+        };
+        state.Chat.Changed += channel =>
+        {
+            if (!channel.Direct) return;
+            foreach (var card in Live.Where(c => c.IsFocused)) card.RefreshConversation();
+        };
     }
 
     private AgentsViewSettings View => _state.AppSettings.AgentsView;
@@ -206,7 +215,8 @@ public sealed partial class AgentActivityViewModel : ObservableObject, IStudioHi
     {
         foreach (var row in AllAgents)
             if (row.Session is { } session)
-                row.Tick(OfficeActivities.Name(OfficeActivities.Of(session, now, session.Claimed.Count > 0 && CheckedOut(session, null).Count > 0, IsWatching(session))),
+                row.Tick(OfficeActivities.Name(OfficeActivities.Of(session, now, session.Claimed.Count > 0 && CheckedOut(session, null).Count > 0, IsWatching(session),
+                    IsAsleep)),
                     ProjectNames(session));
     }
 
@@ -464,7 +474,7 @@ public sealed partial class AgentActivityViewModel : ObservableObject, IStudioHi
         _historyEvents = [.. ActivityFeed.Build(_state.Projects.Where(p => p.Remote == null && (project == null || p == project)), _state.Settings, _state.UserName)
             .Where(e => e.Agent)];
         OnPropertyChanged(nameof(Subtitle));
-        foreach (var name in new[] { nameof(CanHaveStudio), nameof(ShowsStudio), nameof(ShowsOffice), nameof(OfficeTitle) }) OnPropertyChanged(name);
+        foreach (var name in new[] { nameof(CanSetUpStudio), nameof(ShowsStudio), nameof(OfficeTitle) }) OnPropertyChanged(name);
         BuildHistory();
     }
 
@@ -485,6 +495,7 @@ public sealed partial class AgentActivityViewModel : ObservableObject, IStudioHi
         foreach (var name in new[] { nameof(Live), nameof(HasLive), nameof(EmptyText), nameof(LiveTitle), nameof(IdleCount), nameof(HasIdleLine), nameof(IdleText), nameof(IdleButtonText) })
             OnPropertyChanged(name);
         UpdateOffice();
+        SyncFocusedCard();
         RefreshAgentList();
     }
 
@@ -493,41 +504,79 @@ public sealed partial class AgentActivityViewModel : ObservableObject, IStudioHi
     {
         if (!View.ShowOffice) return;
         var project = FilterProject;
-        Office.Update(Live, DateTime.Now, s => s.Claimed.Count > 0 && CheckedOut(s, project).Count > 0, IsWatching, LastSaid, Studio);
+        // All projects: agents hired in the studio of a project they work in are there, not in the office.
+        var inStudios = project == null ? Live.Where(c => StudioOf(c.Session) != null).ToList() : [];
+        Office.Elsewhere = inStudios.Count == 0 ? null
+            : "In studios: " + string.Join("; ", inStudios.GroupBy(c => StudioOf(c.Session)!.Name).Select(g => $"{string.Join(", ", g.Select(c => c.Name))} ({g.Key})"));
+        Office.Update(inStudios.Count == 0 ? Live : [.. Live.Except(inStudios)], DateTime.Now, s => s.Claimed.Count > 0 && CheckedOut(s, project).Count > 0,
+            IsWatching, LastSaid, Studio, IsAsleep);
     }
+
+    // ───────────── Everyone to sleep ─────────────
+
+    /// <summary>You put every agent to sleep: they finish what they're doing and stop until you wake them.</summary>
+    public bool IsAsleep => _main.AgentTools.IsAsleep;
+
+    public string SleepText => _state.Settings.Sleep is { WokenAt: null } sleep
+        ? $"Everyone's asleep since {sleep.At.ToString("HH:mm", CultureInfo.CurrentCulture)}. Agents finish what they were doing and stop: starting new work is " +
+          "refused, and Chat and other news wait until you wake them."
+        : "";
+
+    /// <summary>The big button: every agent (in the office and the studios) finishes what it's doing and goes to sleep.</summary>
+    [RelayCommand]
+    private void PutEveryoneToSleep()
+    {
+        _main.AgentTools.PutToSleep();
+        _state.StatusText = "Everyone's going to sleep: agents finish what they're doing and stop. Wake them up from the Agents view.";
+        RefreshSleep();
+    }
+
+    [RelayCommand]
+    private void WakeEveryoneUp()
+    {
+        _main.AgentTools.WakeUp();
+        _state.StatusText = "Everyone's awake again: agents carry on, and what waited for them comes through.";
+        RefreshSleep();
+    }
+
+    private void RefreshSleep()
+    {
+        OnPropertyChanged(nameof(IsAsleep));
+        OnPropertyChanged(nameof(SleepText));
+        UpdateOffice();
+        TickAgentList(DateTime.Now);
+    }
+
+    /// <summary>The project whose studio the agent is hired in, among those it works in now (if any).</summary>
+    private Project? StudioOf(McpSession session) =>
+        _main.Agents.ProjectsOf(session).Select(id => _state.Projects.FirstOrDefault(p => p.Id == id))
+            .FirstOrDefault(p => p is { Remote: null, Studio: { } studio } && StudioFlow.RoleOf(studio, session.AgentName) != null);
 
     // ───────────── The studio ─────────────
 
-    /// <summary>One of your projects is shown: its room can be the office or its game studio.</summary>
-    public bool CanHaveStudio => FilterProject is { Remote: null, IsInbox: false };
+    /// <summary>One of your projects is shown and it has no studio yet: set up a game or film studio (it's then the project's room).</summary>
+    public bool CanSetUpStudio => FilterProject is { Remote: null, IsInbox: false, Studio: null };
 
-    /// <summary>The project's game studio shows instead of the office; the first time it's set up with the usual roles.</summary>
-    public bool ShowsStudio
-    {
-        get => FilterProject?.Studio?.Shown == true;
-        set
-        {
-            if (FilterProject is not { Remote: null, IsInbox: false } project || value == ShowsStudio) return;
-            project.Studio ??= StudioFlow.NewGame();
-            project.Studio.Shown = value;
-            _main.GetProjectViewModel(project).RefreshStudio();
-            _state.MarkDirty(project);
-            if (value)
-                _state.StatusText = $"{project.Name}'s game studio: agents working here wait in the lobby until you hire them (right-click a robot › Hire as…). " +
-                                    "The roles and what they expect are in the project's Details.";
-            RefreshStudio();
-        }
-    }
+    /// <summary>The project shown has a studio: that's its room (it has no office of its own).</summary>
+    public bool ShowsStudio => FilterProject is { Remote: null, Studio: not null };
 
-    public bool ShowsOffice
+    /// <summary>Set up a studio: "Game" or "Film".</summary>
+    [RelayCommand]
+    private void SetUpStudio(string? kind)
     {
-        get => !ShowsStudio;
-        set { if (value) ShowsStudio = false; }
+        if (FilterProject is not { Remote: null, IsInbox: false, Studio: null } project) return;
+        project.Studio = StudioFlow.New(Enum.TryParse<StudioKind>(kind, out var k) ? k : StudioKind.Game);
+        StudioChannel(project);
+        _main.GetProjectViewModel(project).RefreshStudio();
+        _state.MarkDirty(project);
+        _state.StatusText = $"{project.Name}'s {StudioFlow.KindName(project.Studio.Kind)} is its room now: agents working here wait in the lobby until you hire " +
+                            "them (right-click a robot › Hire as…). The roles and what they expect are in the project's Details, which can also remove the studio.";
+        RefreshStudio();
     }
 
     public string OfficeTitle => ShowsStudio ? $"{FilterProject!.Name} studio" : "Office";
 
-    private StudioContext? Studio => FilterProject is { Remote: null, Studio: { Shown: true } studio } project
+    private StudioContext? Studio => FilterProject is { Remote: null, Studio: { } studio } project
         ? new StudioContext(project.Name, studio, this, MilestonesOf(project))
         : null;
 
@@ -544,9 +593,27 @@ public sealed partial class AgentActivityViewModel : ObservableObject, IStudioHi
         return new MilestoneBoard(rows, categories.Sum(x => x.Done), categories.Sum(x => x.Total));
     }
 
-    void IStudioHiring.Hire(string agent, StudioRole role) => ChangeStudio(studio => StudioFlow.Hire(studio, agent, role, _state.UserName) is { } replaced
-        ? $"Hired {agent} as {role.Name} instead of {replaced}, who's back in the lobby. {agent} is told what the role expects."
-        : $"Hired {agent} as {role.Name}. It's told what the role expects.");
+    void IStudioHiring.Hire(string agent, StudioRole role) => ChangeStudio(studio =>
+    {
+        var replaced = StudioFlow.Hire(studio, agent, role, _state.UserName);
+        // The team talks in the studio's channel: the new hire is invited.
+        if (FilterProject is { } project && StudioChannel(project) is { } channel)
+        {
+            try { _state.Chat.Invite(channel, _state.ChatMe, agent, true); }
+            catch (ChatException) { }
+        }
+        return replaced != null
+            ? $"Hired {agent} as {role.Name} instead of {replaced}, who's back in the lobby. {agent} is told what the role expects, and invited to the studio's channel."
+            : $"Hired {agent} as {role.Name}. It's told what the role expects, and invited to the studio's channel.";
+    });
+
+    /// <summary>The studio's channel (made the first time if the project has none), or null if Chat can't have it.</summary>
+    private ChatChannel? StudioChannel(Project project)
+    {
+        if (project.Studio is not { } studio) return null;
+        try { return StudioFlow.ChannelFor(project, studio, _state.Chat, _state.ChatMe); }
+        catch (ChatException) { return null; }
+    }
 
     void IStudioHiring.Fire(string agent) => ChangeStudio(studio =>
     {
@@ -578,16 +645,19 @@ public sealed partial class AgentActivityViewModel : ObservableObject, IStudioHi
         RefreshStudio();
     }
 
+    /// <summary>A studio was set up or removed elsewhere (Details).</summary>
+    internal void RefreshStudioView() => RefreshStudio();
+
     private void RefreshStudio()
     {
-        foreach (var name in new[] { nameof(CanHaveStudio), nameof(ShowsStudio), nameof(ShowsOffice), nameof(OfficeTitle) }) OnPropertyChanged(name);
+        foreach (var name in new[] { nameof(CanSetUpStudio), nameof(ShowsStudio), nameof(OfficeTitle) }) OnPropertyChanged(name);
         foreach (var card in Live) card.Refresh();
         UpdateOffice();
     }
 
     /// <summary>The agent's role in the shown project's studio, for its card.</summary>
     internal string? StudioRoleOf(McpSession session) =>
-        FilterProject is { Studio: { Shown: true } studio } ? StudioFlow.RoleOf(studio, session.AgentName)?.Name : null;
+        FilterProject is { Studio: { } studio } ? StudioFlow.RoleOf(studio, session.AgentName)?.Name : null;
 
     /// <summary>The agent's latest message in Chat since it connected (for its speech bubble at the cooler).</summary>
     private string? LastSaid(McpSession session)
@@ -669,8 +739,48 @@ public sealed partial class AgentActivityViewModel : ObservableObject, IStudioHi
 
     internal void MessagePrivately(McpSession session) => MessagePrivately(session.AgentName);
 
+    // ───────────── Writing to an agent from its card ─────────────
+
+    /// <summary>The agent focused in the office: its card shows your private conversation with it, to write in.</summary>
+    private void SyncFocusedCard()
+    {
+        var focused = Office.Focused?.Session;
+        foreach (var card in Live) card.IsFocused = card.Session == focused;
+    }
+
+    /// <summary>The last few messages between you and the agent, oldest first.</summary>
+    internal IReadOnlyList<PrivateLine> PrivateLinesWith(string agent)
+    {
+        if (_state.Chat.FindDirect(_state.UserName, agent) is not { } channel) return [];
+        return [.. channel.Messages.Where(m => !m.Notice && !m.Deleted).TakeLast(4).Select(m =>
+        {
+            var mine = string.Equals(m.By, _state.UserName, StringComparison.OrdinalIgnoreCase);
+            var text = string.Join(' ', m.Text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)).Trim();
+            return new PrivateLine(mine ? "You" : m.By, text.Length > 300 ? text[..299].TrimEnd() + "…" : text,
+                m.At.ToString(m.At.Date == DateTime.Today ? "HH:mm" : "d MMM HH:mm", CultureInfo.CurrentCulture), mine);
+        })];
+    }
+
+    /// <summary>Writes to the agent privately (as in Chat, without going there); the problem if it can't.</summary>
+    internal string? SendPrivately(string agent, string text)
+    {
+        try
+        {
+            var room = _state.Chat;
+            var channel = room.FindDirect(_state.UserName, agent) ?? room.OpenDirect(_state.ChatMe, agent, true);
+            room.Post(channel, _state.ChatMe, text);
+            return null;
+        }
+        catch (ChatException ex)
+        {
+            return ex.Message;
+        }
+    }
+
     /// <summary>A chat watcher runs for the agent (ProJict.exe --watch-chat, or /chat/watch).</summary>
     internal bool IsWatching(McpSession session) => _main.AgentTools.IsWatched(session.AgentName);
+
+    internal void Say(string text) => _state.StatusText = text;
 
     internal void MessagePrivately(string agent)
     {
@@ -754,8 +864,44 @@ public sealed partial class AgentCardViewModel : ObservableObject
     public List<CheckoutRow> CheckedOut { get; private set; } = [];
     public bool HasCheckedOut => CheckedOut.Count > 0;
 
-    /// <summary>Right-click the card › Private message: your conversation with it in Chat.</summary>
+    /// <summary>Right-click the card › Private message, or its chat icon: your conversation with it in Chat.</summary>
     [RelayCommand] private void PrivateMessage() => _owner.MessagePrivately(Session);
+    public string OpenChatToolTip => $"Open your private conversation with {Name} in Chat";
+
+    /// <summary>Its robot is focused in the office: the card shows your private conversation with it, with a box to write in.</summary>
+    [ObservableProperty] private bool _isFocused;
+    partial void OnIsFocusedChanged(bool value)
+    {
+        if (value) RefreshConversation();
+    }
+
+    public IReadOnlyList<PrivateLine> Conversation { get; private set; } = [];
+    public bool HasConversation => Conversation.Count > 0;
+    public string ConversationTitle => $"You and {Name}, privately";
+
+    public void RefreshConversation()
+    {
+        Conversation = _owner.PrivateLinesWith(Name);
+        OnPropertyChanged(nameof(Conversation));
+        OnPropertyChanged(nameof(HasConversation));
+    }
+
+    [ObservableProperty] [NotifyCanExecuteChangedFor(nameof(SendCommand))] private string _draft = "";
+
+    private bool CanSend() => Draft.Trim().Length > 0;
+
+    /// <summary>The card's Send (or Enter): to the agent privately, staying in the office.</summary>
+    [RelayCommand(CanExecute = nameof(CanSend))]
+    private void Send()
+    {
+        if (_owner.SendPrivately(Name, Draft.Trim()) is { } problem)
+        {
+            _owner.Say(problem);
+            return;
+        }
+        Draft = "";
+        RefreshConversation();
+    }
 
     /// <summary>Its agent was clicked in the office: the view scrolls to the card and flashes it.</summary>
     internal void RequestReveal() => _owner.RequestReveal(this);
@@ -814,6 +960,9 @@ public sealed partial class AgentCardViewModel : ObservableObject
 
     private static string Age(DateTime at, DateTime now) => AgentActivityViewModel.Age(at, now);
 }
+
+/// <summary>A line of your private conversation with an agent, on its card.</summary>
+public sealed record PrivateLine(string Who, string Text, string Time, bool Mine);
 
 /// <summary>
 /// One of an agent's latest actions; the newest stands out, the rest are quieter. Done several times in a row, it says

@@ -17,6 +17,8 @@ public sealed class McpSession
     public string? ClientTitle { get; set; }
     /// <summary>The agent's working directory, passed on by the ProJict bridge.</summary>
     public string? WorkingDirectory { get; set; }
+    /// <summary>Connected through the old bridge (ProJict.exe --mcp), which an update of ProJict closes, not ProJictBridge.exe.</summary>
+    public bool OldBridge { get; set; }
     /// <summary>Items this agent has checked out (claimed) in this session.</summary>
     public HashSet<Guid> Claimed { get; } = [];
     /// <summary>What the agent says it's working on (set_label), shown on its card; not part of its name.</summary>
@@ -128,7 +130,10 @@ public static class McpServer
     public static readonly string[] SupportedVersions = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
     private const string FallbackVersion = "2025-06-18";
 
-    /// <summary>First line the bridge sends (not JSON-RPC): <c>{"projictBridge":1,"cwd":"…"}</c>.</summary>
+    /// <summary>
+    /// First line the bridge sends (not JSON-RPC): <c>{"projictBridge":2,"bridge":"2","cwd":"…"}</c> from ProJictBridge.exe,
+    /// <c>{"projictBridge":1,"cwd":"…"}</c> from the old ProJict.exe --mcp.
+    /// </summary>
     public const string BridgeHelloKey = "projictBridge";
 
     /// <summary>
@@ -192,6 +197,7 @@ public static class McpServer
         if (message.ContainsKey(BridgeHelloKey))
         {
             session.WorkingDirectory = Text(message["cwd"]);
+            session.OldBridge = !message.ContainsKey("bridge");
             return null;
         }
 
@@ -233,7 +239,7 @@ public static class McpServer
         return new JsonObject
         {
             ["protocolVersion"] = requested != null && SupportedVersions.Contains(requested) ? requested : FallbackVersion,
-            ["capabilities"] = new JsonObject { ["tools"] = new JsonObject { ["listChanged"] = false } },
+            ["capabilities"] = new JsonObject { ["tools"] = new JsonObject { ["listChanged"] = true } },
             ["serverInfo"] = new JsonObject { ["name"] = "projict", ["title"] = "ProJict", ["version"] = serverVersion },
             ["instructions"] = host.Instructions,
         };

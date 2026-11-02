@@ -122,6 +122,96 @@
                     <Rectangle Canvas.Left="53" Canvas.Top="-76" Width="15" Height="14" Fill="White" Stroke="#9CA3AF" StrokeThickness="1" />
                     <Rectangle Canvas.Left="53" Canvas.Top="-76" Width="15" Height="4" Fill="#EF4444" />
                 </Canvas>
+                <!-- A film studio's stations -->
+                <Canvas x:Name="DirectorThings" Visibility="Collapsed">
+                    <Rectangle Canvas.Left="6" Canvas.Top="-140" Width="44" Height="26" Fill="#111827" />
+                    <Path Fill="#111827" Data="M 6,-142 L 48,-152 L 50,-146 L 8,-136 Z" />
+                    <Path Stroke="White" StrokeThickness="3" Data="M 14,-145 L 18,-140 M 24,-147.5 L 28,-142.5 M 34,-150 L 38,-145" />
+                    <Rectangle Canvas.Left="10" Canvas.Top="-131" Width="36" Height="1.5" Fill="#9CA3AF" />
+                    <Rectangle Canvas.Left="10" Canvas.Top="-125" Width="24" Height="1.5" Fill="#9CA3AF" />
+                    <Path Fill="#F59E0B" Data="M 52,-74 L 66,-80 L 66,-64 Z" />
+                    <Rectangle Canvas.Left="50" Canvas.Top="-75" Width="4" Height="6" Fill="#374151" />
+                </Canvas>
+                <Canvas x:Name="WriterThings" Visibility="Collapsed">
+                    <Rectangle Canvas.Left="10" Canvas.Top="-154" Width="36" Height="42" Fill="White" Stroke="#9CA3AF" StrokeThickness="1.5" />
+                    <Rectangle Canvas.Left="15" Canvas.Top="-148" Width="16" Height="2" Fill="#374151" />
+                    <Rectangle Canvas.Left="15" Canvas.Top="-142" Width="26" Height="1.5" Fill="#9CA3AF" />
+                    <Rectangle Canvas.Left="20" Canvas.Top="-137" Width="20" Height="1.5" Fill="#9CA3AF" />
+                    <Rectangle Canvas.Left="15" Canvas.Top="-131" Width="24" Height="1.5" Fill="#9CA3AF" />
+                    <Rectangle Canvas.Left="20" Canvas.Top="-126" Width="18" Height="1.5" Fill="#9CA3AF" />
+                    <Rectangle Canvas.Left="15" Canvas.Top="-120" Width="22" Height="1.5" Fill="#9CA3AF" />
+                    <Rectangle Canvas.Left="51" Canvas.Top="-66" Width="16" Height="4" Fill="#FDE68A" Stroke="#D97706" StrokeThickness="0.8" />
+                    <Rectangle Canvas.Left="54" Canvas.Top="-72" Width="1.5" Height="9" Fill="#1F2937" RenderTransformOrigin="0.5,1">
+                        <Rectangle.RenderTransform>
+                            <RotateTransform Angle="30" />
+                        </Rectangle.RenderTransform>
+                    </Rectangle>
+                </Canvas>
+                <Canvas x:Name="CaptureThings" Visibility="Collapsed">
+                    <Rectangle Canvas.Left="4" Canvas.Top="-150" Width="48" Height="32" RadiusX="2" RadiusY="2" Fill="#1F2937" />
+                    <Rectangle Canvas.Left="10" Canvas.Top="-142" Width="34" Height="16" RadiusX="7" RadiusY="7" Fill="#E5E7EB" />
+                    <Ellipse Canvas.Left="14" Canvas.Top="-139" Width="10" Height="10" Fill="#60A5FA" />
+                    <Ellipse Canvas.Left="30" Canvas.Top="-139" Width="10" Height="10" Fill="#60A5FA" />
+                    <Ellipse Canvas.Left="45" Canvas.Top="-147" Width="4" Height="4" Fill="#EF4444" />
+                    <Path Stroke="{StaticResource Metal}" StrokeThickness="1.5" Data="M 59,-62 L 59,-70 M 59,-70 L 53,-62 M 59,-70 L 65,-62" />
+                    <Rectangle Canvas.Left="52" Canvas.Top="-80" Width="14" Height="10" RadiusX="1.5" RadiusY="1.5" Fill="#374151" />
+                    <Ellipse Canvas.Left="47" Canvas.Top="-79" Width="7" Height="7" Fill="#111827" Stroke="#9CA3AF" StrokeThickness="1" />
+                    <Ellipse Canvas.Left="62" Canvas.Top="-79" Width="3" Height="3" Fill="#EF4444" />
+                </Canvas>
+                <Canvas x:Name="EditingThings" Visibility="Collapsed">
+                    <Rectangle Canvas.Left="2" Canvas.Top="-150" Width="52" Height="34" RadiusX="2" RadiusY="2" Fill="#1F2937" />
+                    <Rectangle Canvas.Left="6" Canvas.Top="-144" Width="14" Height="6" Fill="#60A5FA" />
+                    <Rectangle Canvas.Left="22" Canvas.Top="-144" Width="20" Height="6" Fill="#A78BFA" />
+                    <Rectangle Canvas.Left="10" Canvas.Top="-135" Width="24" Height="6" Fill="#34D399" />
+                    <Rectangle Canvas.Left="6" Canvas.Top="-126" Width="40" Height="5" Fill="#FBBF24" />
+                    <Rectangle Canvas.Left="30" Canvas.Top="-148" Width="1.5" Height="30" Fill="#EF4444" />
+                    <Rectangle Canvas.Left="56" Canvas.Top="-74" Width="3" Height="12" Fill="{StaticResource Metal}" />
+                    <Rectangle Canvas.Left="44" Canvas.Top="-100" Width="26" Height="27" RadiusX="2" RadiusY="2" Fill="#111827" />
+                    <Rectangle Canvas.Left="50" Canvas.Top="-94" Width="16" Height="10" Fill="#93C5FD" />
+                    <Rectangle Canvas.Left="50" Canvas.Top="-81" Width="16" Height="2" Fill="#FBBF24" />
+                </Canvas>
+                <Canvas x:Name="MixingThings" Visibility="Collapsed">
+                    <Rectangle Canvas.Left="2" Canvas.Top="-150" Width="52" Height="32" RadiusX="2" RadiusY="2" Fill="#1F2937" />
+                    <Path Stroke="#34D399" StrokeThickness="2" Data="M 6,-134 L 11,-140 L 16,-128 L 21,-144 L 26,-124 L 31,-138 L 36,-130 L 41,-140 L 46,-131 L 50,-134" />
+                    <Rectangle Canvas.Left="59" Canvas.Top="-80" Width="1.5" Height="18" Fill="{StaticResource Metal}" />
+                    <Rectangle Canvas.Left="55" Canvas.Top="-92" Width="9" Height="14" RadiusX="4.5" RadiusY="4.5" Fill="#4B5563" />
+                    <Rectangle Canvas.Left="55" Canvas.Top="-86" Width="9" Height="1.5" Fill="#9CA3AF" />
+                    <Rectangle Canvas.Left="54" Canvas.Top="-63" Width="12" Height="2" Fill="{StaticResource Metal}" />
+                </Canvas>
+                <Canvas x:Name="GraphicsThings" Visibility="Collapsed">
+                    <Rectangle Canvas.Left="2" Canvas.Top="-152" Width="52" Height="38" RadiusX="2" RadiusY="2" Fill="White" Stroke="#9CA3AF" StrokeThickness="2" />
+                    <Rectangle Canvas.Left="6" Canvas.Top="-148" Width="21" Height="14" Fill="#FCA5A5" />
+                    <Rectangle Canvas.Left="29" Canvas.Top="-148" Width="21" Height="14" Fill="#93C5FD" />
+                    <Rectangle Canvas.Left="6" Canvas.Top="-132" Width="21" Height="14" Fill="#FDE68A" />
+                    <Rectangle Canvas.Left="29" Canvas.Top="-132" Width="21" Height="14" Fill="#A7F3D0" />
+                    <Ellipse Canvas.Left="12" Canvas.Top="-145" Width="7" Height="7" Fill="#B91C1C" />
+                    <Path Fill="#1D4ED8" Data="M 33,-136 L 39,-146 L 45,-136 Z" />
+                    <Rectangle Canvas.Left="50" Canvas.Top="-66" Width="18" Height="4" RadiusX="1" RadiusY="1" Fill="#374151" />
+                    <Rectangle Canvas.Left="56" Canvas.Top="-74" Width="1.5" Height="9" Fill="#F472B6" RenderTransformOrigin="0.5,1">
+                        <Rectangle.RenderTransform>
+                            <RotateTransform Angle="-25" />
+                        </Rectangle.RenderTransform>
+                    </Rectangle>
+                </Canvas>
+                <Canvas x:Name="PublishingThings" Visibility="Collapsed">
+                    <Rectangle Canvas.Left="2" Canvas.Top="-152" Width="52" Height="38" RadiusX="2" RadiusY="2" Fill="#DBEAFE" Stroke="#9CA3AF" StrokeThickness="2" />
+                    <Path Fill="White" Stroke="#3B82F6" StrokeThickness="1.5" Data="M 14,-124 C 6,-124 6,-136 15,-135 C 16,-146 32,-148 35,-139 C 46,-141 48,-125 40,-124 Z" />
+                    <Path Stroke="#3B82F6" StrokeThickness="2.5" StrokeEndLineCap="Round" StrokeStartLineCap="Round" Data="M 27,-126 L 27,-139 M 22,-134 L 27,-139 L 32,-134" />
+                    <Rectangle Canvas.Left="53" Canvas.Top="-76" Width="15" Height="14" Fill="White" Stroke="#9CA3AF" StrokeThickness="1" />
+                    <Rectangle Canvas.Left="53" Canvas.Top="-76" Width="15" Height="4" Fill="#3B82F6" />
+                </Canvas>
+                <Canvas x:Name="ProducingThings" Visibility="Collapsed">
+                    <Rectangle Canvas.Left="2" Canvas.Top="-152" Width="52" Height="38" RadiusX="2" RadiusY="2" Fill="White" Stroke="#9CA3AF" StrokeThickness="2" />
+                    <Rectangle Canvas.Left="6" Canvas.Top="-146" Width="22" Height="5" Fill="#60A5FA" />
+                    <Rectangle Canvas.Left="16" Canvas.Top="-138" Width="20" Height="5" Fill="#A78BFA" />
+                    <Rectangle Canvas.Left="26" Canvas.Top="-130" Width="22" Height="5" Fill="#34D399" />
+                    <Rectangle Canvas.Left="10" Canvas.Top="-122" Width="16" Height="5" Fill="#FBBF24" />
+                    <Rectangle Canvas.Left="34" Canvas.Top="-150" Width="1.5" Height="34" Fill="#EF4444" />
+                    <Rectangle Canvas.Left="53" Canvas.Top="-77" Width="13" Height="15" Fill="#F5E6C8" Stroke="#8E6A45" StrokeThickness="1" />
+                    <Rectangle Canvas.Left="56" Canvas.Top="-79" Width="7" Height="3" Fill="#9CA3AF" />
+                    <Rectangle Canvas.Left="55" Canvas.Top="-72" Width="9" Height="1.2" Fill="#6B7280" />
+                    <Rectangle Canvas.Left="55" Canvas.Top="-68" Width="7" Height="1.2" Fill="#6B7280" />
+                </Canvas>
                 <!-- Monitor -->
                 <Rectangle Canvas.Left="24" Canvas.Top="-72" Width="6" Height="11" Fill="{StaticResource Metal}" />
                 <Rectangle Canvas.Left="16" Canvas.Top="-64" Width="22" Height="3" RadiusX="1" RadiusY="1" Fill="{StaticResource Metal}" />
@@ -198,6 +288,14 @@
                 <DataTrigger Binding="{Binding Station}" Value="Sound"><Setter TargetName="SoundThings" Property="Visibility" Value="Visible" /></DataTrigger>
                 <DataTrigger Binding="{Binding Station}" Value="QA"><Setter TargetName="QAThings" Property="Visibility" Value="Visible" /></DataTrigger>
                 <DataTrigger Binding="{Binding Station}" Value="Production"><Setter TargetName="ProductionThings" Property="Visibility" Value="Visible" /></DataTrigger>
+                <DataTrigger Binding="{Binding Station}" Value="Director"><Setter TargetName="DirectorThings" Property="Visibility" Value="Visible" /></DataTrigger>
+                <DataTrigger Binding="{Binding Station}" Value="Writer"><Setter TargetName="WriterThings" Property="Visibility" Value="Visible" /></DataTrigger>
+                <DataTrigger Binding="{Binding Station}" Value="Capture"><Setter TargetName="CaptureThings" Property="Visibility" Value="Visible" /></DataTrigger>
+                <DataTrigger Binding="{Binding Station}" Value="Editing"><Setter TargetName="EditingThings" Property="Visibility" Value="Visible" /></DataTrigger>
+                <DataTrigger Binding="{Binding Station}" Value="Mixing"><Setter TargetName="MixingThings" Property="Visibility" Value="Visible" /></DataTrigger>
+                <DataTrigger Binding="{Binding Station}" Value="Graphics"><Setter TargetName="GraphicsThings" Property="Visibility" Value="Visible" /></DataTrigger>
+                <DataTrigger Binding="{Binding Station}" Value="Publishing"><Setter TargetName="PublishingThings" Property="Visibility" Value="Visible" /></DataTrigger>
+                <DataTrigger Binding="{Binding Station}" Value="Producing"><Setter TargetName="ProducingThings" Property="Visibility" Value="Visible" /></DataTrigger>
                 <DataTrigger Binding="{Binding Screen}" Value="Reading">
                     <Setter TargetName="Page" Property="Visibility" Value="Visible" />
                 </DataTrigger>
@@ -547,6 +645,9 @@
             </Button>
             <TextBlock DockPanel.Dock="Right" Text="{Binding MoreText}" Style="{StaticResource MutedText}" FontSize="12" Margin="12,0,0,0"
                        Visibility="{Binding MoreText, Converter={StaticResource EmptyToVis}}" />
+            <TextBlock DockPanel.Dock="Bottom" Text="{Binding Elsewhere}" Style="{StaticResource MutedText}" FontSize="12" Margin="0,2,0,0" TextWrapping="Wrap"
+                       ToolTip="Agents hired in a project's studio work there: choose the project at the top to see its studio"
+                       Visibility="{Binding Elsewhere, Converter={StaticResource EmptyToVis}}" />
             <TextBlock Text="{Binding Summary}" Style="{StaticResource MutedText}" FontSize="12" TextTrimming="CharacterEllipsis" />
         </DockPanel>
         <!--
@@ -676,6 +777,13 @@
                         <Rectangle Canvas.Left="244" Canvas.Top="276" Width="22" Height="24" Fill="#B45309" Opacity="0.85" />
                         <Ellipse Canvas.Left="236" Canvas.Top="236" Width="22" Height="40" Fill="#16A34A" Opacity="0.9" />
                         <Ellipse Canvas.Left="252" Canvas.Top="232" Width="20" Height="44" Fill="#22C55E" Opacity="0.9" />
+                    </Canvas>
+                    <!-- A film studio: a green screen pulled down on the back wall -->
+                    <Canvas Visibility="{Binding IsFilm, Converter={StaticResource BoolToVis}}">
+                        <Rectangle Canvas.Left="290" Canvas.Top="152" Width="36" Height="4" RadiusX="2" RadiusY="2" Fill="#374151" />
+                        <Rectangle Canvas.Left="293" Canvas.Top="156" Width="30" Height="138" Fill="#22C55E" />
+                        <Rectangle Canvas.Left="293" Canvas.Top="156" Width="30" Height="138" Fill="Black" Opacity="0.06" />
+                        <Path Fill="#16A34A" Data="M 293,294 L 323,294 L 330,302 L 290,302 Z" />
                     </Canvas>
                     <!-- The studio: its banner, the lobby door and the bench where agents wait to be hired -->
                     <Canvas Visibility="{Binding IsStudio, Converter={StaticResource BoolToVis}}">

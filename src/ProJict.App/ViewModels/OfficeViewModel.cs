@@ -52,6 +52,8 @@ public sealed partial class OfficeViewModel : ObservableObject
     /// <summary>The project whose game studio shows instead of the office (its banner), or null for the office.</summary>
     [ObservableProperty] [NotifyPropertyChangedFor(nameof(IsStudio), nameof(BannerText))] private string? _studioName;
     public bool IsStudio => StudioName != null;
+    /// <summary>A film studio: a green screen on the back wall.</summary>
+    [ObservableProperty] private bool _isFilm;
     public string BannerText => StudioName is not { } name ? "" : Board is { Total: > 0 } board ? $"{name} studio · {board.Percent}% done" : $"{name} studio";
 
     /// <summary>The studio's milestone board: how much of the project is done, and of its categories.</summary>
@@ -102,6 +104,8 @@ public sealed partial class OfficeViewModel : ObservableObject
     public ObservableCollection<object> Scene { get; } = [];
     public bool IsEmpty => Agents.Count == 0;
     public string? MoreText { get; private set; }
+    /// <summary>All projects: the agents hired in a project's studio, who are there rather than here.</summary>
+    [ObservableProperty] private string? _elsewhere;
     /// <summary>"Building 2 · Talking 1 · Resting 3".</summary>
     public string Summary { get; private set; } = "";
 
@@ -146,8 +150,9 @@ public sealed partial class OfficeViewModel : ObservableObject
     /// <summary>The agents the view shows, each at its desk or at the cooler; called as they come, go and act.</summary>
     /// <param name="watching">A chat watcher runs for the agent.</param>
     /// <param name="studio">A project's game studio to show instead of the office: hired agents work at their role's station, the others wait in the lobby.</param>
+    /// <param name="asleep">You put every agent to sleep: the ones done sleep at their desks.</param>
     public void Update(IReadOnlyList<AgentCardViewModel> cards, DateTime now, Func<McpSession, bool> holdsItems, Func<McpSession, bool> watching,
-        Func<McpSession, string?> lastChat, StudioContext? studio = null)
+        Func<McpSession, string?> lastChat, StudioContext? studio = null, bool asleep = false)
     {
         var sessions = cards.Select(c => c.Session).ToList();
         foreach (var gone in _agents.Keys.Except(sessions).ToList())
@@ -160,15 +165,16 @@ public sealed partial class OfficeViewModel : ObservableObject
             _lobbyOf.Remove(gone);
         }
         StudioName = studio?.ProjectName;
+        IsFilm = studio?.Studio.Kind == StudioKind.Film;
         ShowBoard(studio?.Board);
-        for (var i = 0; i < Desks.Count; i++) Desks[i].SetRole(studio?.Studio.Roles.FirstOrDefault(r => (int)r.Station == i));
+        for (var i = 0; i < Desks.Count; i++) Desks[i].SetRole(studio?.Studio.Roles.FirstOrDefault(r => StudioFlow.PlaceOf(r.Station) == i));
         if (studio != null)
         {
             // In the studio a desk is a role's station: its agent works there; the others wait in the lobby.
             _deskOf.Clear();
             foreach (var card in cards)
-                if (StudioFlow.RoleOf(studio.Studio, card.Session.AgentName) is { } role && !_deskOf.ContainsValue((int)role.Station))
-                    _deskOf[card.Session] = (int)role.Station;
+                if (StudioFlow.RoleOf(studio.Studio, card.Session.AgentName) is { } role && !_deskOf.ContainsValue(StudioFlow.PlaceOf(role.Station)))
+                    _deskOf[card.Session] = StudioFlow.PlaceOf(role.Station);
             foreach (var session in _lobbyOf.Keys.Where(_deskOf.ContainsKey).ToList()) _lobbyOf.Remove(session);
         }
         else _lobbyOf.Clear();
@@ -204,7 +210,7 @@ public sealed partial class OfficeViewModel : ObservableObject
         }
         MoreText = cards.Count > placed.Count ? $"+{cards.Count - placed.Count} more {(studio != null ? "waiting outside" : "without a desk")}" : null;
 
-        var activities = placed.ToDictionary(a => a, a => OfficeActivities.Of(a.Session, now, holdsItems(a.Session), watching(a.Session)));
+        var activities = placed.ToDictionary(a => a, a => OfficeActivities.Of(a.Session, now, holdsItems(a.Session), watching(a.Session), asleep));
         // Talkers keep their spot at the cooler while they talk, but move in on their side when a closer one comes free;
         // newcomers take the first free one.
         foreach (var (agent, activity) in activities)

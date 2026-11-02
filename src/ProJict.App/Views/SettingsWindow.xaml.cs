@@ -56,6 +56,12 @@ public partial class SettingsWindow : Window
         MutedText.Visibility = muted.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
         AgentClient.ItemsSource = AgentSetups(state);
         AgentClient.SelectedIndex = 0;
+        if (OldBridgeText(App.Current.MainVm.Agents.Sessions) is { } old)
+        {
+            OldBridgeNote.Text = old;
+            OldBridgeNote.Visibility = Visibility.Visible;
+            ConnectAgent.IsExpanded = true;
+        }
         GitHubAccount.Text = s.GitHubAccount ?? "";
         UseGitHubCli.IsChecked = state.AppSettings.UseGitHubCliSignIn;
         VersionText.Text = $"ProJict {UpdateService.CurrentVersionText}";
@@ -201,13 +207,14 @@ public partial class SettingsWindow : Window
     public sealed record AgentSetup(string Client, string Text, string Where);
 
     /// <summary>
-    /// Setup for each supported agent, all starting "ProJict.exe --mcp" (plus this data folder when it isn't the
-    /// remembered one). Formats: Claude Code and Codex CLI commands, Codex's config.toml, OpenCode's opencode.json and
-    /// the mcpServers JSON most other clients use.
+    /// Setup for each supported agent, all starting "ProJictBridge.exe --mcp" (plus this data folder when it isn't the
+    /// remembered one): the bridge ProJict keeps outside its install folder, so its updates don't cut agents off (in a
+    /// development build, ProJict.exe). Formats: Claude Code and Codex CLI commands, Codex's config.toml, OpenCode's
+    /// opencode.json and the mcpServers JSON most other clients use.
     /// </summary>
     public static IReadOnlyList<AgentSetup> AgentSetups(AppState state)
     {
-        var exe = Environment.ProcessPath!;
+        var exe = BridgeInstaller.Command;
         var remembered = state.AppSettings.DataRoot is { } r ? Path.GetFullPath(r) : null;
         string[] args = string.Equals(remembered, state.Store.DataRoot, StringComparison.OrdinalIgnoreCase)
             ? ["--mcp"] : ["--mcp", "--data", state.Store.DataRoot];
@@ -247,6 +254,19 @@ public partial class SettingsWindow : Window
             new("OpenCode", openCode, "Merge into ~/.config/opencode/opencode.json (for all projects) or opencode.json in a project folder."),
             new("Claude Desktop & other MCP clients", mcpServers, "Merge into the client's MCP settings, e.g. claude_desktop_config.json for Claude Desktop."),
         ];
+    }
+
+    /// <summary>
+    /// The connected agents still on the old ProJict.exe --mcp, which an update of ProJict cuts off, with what to do; null
+    /// when there are none (or no bridge to move to, in a development build).
+    /// </summary>
+    public static string? OldBridgeText(IEnumerable<ProJict.Core.Agents.McpSession> sessions)
+    {
+        var old = sessions.Where(s => s.OldBridge).Select(s => s.AgentName).Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.CurrentCultureIgnoreCase).ToList();
+        if (old.Count == 0 || BridgeInstaller.BridgePath == null) return null;
+        return $"{string.Join(", ", old)} {(old.Count == 1 ? "reaches" : "reach")} ProJict through the old ProJict.exe --mcp, which a ProJict update cuts off. " +
+               "Add ProJict to them again with the command above (it starts ProJictBridge.exe, which stays connected through updates and keeps their names), " +
+               "then restart them or reconnect ProJict in them (/mcp in Claude Code).";
     }
 
     /// <summary>The Claude Code command (kept for checks that look for it).</summary>

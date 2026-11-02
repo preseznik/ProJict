@@ -270,7 +270,10 @@ public sealed partial class AgentTools : IMcpToolHost
         "When a project shows a shipRequest, the user wants it committed, built, packaged, pushed or released: read it with ship_request, post your " +
         "plan with plan_ship and wait for their approval in ProJict; only then run the steps, report each with report_ship and end with finish_ship " +
         "(record a published release with draft_release save=true). " +
-        "When a project shows a studio, it's a game studio and the user hires agents to its roles: if you have one, work as it expects. " +
+        "When a result says asleep, the user put every agent to sleep: finish what you're doing, then stop and stay idle until you're told you're " +
+        "woken (claim_item is refused meanwhile). " +
+        "When a project shows a studio (a game or film studio), the user hires agents to its roles: if you have one, work as it expects, and agree with the " +
+        "team in the studio's channel who takes what, volunteering for what suits your model and tools. " +
         "When a project shows a cleanupRequest, the user wants its repo folder cleaned up: read it with cleanup_request, scan the folder and post your plan " +
         "with plan_cleanup; ProJict moves what they approve to the Recycle Bin, so never remove files yourself, and do no other work there until it's decided. " +
         "The user and agents also talk live in Chat #channels (list_channels, join_channel to read one, read_channel, post_message, create_channel), and privately: " +
@@ -763,6 +766,7 @@ public sealed partial class AgentTools : IMcpToolHost
 
     private string ClaimItem(McpSession session, Args args, List<Attachment> files)
     {
+        CheckAwake();
         var (project, loc) = FindItem(session, args.Required("id"));
         var item = loc.Item;
         if (item.IsDone) throw new McpToolException("This item is already done. Use update_item with state todo to reopen it first.", ToolProblem.Conflict);
@@ -853,6 +857,7 @@ public sealed partial class AgentTools : IMcpToolHost
             "done" => ItemState.Done,
             _ => throw new McpToolException("state must be todo, in_progress or done."),
         };
+        if (state == ItemState.InProgress) CheckAwake();
         if (text == null && tag == null && priority == null && state == null && string.IsNullOrWhiteSpace(comment))
             throw new McpToolException("Nothing to change: give text, tag, priority, state or comment.");
         if (text != null && text.Trim().Length == 0) throw new McpToolException("The text can't be empty.");

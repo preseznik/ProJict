@@ -1,3 +1,4 @@
+using ProJict.Core.Chat;
 using ProJict.Core.Model;
 
 namespace ProJict.Core.Features;
@@ -12,7 +13,16 @@ public static class StudioFlow
     private const int EndedKept = 30;
 
     /// <summary>A new game studio with its eight roles, each with what it's expected to do.</summary>
-    public static Studio NewGame() => new() { Roles = [.. DefaultRoles()] };
+    public static Studio NewGame() => New(StudioKind.Game);
+
+    /// <summary>A new studio of that kind, with its eight roles.</summary>
+    public static Studio New(StudioKind kind) => new() { Kind = kind, Roles = [.. kind == StudioKind.Film ? FilmRoles() : DefaultRoles()] };
+
+    /// <summary>"game studio", "film studio".</summary>
+    public static string KindName(StudioKind kind) => kind == StudioKind.Film ? "film studio" : "game studio";
+
+    /// <summary>Which of the eight places a station is (0–3 the left wall back to front, 4–7 the right).</summary>
+    public static int PlaceOf(StudioStation station) => (int)station % 8;
 
     public static IEnumerable<StudioRole> DefaultRoles()
     {
@@ -47,6 +57,66 @@ public static class StudioFlow
             "Owns the schedule and shipping: what goes into the next build or release, priorities, and that nothing waits unnoticed. Delivers milestones " +
             "and their items, release notes, ship requests and plans, and a short status when asked. Works with everyone: agrees scope with the Lead " +
             "designer and asks QA what blocks a release.");
+    }
+
+    /// <summary>
+    /// The studio's channel: the one it has, else the project's own Open channel (the oldest), else a new one named after
+    /// the project (#grid2vr), which you start.
+    /// </summary>
+    public static ChatChannel ChannelFor(Project project, Studio studio, ChatRoom room, ChatActor owner)
+    {
+        if (studio.ChannelId is { } id && room.Channels.FirstOrDefault(c => c.Id == id) is { } kept) return kept;
+        var channel = room.Channels
+            .Where(c => !c.Direct && c.Access == ChannelAccess.Open && c.Link is { CategoryId: null, ItemId: null } link && link.ProjectId == project.Id)
+            .OrderBy(c => c.CreatedAt).FirstOrDefault()
+            ?? room.Create(owner, FreeName(room, project), ChannelAccess.Open, new ChannelLink { ProjectId = project.Id },
+                $"{project.Name}'s studio: the team talks here and agrees who takes what");
+        studio.ChannelId = channel.Id;
+        return channel;
+    }
+
+    private static string FreeName(ChatRoom room, Project project)
+    {
+        var stem = new string(project.Name.ToLowerInvariant().Select(c => char.IsLetterOrDigit(c) ? c : '-').ToArray()).Trim('-');
+        if (stem.Length == 0) stem = "studio";
+        return new[] { stem, stem + "-studio" }.Concat(Enumerable.Range(2, 50).Select(n => $"{stem}-studio-{n}"))
+            .First(name => room.NameProblem(name) == null);
+    }
+
+    /// <summary>A film studio's roles: from the idea through recording, editing and sound to the published video.</summary>
+    public static IEnumerable<StudioRole> FilmRoles()
+    {
+        StudioRole Role(string name, StudioStation station, string definition) => new() { Name = name, Station = station, Definition = definition };
+        yield return Role("Director", StudioStation.Director,
+            "Owns each video's idea and how it comes across: the story, the script and storyboard, the look and the pace. Decides between options and " +
+            "signs off a video before it's published. Delivers the plan for each video in its item (what, for whom, how long, the shots) and a clear " +
+            "next step for the others. Works with everyone: agrees the script with the Writer and the schedule with the Producer.");
+        yield return Role("Writer", StudioStation.Writer,
+            "Owns the words: scripts, voice-over text, on-screen titles, and the first draft of the title and description. Delivers a script in the " +
+            "video's item (or a note), timed to the shots, and changes after the Director's review. Works with the Director on the story, Sound on the " +
+            "voice-over and the Publisher on the title and description.");
+        yield return Role("Capture", StudioStation.Capture,
+            "Owns the recordings: desktop and game captures, and VR recordings (e.g. with VRCapture), in the resolution, frame rate and audio the video " +
+            "needs. Delivers the clips in the project's folder, named by shot, with a note of what's where. Works with the Director on the shots and " +
+            "with the Editor on what's missing.");
+        yield return Role("Editor", StudioStation.Editing,
+            "Owns the cut: picks and orders the clips, pacing, transitions, color, titles and captions, and exports the finished video. Delivers each " +
+            "cut in the project's folder with a note of its length and what changed, and the final export. Works with Capture on missing shots, Sound " +
+            "on the mix and the Director on sign-off.");
+        yield return Role("Sound", StudioStation.Mixing,
+            "Owns how the video sounds: music (e.g. made with Suno in the browser), voice-over (e.g. ElevenLabs), effects and the final mix and loudness. " +
+            "Delivers the tracks and the mix in the project's folder, with the music's and voices' terms noted. Works with the Writer on the voice-over " +
+            "and the Editor on timing.");
+        yield return Role("Thumbnail & graphics", StudioStation.Graphics,
+            "Owns what's drawn: thumbnails (2–4 to choose from per video), channel art, titles and lower thirds. Delivers images in the sizes the video " +
+            "and channel need, attached to the video's item. Works with the Director on the look and the Publisher on the thumbnail choice.");
+        yield return Role("Publisher", StudioStation.Publishing,
+            "Owns publishing: the title, description, tags, playlists, end screens and the date for each video, and its thumbnail choices. Never " +
+            "publishes before the user approves. Delivers a publish plan in the video's item, and the link once it's out. Works with the Writer on the " +
+            "text, Graphics on the thumbnails and the Producer on the schedule.");
+        yield return Role("Producer", StudioStation.Producing,
+            "Owns the schedule: which videos are made when, what each still needs, and that nothing waits unnoticed. Delivers milestones and their " +
+            "items, and a short status when asked. Works with everyone: agrees what's next with the Director and checks with the Publisher what's due.");
     }
 
     private static bool Same(string a, string b) => string.Equals(a.Trim(), b.Trim(), StringComparison.OrdinalIgnoreCase);

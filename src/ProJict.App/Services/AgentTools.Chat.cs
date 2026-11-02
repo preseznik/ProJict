@@ -307,6 +307,21 @@ public sealed partial class AgentTools
     {
         var args = new Args(arguments);
         var seconds = Math.Clamp(args.Int("seconds") ?? MaxWaitSeconds, 1, MaxWaitSeconds);
+        if (IsAsleep)
+        {
+            // Asleep: it waits (until woken, at most the time given) and gets nothing, so it doesn't spin.
+            var woke = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            Action awake = () => woke.TrySetResult();
+            SleepChanged += awake;
+            try { await Task.WhenAny(woke.Task, Task.Delay(TimeSpan.FromSeconds(seconds))); }
+            finally { SleepChanged -= awake; }
+            if (IsAsleep)
+                return await Run(session, () => WithWaiting(session, "wait_for_messages", Json(new JsonObject
+                {
+                    ["messages"] = new JsonArray(),
+                    ["note"] = "ProJict is asleep: messages wait until you're woken. Stop here; you'll hear when it's woken.",
+                })));
+        }
         var arrived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         Action<ChatChannel>? listener = null;
         var only = await Run(session, () =>

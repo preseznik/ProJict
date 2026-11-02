@@ -21,9 +21,14 @@ public static class OfficeActivities
     private static readonly HashSet<string> Manage = ["add_item", "add_comment", "write_doc", "write_wiki", "update_project", "plan_ship", "draft_release", "update_item"];
     private static readonly HashSet<string> Meta = ["set_status", "set_label", "set_name"];
 
+    /// <summary>Everyone's asleep: an agent that did nothing this long has finished up and sleeps.</summary>
+    public static readonly TimeSpan AsleepAfter = TimeSpan.FromSeconds(20);
+
     /// <param name="watching">A chat watcher runs for it, so it hears Chat while idle.</param>
-    public static OfficeActivity Of(McpSession session, DateTime now, bool holdsItems, bool watching = false)
+    /// <param name="asleep">You put every agent to sleep: once it's done it sleeps, whatever it listens for.</param>
+    public static OfficeActivity Of(McpSession session, DateTime now, bool holdsItems, bool watching = false, bool asleep = false)
     {
+        if (asleep && now - AgentsViewSettings.LastSeen(session) >= AsleepAfter) return OfficeActivity.Resting;
         if (session.Listening) return OfficeActivity.Listening;
         if (now - AgentsViewSettings.LastSeen(session) >= RestAfter) return watching ? OfficeActivity.Listening : OfficeActivity.Resting;
         var tool = session.Recent.LastOrDefault(a => a.Tool == null || !Meta.Contains(a.Tool))?.Tool;

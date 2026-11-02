@@ -977,11 +977,16 @@
                         </StackPanel>
 
                         <!-- The project's game studio: its roles and what each expects; hiring is in the Agents view. -->
-                        <TextBlock Grid.Row="9" Text="Game studio" Visibility="{Binding CanHaveStudio, Converter={StaticResource BoolToVis}}" />
+                        <TextBlock Grid.Row="9" Text="Studio" Visibility="{Binding CanHaveStudio, Converter={StaticResource BoolToVis}}" />
                         <StackPanel x:Name="StudioDetails" Grid.Row="9" Grid.Column="1" Margin="0,4" Visibility="{Binding CanHaveStudio, Converter={StaticResource BoolToVis}}">
-                            <Button Content="Set up a game studio" Command="{Binding SetUpStudioCommand}" HorizontalAlignment="Left"
-                                    Visibility="{Binding HasStudio, Converter={StaticResource InvBoolToVis}}" />
+                            <StackPanel Orientation="Horizontal" Visibility="{Binding HasStudio, Converter={StaticResource InvBoolToVis}}">
+                                <Button Content="Set up a game studio" Command="{Binding SetUpStudioCommand}" CommandParameter="Game" />
+                                <Button Content="Set up a film studio" Command="{Binding SetUpStudioCommand}" CommandParameter="Film" Margin="8,0,0,0" />
+                            </StackPanel>
                             <TextBlock Margin="0,4,0,6" FontSize="12" TextWrapping="Wrap" Text="{Binding StudioHint}" />
+                            <Button Content="{Binding RemoveStudioText}" Command="{Binding RemoveStudioCommand}" HorizontalAlignment="Left" Margin="0,0,0,8"
+                                    Visibility="{Binding HasStudio, Converter={StaticResource BoolToVis}}"
+                                    ToolTip="This project's room in the Agents view goes back to being the office; its roles and hires are removed" />
                             <ItemsControl ItemsSource="{Binding StudioRoles}" Focusable="False" Visibility="{Binding HasStudio, Converter={StaticResource BoolToVis}}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type vm:StudioRoleRow}">

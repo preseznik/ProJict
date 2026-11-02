@@ -92,6 +92,9 @@
                         <TextBox x:Name="McpCommand" IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True" FontFamily="{StaticResource MonoFont}" FontSize="12"
                                  MaxHeight="170" VerticalScrollBarVisibility="Auto" Margin="0,8,0,0" />
                         <TextBlock x:Name="McpWhere" Style="{StaticResource MutedText}" Margin="2,4,0,0" TextWrapping="Wrap" />
+                        <!-- Connected agents on the old bridge (ProJict.exe): add ProJict to them again with the command above. -->
+                        <TextBlock x:Name="OldBridgeNote" Margin="2,8,0,0" TextWrapping="Wrap" Visibility="Collapsed"
+                                   Foreground="{DynamicResource SystemFillColorCautionBrush}" />
                     </StackPanel>
                 </Expander>
             </StackPanel>

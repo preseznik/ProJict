@@ -119,6 +119,16 @@ public sealed class ExportOptions
 }
 
 /// <summary>Workspace-wide settings stored next to the data (workspace.json).</summary>
+/// <summary>You put every agent to sleep (the Agents view): they finish what they're doing and stop, until you wake them.</summary>
+public sealed class AgentsSleep
+{
+    public DateTime At { get; set; } = DateTime.Now;
+    public string By { get; set; } = "";
+    /// <summary>When you woke them up again; null while they sleep.</summary>
+    public DateTime? WokenAt { get; set; }
+    public string? WokenBy { get; set; }
+}
+
 public sealed class WorkspaceSettings
 {
     public const string PersonalGroup = "Personal";
@@ -136,6 +146,8 @@ public sealed class WorkspaceSettings
     /// <summary>Folders the TXT files were imported from; exporting into them would overwrite the archive.</summary>
     public List<string> ImportSourceFolders { get; set; } = [];
     public string Hotkey { get; set; } = "Ctrl+Alt+J";
+    /// <summary>Every agent put to sleep (and woken again); null when it never happened.</summary>
+    public AgentsSleep? Sleep { get; set; }
     public bool CloseToTray { get; set; } = true;
     public int StaleDays { get; set; } = 30;
     public string? VsCodePath { get; set; }

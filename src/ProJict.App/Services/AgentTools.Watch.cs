@@ -34,7 +34,7 @@ public sealed partial class AgentTools
     {
         var remembered = _state.AppSettings.DataRoot is { } root ? Path.GetFullPath(root) : null;
         var data = string.Equals(remembered, _state.Store.DataRoot, StringComparison.OrdinalIgnoreCase) ? "" : $" --data \"{_state.Store.DataRoot}\"";
-        return $"\"{Environment.ProcessPath}\" --watch-chat --as \"{agent}\"{data}";
+        return $"\"{BridgeInstaller.Command}\" --watch-chat --as \"{agent}\"{data}";
     }
 
     /// <summary>
@@ -57,15 +57,20 @@ public sealed partial class AgentTools
                 Action<ChatChannel> listener = _ => changed.TrySetResult();
                 // A change in a project (a comment, a ship decision) wakes it too.
                 Action<Project> touched = _ => changed.TrySetResult();
+                // Put to sleep or woken: it hears at once.
+                Action sleepy = () => changed.TrySetResult();
                 var rooms = new List<ChatRoom>();
                 var lines = await _dispatcher.InvokeAsync(() =>
                 {
                     Chat.Changed += listener;
                     _state.ProjectChanged += touched;
+                    SleepChanged += sleepy;
                     // Other ProJicts' channels too: a message there wakes it as well.
                     rooms.AddRange(SharedRooms(identity));
                     foreach (var room in rooms) room.Changed += listener;
-                    var found = new List<string>();
+                    var found = WatchSleepLines(identity);
+                    // Asleep: only that; chat and other news wait until it's woken.
+                    if (IsAsleep) return found;
                     if (!_state.AppSettings.AgentsUseChat)
                     {
                         if (!saidOff) found.Add("Chat is off for AI agents (the user's Settings › AI agents); still watching in case it comes back on.");
@@ -95,6 +100,7 @@ public sealed partial class AgentTools
                     {
                         Chat.Changed -= listener;
                         _state.ProjectChanged -= touched;
+                        SleepChanged -= sleepy;
                         foreach (var room in rooms) room.Changed -= listener;
                     });
                 }
@@ -118,6 +124,20 @@ public sealed partial class AgentTools
         lock (_live) same = _live.Where(s => string.Equals(s.AgentName, identity.AgentName, StringComparison.OrdinalIgnoreCase)).ToList();
         foreach (var session in same) identity.Noticed.UnionWith(session.Noticed);
         var lines = WorkLines(identity, same.SelectMany(s => _main.Agents.ProjectsOf(s)).Distinct().ToList()).Select(l => "[ProJict] " + l).ToList();
+        foreach (var session in same) session.Noticed.UnionWith(identity.Noticed);
+        return lines;
+    }
+
+    /// <summary>
+    /// Going to sleep and waking up, as "[ProJict] …" lines; told once, by the watcher or a tool result. The wake line comes
+    /// when it was told it's asleep either way, since an agent asleep and idle hears it only from its watcher.
+    /// </summary>
+    private List<string> WatchSleepLines(McpSession identity)
+    {
+        List<McpSession> same;
+        lock (_live) same = _live.Where(s => string.Equals(s.AgentName, identity.AgentName, StringComparison.OrdinalIgnoreCase)).ToList();
+        foreach (var session in same) identity.Noticed.UnionWith(session.Noticed);
+        var lines = SleepLines(identity).Select(l => "[ProJict] " + l).ToList();
         foreach (var session in same) session.Noticed.UnionWith(identity.Noticed);
         return lines;
     }

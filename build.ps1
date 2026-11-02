@@ -1,5 +1,5 @@
 # Builds the self-contained app and the installer: artifacts\ProJict-Setup-<version>.exe
-# Requires the .NET 10 SDK and Inno Setup 6.
+# Requires the .NET 10 SDK, Inno Setup 6 and Visual Studio's C++ build tools (for the bridge).
 param([string]$Version)
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
@@ -13,6 +13,15 @@ $publish = 'artifacts/publish'
 if (Test-Path $publish) { Remove-Item $publish -Recurse -Force }
 dotnet publish src/ProJict.App -c Release -r win-x64 --self-contained -p:DebugType=none -p:Version=$Version -o $publish
 if ($LASTEXITCODE -ne 0) { throw 'dotnet publish failed' }
+
+# The bridge agents start (ProJictBridge.exe, one native file) goes next to ProJict.exe; ProJict keeps a copy outside
+# its install folder so updates don't cut agents off. Native AOT needs the C++ build tools, and finds them with vswhere.
+$env:PATH = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer;$env:PATH"
+$bridge = 'artifacts/bridge'
+if (Test-Path $bridge) { Remove-Item $bridge -Recurse -Force }
+dotnet publish src/ProJict.Bridge -c Release -r win-x64 -p:DebugType=none -p:Version=$Version -o $bridge
+if ($LASTEXITCODE -ne 0) { throw 'dotnet publish (bridge) failed' }
+Copy-Item "$bridge/ProJictBridge.exe" $publish
 
 $iscc = @(
     (Get-Command ISCC.exe -ErrorAction SilentlyContinue).Source,

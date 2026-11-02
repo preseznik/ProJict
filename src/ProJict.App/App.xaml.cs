@@ -91,6 +91,8 @@ public partial class App : Application
             () => MainWindow is { IsVisible: true, IsActive: true } window && window.WindowState != WindowState.Minimized);
 
         _agents = new AgentPipeServer(AgentPipeServer.PipeName(dataRoot), MainVm.AgentTools, UpdateService.CurrentVersionText, MainVm.AgentTools.WatchOverPipeAsync);
+        // The bridge agents start, outside the install folder so updates don't cut them off.
+        Task.Run(BridgeInstaller.Refresh);
         if (appSettings.AllowAgents) _agents.Start();
 
         // Started for an AI agent (by the --mcp bridge): stay in the tray until the user opens the window.

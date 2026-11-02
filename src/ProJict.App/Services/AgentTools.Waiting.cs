@@ -18,15 +18,20 @@ public sealed partial class AgentTools
 
     private string WithWaiting(McpSession session, string tool, string result)
     {
-        var lines = new List<string>();
-        if (!ChatTools.Contains(tool)) lines.AddRange(ChatLines(session));
-        lines.AddRange(WorkLines(session));
-        if (lines.Count == 0) return result;
+        var lines = SleepLines(session);
+        // Asleep: nothing else, so nothing gets it going again (it all comes through once it's woken).
+        if (!IsAsleep)
+        {
+            if (!ChatTools.Contains(tool)) lines.AddRange(ChatLines(session));
+            lines.AddRange(WorkLines(session));
+        }
+        if (lines.Count == 0 && !IsAsleep) return result;
         try
         {
             if (JsonNode.Parse(result) is JsonObject json)
             {
-                json["waitingForYou"] = new JsonArray(lines.Select(l => (JsonNode)l).ToArray());
+                if (lines.Count > 0) json["waitingForYou"] = new JsonArray(lines.Select(l => (JsonNode)l).ToArray());
+                MarkAsleep(json);
                 return Json(json);
             }
         }
@@ -42,6 +47,10 @@ public sealed partial class AgentTools
     {
         var now = DateTime.Now;
         var lines = new List<string>();
+        if (session.OldBridge && BridgeInstaller.BridgePath is { } bridge && session.Noticed.Add("oldbridge"))
+            lines.Add($"You reach ProJict through \"ProJict.exe --mcp\", which a ProJict update cuts off (you'd lose ProJict until your client " +
+                      $"reconnects). Ask the user to add ProJict to your client again with \"{bridge}\" --mcp instead (ProJict's Settings › AI agents " +
+                      "has the exact command): it stays connected through updates and keeps your name.");
         if (session.RenamedBy is { } renamer && session.Noticed.Add($"renamed:{session.AgentName}"))
             lines.Add($"{renamer} renamed you {session.AgentName}: everything you do is now signed {session.AgentName}. " +
                       $"Go by that name, also in Chat, and pick it again with set_name {session.AgentName} when you come back.");

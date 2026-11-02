@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Threading;
 using ProJict.App.ViewModels;
 using ProJict.Core.Agents;
@@ -118,8 +119,22 @@ public partial class AgentActivityView : UserControl
         // Its card may only just have been made (it was hidden): scroll once it's laid out.
         Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () =>
         {
-            if (LiveCards.ItemContainerGenerator.ContainerFromItem(card) is FrameworkElement container) container.BringIntoView();
+            if (LiveCards.ItemContainerGenerator.ContainerFromItem(card) is not FrameworkElement container) return;
+            container.BringIntoView();
+            // Clicked in the office: ready to write to it (only while ProJict is in front, so nothing takes focus from you).
+            if (card.IsFocused && Window.GetWindow(this)?.IsActive == true && FindDraft(container) is { } draft) draft.Focus();
         });
+    }
+
+    private static TextBox? FindDraft(DependencyObject parent)
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            if (child is TextBox { Name: "PrivateDraft" } box) return box;
+            if (FindDraft(child) is { } found) return found;
+        }
+        return null;
     }
 
     private void AgentRow_ContextMenuOpening(object sender, ContextMenuEventArgs e) => ((sender as FrameworkElement)?.DataContext as AgentListRow)?.RefreshMenu();
