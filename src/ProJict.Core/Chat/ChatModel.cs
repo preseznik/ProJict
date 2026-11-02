@@ -27,6 +27,9 @@ public sealed class ChatMember
     public DateTime? MutedUntil { get; set; }
     /// <summary>The newest message they've seen, for unread counts and what waits for an agent.</summary>
     public DateTime? LastRead { get; set; }
+    /// <summary>A private conversation they put in their archive: nothing new in it counts as unread for them until they take it out.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Archived { get; set; }
 }
 
 public sealed class ChatMessage

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.38
+
+- **An archive for private conversations.** Right-click one of your private conversations in Chat › **Archive** and it moves to **Archive** at the bottom of the list, folded away. Nothing new in it counts, turns red or notifies you, not even an @mention, until you open it or right-click › **Take out of the archive**, which brings it back and opens it with the **New** line above what came meanwhile. It's archived only for you; whoever you talk to there writes and reads as before.
+
 ## 0.1.37
 
 - **ComfyUI runs keep the 3D models they make, and say why one is refused.** A run kept only pictures, video and sound, so a 3D workflow gave the item ten preview pictures and not the model it saved. Now a run keeps what the workflow saves, models included (.glb), and keeps its previews only when it saves nothing. When ComfyUI refuses a workflow, the agent and the item's history get its reason per node (a missing LoRA, say), not just "Prompt outputs failed validation".

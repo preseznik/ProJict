@@ -42,6 +42,8 @@ public sealed partial class ChatViewModel : ObservableObject
         Yours = new ChatSection(state, "yours", "Channels", "The channels you're in");
         Others = new ChatSection(state, "others", "Other channels", "Channels you're not in");
         Private = new ChatSection(state, "private", "Private messages", "One on one: right-click someone › Private message");
+        Archive = new ChatSection(state, "archive", "Archive",
+            "Private conversations you archived: nothing new in them counts or notifies you until you open one, or take it out (right-click)", foldedAtFirst: true);
         Room.Changed += OnChanged;
         Room.Removed += channel =>
         {
@@ -151,6 +153,8 @@ public sealed partial class ChatViewModel : ObservableObject
     /// <summary>Private conversations, below all channels: yours, and (as the owner) the ones between agents.</summary>
     public List<ChannelRowViewModel> PrivateChats { get; private set; } = [];
     public bool HasPrivateChats => PrivateChats.Count > 0;
+    /// <summary>Your private conversations in the archive, at the bottom.</summary>
+    public List<ChannelRowViewModel> ArchivedChats { get; private set; } = [];
     public bool HasNoChannels => !AllChannels.Any();
     /// <summary>The channels of each ProJict you're connected to, under its owner's name.</summary>
     public List<ChatSection> HostChats { get; private set; } = [];
@@ -159,6 +163,7 @@ public sealed partial class ChatViewModel : ObservableObject
     public ChatSection Yours { get; }
     public ChatSection Others { get; }
     public ChatSection Private { get; }
+    public ChatSection Archive { get; }
 
     [ObservableProperty] private ChatChannel? _channel;
     public bool HasChannel => Channel != null;
@@ -307,6 +312,21 @@ public sealed partial class ChatViewModel : ObservableObject
         if (Channel == channel) OpenChannel(channel);
     }
 
+    /// <summary>
+    /// Puts one of your private conversations in the archive, where nothing new in it counts or notifies you, or takes it
+    /// out (and opens it, so what came meanwhile is read there rather than announced).
+    /// </summary>
+    internal void SetArchived(ChatChannel channel, bool archived)
+    {
+        if (!Try(() => Room.SetArchived(channel, MyName, archived))) return;
+        var who = ChatRoom.Title(channel, MyName);
+        _state.StatusText = archived
+            ? $"Archived your conversation with {who}: nothing new in it counts until you open it or take it out."
+            : $"Took your conversation with {who} out of the archive.";
+        Refresh();
+        if (!archived) OpenChannel(channel);
+    }
+
     internal void DeleteAgentChat(ChatChannel channel)
     {
         var both = string.Join(" and ", channel.Members.Select(m => m.Name));
@@ -327,9 +347,11 @@ public sealed partial class ChatViewModel : ObservableObject
         YourChannels = mine;
         OtherChannels = others;
         // Yours; the agents' conversations with each other have a panel of their own. The newest first.
-        PrivateChats = Room.Channels.Where(c => c.Direct && ChatRoom.Member(c, MyName) != null)
+        var yours = Room.Channels.Where(c => c.Direct && ChatRoom.Member(c, MyName) != null)
             .OrderByDescending(c => c.Messages.LastOrDefault()?.At ?? c.CreatedAt)
             .Select(c => new ChannelRowViewModel(c, this)).ToList();
+        PrivateChats = [.. yours.Where(r => !r.IsArchived)];
+        ArchivedChats = [.. yours.Where(r => r.IsArchived)];
         AgentChats = Room.Channels.Where(c => c.Direct && ChatRoom.Member(c, MyName) == null)
             .OrderByDescending(c => c.Messages.LastOrDefault()?.At ?? c.CreatedAt)
             .Select(c => new AgentChatRow(c, this)).ToList();
@@ -343,8 +365,9 @@ public sealed partial class ChatViewModel : ObservableObject
         Yours.Set(YourChannels);
         Others.Set(OtherChannels);
         Private.Set(PrivateChats);
+        Archive.Set(ArchivedChats);
         foreach (var name in new[] { nameof(YourChannels), nameof(OtherChannels), nameof(HasOtherChannels), nameof(HasNoChannels), nameof(UnreadCount), nameof(HasMention),
-                     nameof(UnreadToolTip), nameof(BrowseRows), nameof(PrivateChats), nameof(HasPrivateChats), nameof(HostChats), nameof(HasHostChats),
+                     nameof(UnreadToolTip), nameof(BrowseRows), nameof(PrivateChats), nameof(HasPrivateChats), nameof(ArchivedChats), nameof(HostChats), nameof(HasHostChats),
                      nameof(AgentChats), nameof(HasAgentChats), nameof(AgentChatsTitle) })
             OnPropertyChanged(name);
         CountsChanged?.Invoke();
@@ -1126,7 +1149,7 @@ public sealed record InviteChoice(string Name, string Label)
 /// <summary>A connected ProJict's channels, under its owner's name.</summary>
 /// <summary>A heading in Chat's sidebar with its channels under it. A click folds them away, leaving only the open one and those with
 /// something new; folded ones stay folded (AppSettings.FoldedChatSections).</summary>
-public sealed partial class ChatSection(AppState state, string key, string title, string hint, bool shared = false) : ObservableObject
+public sealed partial class ChatSection(AppState state, string key, string title, string hint, bool shared = false, bool foldedAtFirst = false) : ObservableObject
 {
     private List<ChannelRowViewModel> _all = [];
     public string Key => key;
@@ -1134,15 +1157,17 @@ public sealed partial class ChatSection(AppState state, string key, string title
     /// <summary>Another ProJict's, shown with a link mark.</summary>
     public bool IsShared => shared;
     public bool HasRows => _all.Count > 0;
+    /// <summary>Open, or folded; one that starts folded (the archive) is kept as "open:key" once you open it.</summary>
     public bool IsOpen
     {
-        get => state.AppSettings.FoldedChatSections?.Contains(key) != true;
+        get => foldedAtFirst ? state.AppSettings.FoldedChatSections?.Contains("open:" + key) == true : state.AppSettings.FoldedChatSections?.Contains(key) != true;
         set
         {
             if (value == IsOpen) return;
             var folded = state.AppSettings.FoldedChatSections ??= [];
-            if (value) folded.Remove(key);
-            else folded.Add(key);
+            var entry = foldedAtFirst ? "open:" + key : key;
+            if (value == foldedAtFirst) folded.Add(entry);
+            else folded.Remove(entry);
             if (folded.Count == 0) state.AppSettings.FoldedChatSections = null;
             state.SaveAppSettings();
             Changed();
@@ -1192,6 +1217,11 @@ public sealed partial class ChannelRowViewModel(ChatChannel model, ChatViewModel
     public string? Source => owner.PlaceOf(model).Host?.OwnerName;
     public string SourceTag => Source != null ? "· " + Source : "";
     public bool IsDirect => model.Direct;
+    /// <summary>Your own private conversation (not another ProJict's): it can go in the archive, or come out.</summary>
+    public bool CanArchive => model.Direct && owner.PlaceOf(model).Host == null && ChatRoom.Member(model, owner.NameIn(model)) != null;
+    public bool IsArchived => ChatRoom.IsArchived(model, owner.NameIn(model));
+    [RelayCommand] private void Archive() => owner.SetArchived(model, true);
+    [RelayCommand] private void Unarchive() => owner.SetArchived(model, false);
     /// <summary>Its topic, else what it's about; for a private conversation, the last thing said.</summary>
     public string? Subtitle => model.Direct
         ? model.Messages.LastOrDefault(m => !m.Notice && !m.Deleted) is { } last ? Snippet(last.Text) : "No messages yet"

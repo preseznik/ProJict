@@ -268,6 +268,21 @@ public sealed class ChatRoom
         Changed?.Invoke(channel);
     }
 
+    /// <summary>
+    /// Puts one of someone's private conversations in their archive, or takes it out. While it's there, new messages in it
+    /// don't count as unread for them (no counts, no notifications); the other one isn't affected.
+    /// </summary>
+    public void SetArchived(ChatChannel channel, string name, bool archived)
+    {
+        if (!channel.Direct) throw new ChatException("Only private conversations go in the archive; leave a channel you don't want instead.");
+        if (Member(channel, name) is not { } member) throw new ChatException("Only the two in a private conversation can archive it.");
+        if (member.Archived == archived) return;
+        member.Archived = archived;
+        Changed?.Invoke(channel);
+    }
+
+    public static bool IsArchived(ChatChannel channel, string name) => Member(channel, name)?.Archived == true;
+
     public void Delete(ChatChannel channel, ChatActor by)
     {
         if (!by.Owner) throw new ChatException("Only the owner of the workspace can delete a channel.");
@@ -486,11 +501,11 @@ public sealed class ChatRoom
 
     /// <summary>
     /// Messages the member hasn't seen: newer than what they read, by others, not deleted; of the lines from ProJict only
-    /// the ones about them (invited, muted, …).
+    /// the ones about them (invited, muted, …). None in a private conversation they archived.
     /// </summary>
     public static IEnumerable<ChatMessage> Unread(ChatChannel channel, string name)
     {
-        if (Member(channel, name) is not { } member) return [];
+        if (Member(channel, name) is not { } member || member.Archived) return [];
         var since = member.LastRead ?? DateTime.MinValue;
         return channel.Messages.Where(m => m.At > since && !m.Deleted && !string.Equals(m.By, name, StringComparison.OrdinalIgnoreCase) &&
                                            (!m.Notice || string.Equals(m.About, name, StringComparison.OrdinalIgnoreCase)));
