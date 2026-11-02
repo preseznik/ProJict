@@ -35,6 +35,8 @@ public sealed partial class AgentTools : IMcpToolHost
     private readonly List<McpSession> _live = [];
     /// <summary>The session whose call is running: calls run one at a time on the UI thread.</summary>
     private McpSession? _caller;
+    /// <summary>What each named agent was told, kept across restarts.</summary>
+    private readonly NoticedStore _noticed;
 
     /// <summary>Raised on the UI thread after an agent did something (it's in the session's <see cref="McpSession.Recent"/>).</summary>
     public event Action<McpSession, AgentAction>? Recorded;
@@ -44,6 +46,7 @@ public sealed partial class AgentTools : IMcpToolHost
         _state = state;
         _main = main;
         _dispatcher = dispatcher;
+        _noticed = new NoticedStore(state.PersistsSettings ? NoticedStore.DefaultPath : null, state.Store.DataRoot);
 
         Add("list_projects", "List projects", "All projects with their repo folder, GitHub link and item counts.",
             Schema(), ListProjects, readOnly: true);
@@ -330,7 +333,14 @@ public sealed partial class AgentTools : IMcpToolHost
     public async Task<string> CallAsync(McpSession session, string name, JsonElement arguments)
     {
         if (session.Frozen) throw new McpToolException(FrozenMessage, ToolProblem.Forbidden);
-        if (name == "wait_for_messages") return await WaitForMessagesAsync(session, arguments);
+        // What it was told lives on the UI thread, like everything else about sessions.
+        await _dispatcher.InvokeAsync(() => Recall(session));
+        if (name == "wait_for_messages")
+        {
+            var heard = await WaitForMessagesAsync(session, arguments);
+            await _dispatcher.InvokeAsync(() => Keep(session));
+            return heard;
+        }
         var (run, filesArgument) = _handlers[name];
         var args = new Args(arguments);
         if (!Allows(session, name, arguments))
@@ -349,7 +359,9 @@ public sealed partial class AgentTools : IMcpToolHost
             {
                 var result = run(session, args, files);
                 Record(session, name, args);
-                return ((string?)WithWaiting(session, name, result), (Exception?)null);
+                var told = WithWaiting(session, name, result);
+                Keep(session);
+                return ((string?)told, (Exception?)null);
             }
             catch (Exception ex) { return (null, ex); }
             finally { _caller = null; }
@@ -357,6 +369,26 @@ public sealed partial class AgentTools : IMcpToolHost
         if (error != null) ExceptionDispatchInfo.Throw(error);
         return text!;
     }
+
+    /// <summary>
+    /// (UI thread.) A named agent picks up what it was told before, in another session or before ProJict restarted (say for an update),
+    /// so that isn't said again. Unnamed sessions ("Claude Code 2") aren't anyone in particular, so they start afresh.
+    /// </summary>
+    private void Recall(McpSession session)
+    {
+        if (!HasOwnName(session) || session.RecalledFor == session.AgentName) return;
+        session.Noticed.UnionWith(_noticed.For(session.AgentName));
+        session.RecalledFor = session.AgentName;
+    }
+
+    /// <summary>Notes what a named agent has been told by now, for after a restart.</summary>
+    private void Keep(McpSession session)
+    {
+        if (!HasOwnName(session)) return;
+        _noticed.Remember(session.AgentName, [.. session.Noticed]);
+    }
+
+    private static bool HasOwnName(McpSession session) => session.Name != null || !string.IsNullOrWhiteSpace(session.SignAs);
 
     /// <summary>Whether the session may make the call: a read-only API token only reads, apart from Chat when Settings › API lets it.</summary>
     public bool Allows(McpSession session, string name, JsonElement arguments) =>

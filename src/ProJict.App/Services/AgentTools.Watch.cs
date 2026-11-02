@@ -44,6 +44,8 @@ public sealed partial class AgentTools
     public async Task WatchChatAsync(McpSession identity, Func<string, Task> write, CancellationToken stop)
     {
         var agent = identity.AgentName;
+        // What it was told before ProJict restarted (or by its sessions) isn't printed again.
+        Recall(identity);
         lock (_watchers) _watchers[agent] = _watchers.GetValueOrDefault(agent) + 1;
         await _dispatcher.InvokeAsync(() => _main.Agents.Renamed());
         try
@@ -125,6 +127,7 @@ public sealed partial class AgentTools
         foreach (var session in same) identity.Noticed.UnionWith(session.Noticed);
         var lines = WorkLines(identity, same.SelectMany(s => _main.Agents.ProjectsOf(s)).Distinct().ToList()).Select(l => "[ProJict] " + l).ToList();
         foreach (var session in same) session.Noticed.UnionWith(identity.Noticed);
+        Keep(identity);
         return lines;
     }
 
@@ -139,6 +142,7 @@ public sealed partial class AgentTools
         foreach (var session in same) identity.Noticed.UnionWith(session.Noticed);
         var lines = SleepLines(identity).Select(l => "[ProJict] " + l).ToList();
         foreach (var session in same) session.Noticed.UnionWith(identity.Noticed);
+        Keep(identity);
         return lines;
     }
 
@@ -150,6 +154,7 @@ public sealed partial class AgentTools
         foreach (var session in same) identity.Noticed.UnionWith(session.Noticed);
         var lines = AnswerLines(identity).Select(l => "[answer] " + l).ToList();
         foreach (var session in same) session.Noticed.UnionWith(identity.Noticed);
+        Keep(identity);
         return lines;
     }
 

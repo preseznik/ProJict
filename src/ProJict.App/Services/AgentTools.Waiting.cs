@@ -18,6 +18,10 @@ public sealed partial class AgentTools
 
     private string WithWaiting(McpSession session, string tool, string result)
     {
+        // Under the name it has now (set_name may have just picked it), what it was told before counts.
+        Recall(session);
+        // The bridge repeating a call after a restart: the agent never sees this answer, so nothing counts as told.
+        if (session.Replaying) return result;
         var lines = SleepLines(session);
         // Asleep: nothing else, so nothing gets it going again (it all comes through once it's woken).
         if (!IsAsleep)

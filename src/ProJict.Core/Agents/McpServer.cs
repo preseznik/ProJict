@@ -74,6 +74,13 @@ public sealed class McpSession
     public volatile bool Listening;
     /// <summary>What its tool results already told it is waiting (chat messages, comments, …), so each is mentioned once.</summary>
     public HashSet<string> Noticed { get; } = [];
+    /// <summary>The name whose earlier news was added to <see cref="Noticed"/> (told in another session, or before ProJict restarted).</summary>
+    public string? RecalledFor { get; set; }
+    /// <summary>
+    /// The call running now is the bridge repeating one of the agent's earlier calls after ProJict restarted (its name, say):
+    /// its answer never reaches the agent, so nothing waiting is put in it (it would count as told).
+    /// </summary>
+    public bool Replaying { get; set; }
 
     /// <summary>
     /// How the agent signs its work: the name it picked ("Ada"), else an API token's name, or else its client's name
@@ -215,7 +222,7 @@ public static class McpServer
                 "initialize" => Initialize(parameters, host, session, serverVersion),
                 "ping" => new JsonObject(),
                 "tools/list" => ListTools(host),
-                "tools/call" => await CallToolAsync(parameters, host, session),
+                "tools/call" => await CallToolAsync(parameters, host, session, replay: Text(id) is { } replayed && replayed.StartsWith(ReplayIdPrefix, StringComparison.Ordinal)),
                 _ when method.StartsWith("notifications/", StringComparison.Ordinal) => null,
                 _ => throw new ProtocolError(-32601, $"Method not found: {method}"),
             };
@@ -263,7 +270,10 @@ public static class McpServer
         }).ToArray()),
     };
 
-    private static async Task<JsonObject> CallToolAsync(JsonObject? parameters, IMcpToolHost host, McpSession session)
+    /// <summary>How the bridge numbers the calls it repeats after ProJict restarted ("projict-bridge-1").</summary>
+    public const string ReplayIdPrefix = "projict-bridge-";
+
+    private static async Task<JsonObject> CallToolAsync(JsonObject? parameters, IMcpToolHost host, McpSession session, bool replay = false)
     {
         var name = Text(parameters?["name"]) ?? throw new ProtocolError(-32602, "Missing tool name");
         if (host.Tools.All(t => t.Name != name)) throw new ProtocolError(-32602, $"Unknown tool: {name}");
@@ -274,6 +284,7 @@ public static class McpServer
         var isError = false;
         try
         {
+            session.Replaying = replay;
             text = await host.CallAsync(session, name, arguments);
         }
         catch (McpToolException ex)
@@ -283,6 +294,10 @@ public static class McpServer
         catch (Exception ex)
         {
             (text, isError) = ($"ProJict could not run {name}: {ex.Message}", true);
+        }
+        finally
+        {
+            session.Replaying = false;
         }
         return new JsonObject
         {
