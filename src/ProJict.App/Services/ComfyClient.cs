@@ -8,9 +8,10 @@ using ProJict.Core.Tools;
 namespace ProJict.App.Services;
 
 /// <summary>How a ComfyUI server is doing: reachable or not, how many runs it has, and its graphics card.</summary>
-public sealed record ComfyStatus(bool Reachable, int Running, int Pending, string? Device, string? Problem)
+public sealed record ComfyStatus(bool Reachable, int Running, int Pending, string? Device, string? Problem, bool Answers = false)
 {
-    public string Describe() => !Reachable ? $"Not reachable{(Problem != null ? $": {Problem}" : "")}"
+    /// <summary>Something answers at the address, but not as ComfyUI does (a 404): the Problem says so.</summary>
+    public string Describe() => Answers ? Problem ?? "" : !Reachable ? $"Not reachable{(Problem != null ? $": {Problem}" : "")}"
         : $"Reachable · {(Running + Pending == 0 ? "nothing queued" : $"{Running} running, {Pending} waiting")}{(Device != null ? $" · {Device}" : "")}";
 }
 
@@ -47,10 +48,26 @@ public sealed class ComfyClient
             catch (Exception) { /* older servers: the queue is enough */ }
             return new ComfyStatus(true, (queue?["queue_running"] as JsonArray)?.Count ?? 0, (queue?["queue_pending"] as JsonArray)?.Count ?? 0, device, null);
         }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            return new ComfyStatus(false, 0, 0, null, NotThere(endpoint, "/queue"), Answers: true);
+        }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException or UriFormatException or InvalidOperationException)
         {
             return new ComfyStatus(false, 0, 0, null, ex is TaskCanceledException ? "no answer" : ex.Message);
         }
+    }
+
+    /// <summary>What a 404 means here: something answers at the address, but ComfyUI's API isn't there.</summary>
+    private static string NotThere(ComfyEndpoint endpoint, string path) =>
+        $"Something answers at {endpoint.Address}, but not as ComfyUI does (404 for {path}). Give the ComfyUI server's own address, e.g. http://127.0.0.1:8188.";
+
+    private static async Task<string> GetAsync(ComfyEndpoint endpoint, string path, CancellationToken stop)
+    {
+        using var response = await Http.GetAsync(Url(endpoint, path), stop);
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound) throw new InvalidOperationException(NotThere(endpoint, path));
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadAsStringAsync(stop);
     }
 
     /// <summary>Uploads a picture for a LoadImage input; returns the name ComfyUI knows it by.</summary>
@@ -63,6 +80,7 @@ public sealed class ComfyClient
         form.Add(new StringContent("true"), "overwrite");
         using var response = await Http.PostAsync(Url(endpoint, "/upload/image"), form, stop);
         var body = await response.Content.ReadAsStringAsync(stop);
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound) throw new InvalidOperationException(NotThere(endpoint, "/upload/image"));
         if (!response.IsSuccessStatusCode) throw new InvalidOperationException($"ComfyUI didn't take the picture ({(int)response.StatusCode}): {Short(body)}");
         var answer = JsonNode.Parse(body);
         var name = (string?)answer?["name"] ?? throw new InvalidOperationException("ComfyUI didn't say what it called the picture.");
@@ -75,12 +93,28 @@ public sealed class ComfyClient
         var request = new JsonObject { ["prompt"] = graph.DeepClone(), ["client_id"] = "projict-" + Guid.NewGuid().ToString("N") };
         using var response = await Http.PostAsync(Url(endpoint, "/prompt"), new StringContent(request.ToJsonString(), Encoding.UTF8, "application/json"), stop);
         var body = await response.Content.ReadAsStringAsync(stop);
-        if (!response.IsSuccessStatusCode)
-        {
-            var problem = JsonNode.Parse(body) is JsonObject error ? (string?)error["error"]?["message"] ?? Short(body) : Short(body);
-            throw new InvalidOperationException($"ComfyUI refused the workflow: {problem}");
-        }
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound) throw new InvalidOperationException(NotThere(endpoint, "/prompt"));
+        if (!response.IsSuccessStatusCode) throw new InvalidOperationException($"ComfyUI refused the workflow: {Refusal(body)}");
         return (string?)JsonNode.Parse(body)?["prompt_id"] ?? throw new InvalidOperationException("ComfyUI didn't give the run an id.");
+    }
+
+    /// <summary>
+    /// ComfyUI's complaint with its reasons per node ("Prompt outputs failed validation: Load LoRA (105:124): Value not in
+    /// list: lora_name …"); its headline alone doesn't say what to fix.
+    /// </summary>
+    internal static string Refusal(string body)
+    {
+        JsonNode? answer;
+        try { answer = JsonNode.Parse(body); }
+        catch (System.Text.Json.JsonException) { return Short(body); }
+        if (answer is not JsonObject error) return Short(body);
+        var headline = (string?)error["error"]?["message"] ?? "";
+        var reasons = (error["node_errors"] as JsonObject ?? []).SelectMany(node =>
+            (node.Value?["errors"] as JsonArray ?? []).OfType<JsonObject>().Select(e =>
+                $"{(string?)node.Value?["class_type"] ?? "a node"} ({node.Key}): {(string?)e["message"]}" + ((string?)e["details"] is { Length: > 0 } d ? $": {d}" : "")))
+            .ToList();
+        var text = string.Join("; ", new[] { headline }.Concat(reasons).Where(t => t.Length > 0));
+        return text.Length == 0 ? Short(body) : text.Length > 600 ? text[..600] + "…" : text;
     }
 
     /// <summary>Waits for a queued run to finish; returns the files it made. A run ComfyUI says failed is thrown.</summary>
@@ -90,7 +124,7 @@ public sealed class ComfyClient
         while (DateTime.Now < until)
         {
             stop.ThrowIfCancellationRequested();
-            var history = JsonNode.Parse(await Http.GetStringAsync(Url(endpoint, "/history/" + Uri.EscapeDataString(promptId)), stop));
+            var history = JsonNode.Parse(await GetAsync(endpoint, "/history/" + Uri.EscapeDataString(promptId), stop));
             if (history?[promptId] is JsonObject run)
             {
                 if ((string?)run["status"]?["status_str"] == "error")
@@ -101,18 +135,28 @@ public sealed class ComfyClient
                 }
                 if (run["outputs"] is JsonObject outputs)
                 {
-                    var files = new List<ComfyOutput>();
-                    foreach (var (_, output) in outputs)
-                        foreach (var kind in new[] { "images", "gifs", "videos", "audio" })
-                            foreach (var file in (output?[kind] as JsonArray ?? []).OfType<JsonObject>())
-                                if ((string?)file["filename"] is { } name)
-                                    files.Add(new ComfyOutput(name, (string?)file["subfolder"] ?? "", (string?)file["type"] ?? "output"));
+                    var files = Outputs(outputs);
                     if ((bool?)run["status"]?["completed"] != false) return files;
                 }
             }
             await Task.Delay(PollEvery, stop);
         }
         throw new TimeoutException($"The workflow hadn't finished after {GiveUpAfter.TotalMinutes:0} minutes.");
+    }
+
+    /// <summary>
+    /// The files a run made, of any kind (pictures, video, sound, 3D models): what its Save nodes saved, or when it saved
+    /// nothing, its previews (ComfyUI keeps those only for a while).
+    /// </summary>
+    internal static List<ComfyOutput> Outputs(JsonObject outputs)
+    {
+        var files = outputs.SelectMany(node => (node.Value as JsonObject ?? []).Select(kind => kind.Value).OfType<JsonArray>())
+            .SelectMany(list => list.OfType<JsonObject>())
+            .Where(file => (string?)file["filename"] is { Length: > 0 })
+            .Select(file => new ComfyOutput((string)file["filename"]!, (string?)file["subfolder"] ?? "", (string?)file["type"] ?? "output"))
+            .Distinct()
+            .ToList();
+        return files.Any(f => f.Type == "output") ? [.. files.Where(f => f.Type == "output")] : files;
     }
 
     public async Task<byte[]> FetchAsync(ComfyEndpoint endpoint, ComfyOutput output, CancellationToken stop = default) =>

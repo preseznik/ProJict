@@ -10,7 +10,42 @@ public sealed class ComfyEndpoint
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Name { get; set; } = "";
-    public string Address { get; set; } = "";
+
+    /// <summary>The server's own address, however it was typed or pasted (see <see cref="ServerAddress"/>).</summary>
+    public string Address
+    {
+        get;
+        set => field = ServerAddress(value);
+    } = "";
+
+    /// <summary>ComfyUI's own endpoints: an address pasted with one of these on the end means the server before it.</summary>
+    private static readonly string[] ApiPaths = ["/prompt", "/queue", "/history", "/system_stats", "/object_info", "/upload/image", "/view", "/ws", "/api"];
+
+    /// <summary>
+    /// "192.168.1.173:9696/prompt" → "http://192.168.1.173:9696": http:// when it has no scheme, and without ComfyUI's
+    /// endpoint paths, a query, a # or a trailing slash, since ProJict adds the paths itself. A base path a proxy puts
+    /// ComfyUI under ("https://gpu.example/comfy") stays.
+    /// </summary>
+    public static string ServerAddress(string? text)
+    {
+        text = (text ?? "").Trim();
+        if (text.Length == 0) return "";
+        if (!text.Contains("://", StringComparison.Ordinal)) text = "http://" + text;
+        // Not an address yet ("http://" while it's being typed): kept as it is.
+        if (!Uri.TryCreate(text, UriKind.Absolute, out var uri) || uri.Host.Length == 0) return text;
+        var path = uri.AbsolutePath.TrimEnd('/');
+        for (var cut = true; cut;)
+        {
+            cut = false;
+            foreach (var api in ApiPaths)
+                if (path.EndsWith(api, StringComparison.OrdinalIgnoreCase))
+                {
+                    path = path[..^api.Length].TrimEnd('/');
+                    cut = true;
+                }
+        }
+        return uri.GetLeftPart(UriPartial.Authority) + path;
+    }
 }
 
 /// <summary>What a workflow's input takes: text (a prompt), a number (seed, size) or a picture (uploaded to ComfyUI first).</summary>
@@ -72,10 +107,14 @@ public static class ComfyGraph
         var nodes = Nodes(graph).ToList();
         var positive = new HashSet<string>();
         var negative = new HashSet<string>();
+        // What each node feeds, by the input's name ("prompt", "values.a"): names a primitive by its use.
+        var feeds = new Dictionary<string, string>();
         foreach (var (_, _, inputs, _) in nodes)
         {
             if (LinkedNode(inputs["positive"]) is { } p) positive.Add(p);
             if (LinkedNode(inputs["negative"]) is { } n) negative.Add(n);
+            foreach (var (name, value) in inputs)
+                if (LinkedNode(value) is { } from) feeds.TryAdd(from, name);
         }
         var found = new List<WorkflowInput>();
         var taken = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
@@ -101,8 +140,37 @@ public static class ComfyGraph
                         Add(field == "batch_size" ? "batch" : field, id, field, WorkflowInputKind.Number, number, title);
             if (kind == "LoadImage" && inputs["image"] is JsonValue image && image.TryGetValue<string>(out _))
                 Add("image", id, "image", WorkflowInputKind.Image, image, title);
+            // A prompt typed into the node that uses it (video and API nodes take one directly).
+            foreach (var (field, key) in new[] { ("prompt", "prompt"), ("negative_prompt", "negative") })
+                if (inputs[field] is JsonValue typed && typed.TryGetValue<string>(out _)) Add(key, id, field, WorkflowInputKind.Text, typed, title);
+            // A primitive another node uses (Text (Multiline), Float, Int): a text feeding a prompt is the prompt; others
+            // are named by their title, else by what they feed.
+            if (kind.StartsWith("Primitive", StringComparison.OrdinalIgnoreCase) && inputs["value"] is JsonValue primitive && feeds.GetValueOrDefault(id) is { } use)
+            {
+                if (primitive.TryGetValue<string>(out _))
+                {
+                    var key = use.Contains("negative", StringComparison.OrdinalIgnoreCase) ? "negative"
+                        : use.Contains("prompt", StringComparison.OrdinalIgnoreCase) || use is "text" or "positive" ? "prompt"
+                        : PrimitiveName(title, use);
+                    Add(key, id, "value", WorkflowInputKind.Text, primitive, title);
+                }
+                else if (primitive.TryGetValue<double>(out _))
+                    Add(PrimitiveName(title, use), id, "value", WorkflowInputKind.Number, primitive, title);
+            }
         }
         return found;
+    }
+
+    /// <summary>The words a primitive's title adds to its kind ("Float (duration)" → "duration"), else what it feeds, else "value".</summary>
+    private static string PrimitiveName(string? title, string use)
+    {
+        var generic = new[] { "primitive", "float", "int", "integer", "number", "string", "text", "multiline", "value" };
+        var words = (title ?? "").Replace('(', ' ').Replace(')', ' ').Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Where(w => !generic.Contains(w.ToLowerInvariant())).Select(w => w.ToLowerInvariant());
+        var name = string.Join(" ", words);
+        if (name.Length > 0) return name;
+        // "values.a" says little: only a plain input name ("steps", "length") is used.
+        return use.Length > 0 && !use.Contains('.') ? use.ToLowerInvariant() : "value";
     }
 
     /// <summary>
@@ -120,10 +188,13 @@ public static class ComfyGraph
             var target = (JsonObject)copy[input.Node]!["inputs"]!;
             target[input.Field] = input.Kind switch
             {
-                WorkflowInputKind.Number when input.Key == "seed" && value.Trim().Equals("random", StringComparison.OrdinalIgnoreCase) =>
+                WorkflowInputKind.Number when input.Field is "seed" or "noise_seed" && value.Trim().Equals("random", StringComparison.OrdinalIgnoreCase) =>
                     JsonValue.Create((random ?? Random.Shared).NextInt64(0, 1L << 48)),
-                WorkflowInputKind.Number => long.TryParse(value.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var n)
-                    ? JsonValue.Create(n) : throw new ArgumentException($"{input.Key} must be a whole number."),
+                WorkflowInputKind.Number when long.TryParse(value.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) => JsonValue.Create(n),
+                // Seeds, sizes and batches are whole numbers; a primitive (a duration, say) may take a decimal.
+                WorkflowInputKind.Number when input.Field == "value" && double.TryParse(value.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var d) =>
+                    JsonValue.Create(d),
+                WorkflowInputKind.Number => throw new ArgumentException(input.Field == "value" ? $"{input.Key} must be a number." : $"{input.Key} must be a whole number."),
                 _ => JsonValue.Create(value),
             };
         }

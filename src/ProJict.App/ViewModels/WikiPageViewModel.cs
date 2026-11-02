@@ -469,7 +469,8 @@ public sealed partial class WikiPageViewModel : ObservableObject
         ShowHistory();
     }
 
-    private void ShowHistory()
+    /// <summary>The page's versions, newest first (the wiki opens pages this way while you keep History on).</summary>
+    internal void ShowHistory()
     {
         if (HasUnsavedChanges) SaveEdits(stayEditing: false);
         IsEditing = false;

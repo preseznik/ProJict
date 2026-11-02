@@ -319,6 +319,9 @@
                 </DataGrid.GroupStyle>
                 <DataGrid.RowStyle>
                     <Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
+                        <!-- The theme's row style paints rows white, also in the dark theme (white on white): rows take the page's colours. -->
+                        <Setter Property="Background" Value="Transparent" />
+                        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
                         <Setter Property="Cursor" Value="Hand" />
                         <Setter Property="ToolTip" Value="Click to open" />
                         <EventSetter Event="MouseLeftButtonUp" Handler="TableRow_Click" />
