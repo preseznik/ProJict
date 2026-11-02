@@ -13,6 +13,11 @@ public partial class ChatView : UserControl
     private ChatViewModel? _vm;
     private ChatChannel? _shownChannel;
     private bool _atBottom = true;
+    private bool _showingEarlier;
+    private bool _opening;
+    private bool _scrollQueued;
+    /// <summary>Where the view itself last scrolled to, so that isn't taken for you scrolling up.</summary>
+    private double _scrolledTo = double.NaN;
 
     public ChatView()
     {
@@ -47,14 +52,20 @@ public partial class ChatView : UserControl
     private void OnMessagesChanged()
     {
         if (_vm == null) return;
-        var opened = _vm.Channel != _shownChannel;
+        // Opening a channel syncs its messages twice (the New line comes the second time): one scroll, after both.
+        _opening |= _vm.Channel != _shownChannel;
         _shownChannel = _vm.Channel;
         var mine = _vm.Messages.LastOrDefault() is { IsMine: true } last && DateTime.Now - last.Model.At < TimeSpan.FromSeconds(5);
-        if (!opened && !_atBottom && !mine) return;
+        if ((!_opening && !_atBottom && !mine) || _scrollQueued) return;
+        _scrollQueued = true;
         Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () =>
         {
-            if (opened && _vm?.Messages.FirstOrDefault(m => m.IsFirstUnread) is { } first && Container(first) is { } element)
-                element.BringIntoView(new Rect(0, 0, 1, 1));
+            _scrollQueued = false;
+            var opening = _opening;
+            _opening = false;
+            // The New line near the top, with a little of what came before it; otherwise the newest message.
+            if (opening && _vm?.Messages.FirstOrDefault(m => m.IsFirstUnread) is { } first && Container(first) is { } element)
+                MessageScroller.ScrollToVerticalOffset(_scrolledTo = Math.Max(0, element.TranslatePoint(new Point(0, 0), (UIElement)MessageScroller.Content).Y - 40));
             else MessageScroller.ScrollToEnd();
         });
     }
@@ -70,8 +81,33 @@ public partial class ChatView : UserControl
         if (IsVisible) DraftBox.Focus();
     }
 
-    private void MessageScroller_ScrollChanged(object sender, ScrollChangedEventArgs e) =>
+    private void MessageScroller_ScrollChanged(object sender, ScrollChangedEventArgs e)
+    {
         _atBottom = MessageScroller.VerticalOffset >= MessageScroller.ScrollableHeight - 40;
+        // Scrolling up near the top brings the older messages in (not when the list changed size, or the view went to the New line).
+        var ours = Math.Abs(MessageScroller.VerticalOffset - _scrolledTo) < 1;
+        _scrolledTo = double.NaN;
+        if (e.VerticalChange < 0 && e.ExtentHeightChange == 0 && e.ViewportHeightChange == 0 && !ours && MessageScroller.VerticalOffset < 300 && _vm is { HasEarlier: true })
+            Dispatcher.BeginInvoke(DispatcherPriority.Input, () =>
+            {
+                // Several scrolls may ask: once one brought them in, the view isn't near the top any more.
+                if (MessageScroller.VerticalOffset < 300) ShowEarlier();
+            });
+    }
+
+    private void ShowEarlier_Click(object sender, RoutedEventArgs e) => ShowEarlier();
+
+    /// <summary>Older messages go in front, and the view stays on what you were reading, before it's drawn again.</summary>
+    private void ShowEarlier()
+    {
+        if (_vm is not { HasEarlier: true } || _showingEarlier) return;
+        _showingEarlier = true;
+        var fromBottom = MessageScroller.ExtentHeight - MessageScroller.VerticalOffset;
+        _vm.ShowEarlierCommand.Execute(null);
+        MessageScroller.UpdateLayout();
+        MessageScroller.ScrollToVerticalOffset(MessageScroller.ExtentHeight - fromBottom);
+        _showingEarlier = false;
+    }
 
     private void DraftBox_PreviewKeyDown(object sender, KeyEventArgs e)
     {
