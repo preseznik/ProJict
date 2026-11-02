@@ -65,6 +65,8 @@ public sealed partial class AgentTools
             if (session.Noticed.Add(key)) lines.Add(line);
         foreach (var (key, line) in WikiAcceptedLines(session))
             if (session.Noticed.Add(key)) lines.Add(line);
+        foreach (var (key, line) in ListenLines(session))
+            if (session.Noticed.Add(key)) lines.Add(line);
         if (session.RenamedBy is { } renamer && session.Noticed.Add($"renamed:{session.AgentName}"))
             lines.Add($"{renamer} renamed you {session.AgentName}: everything you do is now signed {session.AgentName}. " +
                       $"Go by that name, also in Chat, and pick it again with set_name {session.AgentName} when you come back.");

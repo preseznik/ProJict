@@ -473,6 +473,8 @@ public sealed partial class ChatViewModel : ObservableObject
             .OrderByDescending(m => !m.Agent && Here.Room.IsOwner(m.Name)).ThenByDescending(m => m.Moderator).ThenBy(m => m.Name, StringComparer.CurrentCultureIgnoreCase)
             .Select(m => new ChatMemberViewModel(m, Channel, this)).ToList();
         OnPropertyChanged(nameof(Members));
+        // Who hears Chat changes with presence (a watcher starting or stopping).
+        OnPropertyChanged(nameof(ComposerNote));
     }
 
     /// <summary>
@@ -700,7 +702,26 @@ public sealed partial class ChatViewModel : ObservableObject
                                  (Channel.Suspended ? " Suspended: neither can write here until you resume it (right-click it under Agents' private chats)." : "")
             : "Only members write here."
         : Here.Room.MutedUntil(Channel, Here.Me.Name) is { } until && !Here.Me.Owner ? $"You're muted until {until:HH:mm}."
-        : null;
+        : NotHearingNote;
+
+    /// <summary>
+    /// Your agents here that are connected but don't hear Chat right now (no chat watcher, not waiting for messages): they
+    /// read what you write when they next do something.
+    /// </summary>
+    private string? NotHearingNote
+    {
+        get
+        {
+            if (Channel is not { } channel || Here.Host != null) return null;
+            var connected = _main.Agents.Sessions.Select(s => s.AgentName).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var deaf = channel.Members.Where(m => m.Agent && connected.Contains(m.Name) && !_main.AgentTools.HearsChat(m.Name)).Select(m => m.Name).ToList();
+            if (deaf.Count == 0) return null;
+            var who = deaf.Count == 1 ? deaf[0] : string.Join(", ", deaf.SkipLast(1)) + " and " + deaf[^1];
+            return deaf.Count == 1
+                ? $"{who} doesn't hear Chat right now (no chat watcher running), so it reads this when it next does something. It's told how to keep listening."
+                : $"{who} don't hear Chat right now (no chat watcher running), so they read this when they next do something. They're told how to keep listening.";
+        }
+    }
 
     private bool CanSend() => Channel != null && CanWrite && (Draft.Trim().Length > 0 || Pending.Count > 0);
 

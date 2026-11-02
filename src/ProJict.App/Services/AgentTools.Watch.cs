@@ -23,6 +23,8 @@ public sealed partial class AgentTools
     private static readonly TimeSpan WatchRecheck = TimeSpan.FromSeconds(30);
 
     private readonly Dictionary<string, int> _watchers = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>When an agent's last watcher stopped (Claude Code's Monitor ends after 30 minutes): it's told to start it again.</summary>
+    private readonly Dictionary<string, DateTime> _watchStopped = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>How long lines stay in an agent's feed for its watchers that haven't printed them yet.</summary>
     private static readonly TimeSpan FeedKeptFor = TimeSpan.FromMinutes(10);
@@ -101,6 +103,7 @@ public sealed partial class AgentTools
         lock (_watchers)
         {
             watching = _watchers[agent] = _watchers.GetValueOrDefault(agent) + 1;
+            _watchStopped.Remove(agent);
             feed = FeedOf(agent);
         }
         long next;
@@ -184,6 +187,7 @@ public sealed partial class AgentTools
                 if (--_watchers[agent] == 0)
                 {
                     _watchers.Remove(agent);
+                    _watchStopped[agent] = DateTime.Now;
                     lock (_feeds) _feeds.Remove(agent);
                 }
             if (!_dispatcher.HasShutdownStarted) await _dispatcher.InvokeAsync(() => _main.Agents.Renamed());
@@ -275,7 +279,32 @@ public sealed partial class AgentTools
     private static string OneLine(string text) =>
         string.Join(" ⏎ ", text.Replace("\r\n", "\n").Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0));
 
-    /// <summary>Once per session, with its first chat news: how to keep hearing Chat (unless a watcher already runs for it).</summary>
+    /// <summary>
+    /// The agent hears Chat on its own: a watcher runs for it, or it's waiting for messages. Otherwise it reads what came
+    /// only when it next does something.
+    /// </summary>
+    public bool HearsChat(string agent) =>
+        IsWatched(agent) || _main.Agents.Sessions.Any(s => s.Listening && string.Equals(s.AgentName, agent, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Keeping an agent hearing Chat: its watcher stopped (at most once per stop), else the tip on its first call. Only for
+    /// an agent with a name of its own, that doesn't hear Chat now.
+    /// </summary>
+    private IEnumerable<(string Key, string Line)> ListenLines(McpSession session)
+    {
+        if (session.Name == null || HearsChat(session.AgentName)) yield break;
+        DateTime? stopped;
+        lock (_watchers) stopped = _watchStopped.TryGetValue(session.AgentName, out var at) ? at : null;
+        if (stopped is { } when)
+            yield return ($"watchstopped:{when.Ticks}",
+                $"Your chat watcher stopped at {when.ToString("HH:mm", System.Globalization.CultureInfo.CurrentCulture)}, so you don't hear Chat now: " +
+                (session.Remote ? $"keep GET {ProJict.Core.Api.ApiRoutes.Base}/chat/watch running in the background again" : $"run {WatchCommand(session.AgentName)} in the background again") +
+                ". Start it again each time it ends (Claude Code's Monitor ends after 30 minutes), so you keep answering when you're written to.");
+        else if (WatchTip(session) is { } tip)
+            yield return ("tip:watch-chat:given", tip);
+    }
+
+    /// <summary>Once per session, with its first call or chat news: how to keep hearing Chat (unless a watcher already runs for it).</summary>
     private string? WatchTip(McpSession session)
     {
         if (IsWatched(session.AgentName) || !session.Noticed.Add("tip:watch-chat")) return null;
@@ -283,7 +312,8 @@ public sealed partial class AgentTools
             ? $"To hear Chat while you're idle or busy, keep GET {ProJict.Core.Api.ApiRoutes.Base}/chat/watch running in the background if your client can " +
               "(e.g. curl -sN with your Authorization header, under Claude Code's Monitor tool): it prints a line per message for you."
             : $"To hear Chat while you're idle or busy, run {WatchCommand(session.AgentName)} in the background if your client can tell you about each " +
-              "line a command prints (e.g. Claude Code's Monitor tool): it prints a line per message for you." +
+              "line a command prints (e.g. Claude Code's Monitor tool): it prints a line per message for you. Start it again each time it ends " +
+              "(Claude Code's Monitor ends after 30 minutes), or you stop hearing Chat." +
               (session.Name == null ? " Pick your name with set_name first, and use it there." : "");
     }
 }
