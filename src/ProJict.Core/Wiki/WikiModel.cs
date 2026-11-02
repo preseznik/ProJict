@@ -63,6 +63,17 @@ public sealed class WikiReview
     [JsonIgnore] public string Who => Role != null ? $"{By} ({Role})" : By;
 }
 
+/// <summary>You checked what agents changed on a page ("Looks good"): who, when, and which versions it covered.</summary>
+public sealed class WikiAcceptance
+{
+    public DateTime At { get; set; } = DateTime.Now;
+    public string By { get; set; } = "";
+    /// <summary>The version accepted.</summary>
+    public int Version { get; set; }
+    /// <summary>The version last checked before it (0: never): the versions after it are what was accepted.</summary>
+    public int Since { get; set; }
+}
+
 /// <summary>Who saves: a person (you, or someone you share with) or an AI agent, by the name they sign with.</summary>
 public sealed record WikiAuthor(string Name, bool Agent = false);
 
@@ -101,6 +112,9 @@ public sealed class WikiPage
     /// <summary>Reviews by a studio's lead (and your reopening them), oldest first; null while there are none.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<WikiReview>? Reviews { get; set; }
+    /// <summary>Your last "Looks good": the agents who wrote what you accepted are told.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WikiAcceptance? LastAccepted { get; set; }
 
     [JsonIgnore] public int Version => Versions.Count > 0 ? Versions[^1].Number : 0;
     /// <summary>The lead's acceptance of the page as it is now, if that's how it was last checked.</summary>

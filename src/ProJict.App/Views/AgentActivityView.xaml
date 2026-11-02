@@ -581,6 +581,7 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
                     <TextBlock Text="Show agents" FontWeight="SemiBold" Margin="0,6,0,0" />
                     <StackPanel Grid.Column="1">
@@ -602,6 +603,14 @@
                                   Width="160" HorizontalAlignment="Left" AutomationProperties.Name="Earlier work" />
                         <TextBlock Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap" Margin="0,6,0,0"
                                    Text="Grouped by week or month, the oldest week or month is shown whole, so its stats are complete." />
+                    </StackPanel>
+                    <TextBlock Grid.Row="2" Text="Office look" FontWeight="SemiBold" Margin="0,22,0,0" />
+                    <StackPanel Grid.Row="2" Grid.Column="1" Margin="0,16,0,0">
+                        <RadioButton x:Name="ClassicLook" GroupName="OfficeLook" IsChecked="{Binding IsClassicLook}" Content="Classic: the office as ProJict draws it" />
+                        <RadioButton x:Name="DrawnLook" GroupName="OfficeLook" IsChecked="{Binding IsDrawnLook}" Margin="0,4,0,0"
+                                     Content="Drawn: pictures of the rooms, light and dark (new)" />
+                        <TextBlock Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap" Margin="0,6,0,0"
+                                   Text="For the office and the game and film studios. The robots and what they do stay the same." />
                     </StackPanel>
                 </Grid>
             </Border>

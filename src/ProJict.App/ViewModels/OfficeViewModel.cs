@@ -286,6 +286,7 @@ public sealed partial class OfficeViewModel : ObservableObject
             Desks[i].Show(at == null ? null : at.Activity == OfficeActivity.Talking ? DeskScreen.Away : (DeskScreen)at.Activity);
         }
 
+        SyncTheme();
         HourAngle = now.Hour % 12 * 30 + now.Minute * 0.5;
         MinuteAngle = now.Minute * 6 + now.Second * 0.1;
         if (now.Hour != _skyHour)

@@ -280,10 +280,11 @@ public sealed class WikiBook
         Changed?.Invoke(page);
     }
 
-    /// <summary>You've checked what agents changed.</summary>
-    public void Accept(WikiPage page)
+    /// <summary>You've checked what agents changed: noted, so the agents who wrote it hear that you accepted it.</summary>
+    public void Accept(WikiPage page, string? by = null)
     {
         if (!page.NeedsReview) return;
+        page.LastAccepted = new WikiAcceptance { By = by ?? "", Version = page.Version, Since = page.ReviewedVersion ?? 0 };
         page.NeedsReview = false;
         page.ReviewedVersion = null;
         Changed?.Invoke(page);

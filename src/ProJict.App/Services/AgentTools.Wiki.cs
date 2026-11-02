@@ -277,6 +277,22 @@ public sealed partial class AgentTools
     }
 
     /// <summary>For waitingForYou and the watcher: pages the agent reviews as its studio's lead, and ones the user reopened.</summary>
+    /// <summary>How long after you accept a page its authors are still told (when they come back later).</summary>
+    private static readonly TimeSpan AcceptedToldFor = TimeSpan.FromDays(7);
+
+    /// <summary>You accepted ("Looks good") a page with an agent's changes: it hears so, once, and can go on with what waited for it.</summary>
+    private IEnumerable<(string Key, string Line)> WikiAcceptedLines(McpSession session)
+    {
+        foreach (var page in _state.Wiki.Pages)
+        {
+            if (page.LastAccepted is not { } accepted || DateTime.Now - accepted.At > AcceptedToldFor) continue;
+            if (!page.Versions.Any(v => v.Agent && v.Number > accepted.Since && v.Number <= accepted.Version && AgentNaming.IsOwnWork(session, v.By))) continue;
+            yield return ($"wikiaccepted:{page.Id}:{accepted.Version}",
+                $"{(accepted.By.Length > 0 ? accepted.By : "The user")} accepted the wiki page “{page.Path}” with your changes (version {accepted.Version}): " +
+                "it's approved as it is, so go on with what waited for it.");
+        }
+    }
+
     private IEnumerable<(string Key, string Line)> WikiReviewLines(McpSession session, Project project)
     {
         if (project.Studio is not { LeadReviewsWiki: true } studio || !LeadReview.IsLead(studio, session.AgentName)) yield break;

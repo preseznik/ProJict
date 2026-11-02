@@ -730,6 +730,10 @@
                             <TranslateTransform x:Name="PanMove" />
                         </TransformGroup>
                     </Canvas.RenderTransform>
+                    <!-- The drawn look: a picture of the room (the office's or the studio's, light or dark), filling it -->
+                    <Image Source="{Binding RoomPicture}" Width="800" Height="520" Stretch="UniformToFill"
+                           Visibility="{Binding IsDrawnLook, Converter={StaticResource BoolToVis}}" />
+                    <Canvas x:Name="ClassicRoom" Visibility="{Binding ShowsClassicRoom, Converter={StaticResource BoolToVis}}">
                     <!-- Ceiling, walls, floor -->
                     <Polygon Points="0,0 800,0 580,70 220,70" Fill="{DynamicResource SolidBackgroundFillColorTertiaryBrush}" />
                     <Polygon Points="0,0 220,70 220,300 0,520" Fill="{DynamicResource SolidBackgroundFillColorSecondaryBrush}" />
@@ -792,6 +796,7 @@
                     <Rectangle Canvas.Left="547" Canvas.Top="147" Width="14" Height="10" Fill="#BBF7D0" />
                     <Rectangle Canvas.Left="490" Canvas.Top="170" Width="80" Height="3" Fill="#9CA3AF" />
                     </Canvas>
+                    </Canvas>
                     <!-- The studio's milestone board: how much of the project is done, and of each category; a click shows it on the board -->
                     <Border x:Name="MilestoneBoard" Canvas.Left="484" Canvas.Top="102" Width="92" CornerRadius="2" Background="White" BorderBrush="#9CA3AF" BorderThickness="1.5"
                             Padding="5,4,5,3" Visibility="{Binding IsStudio, Converter={StaticResource BoolToVis}}">
@@ -838,6 +843,7 @@
                             </ItemsControl>
                         </StackPanel>
                     </Border>
+                    <Canvas Visibility="{Binding ShowsClassicRoom, Converter={StaticResource BoolToVis}}">
                     <!-- A plant in the left corner (the studio's lobby door is there) -->
                     <Canvas Visibility="{Binding IsStudio, Converter={StaticResource InvBoolToVis}}">
                         <Rectangle Canvas.Left="244" Canvas.Top="276" Width="22" Height="24" Fill="#B45309" Opacity="0.85" />
@@ -850,6 +856,7 @@
                         <Rectangle Canvas.Left="293" Canvas.Top="156" Width="30" Height="138" Fill="#22C55E" />
                         <Rectangle Canvas.Left="293" Canvas.Top="156" Width="30" Height="138" Fill="Black" Opacity="0.06" />
                         <Path Fill="#16A34A" Data="M 293,294 L 323,294 L 330,302 L 290,302 Z" />
+                    </Canvas>
                     </Canvas>
                     <!-- The studio: its banner, the lobby door and the bench where agents wait to be hired -->
                     <Canvas Visibility="{Binding IsStudio, Converter={StaticResource BoolToVis}}">

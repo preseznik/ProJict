@@ -202,7 +202,7 @@ public sealed partial class WikiPageViewModel : ObservableObject
     private void Accept()
     {
         if (!IsOwn) return;
-        State.Wiki.Accept(Model);
+        State.Wiki.Accept(Model, State.UserName);
         State.StatusText = $"Checked “{Model.Title}”.";
     }
 
