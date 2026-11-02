@@ -49,6 +49,13 @@
                        Text="List = TODO items, Done list = DONE file (everything marked done), Note = kept as a note on the project, Skip = ignored. Files without a known prefix are skipped by default (they may hold credentials). Files with the same Project are merged; a Category prefix keeps merged lists apart (e.g. MAPS · HUD)." />
             <DataGrid ItemsSource="{Binding Files}" AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False"
                       HeadersVisibility="Column" GridLinesVisibility="Horizontal" RowHeight="40" SelectionUnit="FullRow">
+                <DataGrid.RowStyle>
+                    <!-- The theme's row style paints rows white, also in the dark theme: rows take the window's colours. -->
+                    <Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
+                        <Setter Property="Background" Value="Transparent" />
+                        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+                    </Style>
+                </DataGrid.RowStyle>
                 <DataGrid.Columns>
                     <DataGridTextColumn Header="File" Binding="{Binding FileName}" IsReadOnly="True" Width="240" />
                     <DataGridTextColumn Header="Size" Binding="{Binding SizeText}" IsReadOnly="True" Width="80" />
