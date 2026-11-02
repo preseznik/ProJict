@@ -54,6 +54,7 @@ public sealed partial class AgentActivityViewModel : ObservableObject, IStudioHi
         Units = units;
         _selectedUnit = units.First(u => u.Unit == View.ActiveWithinUnit);
         _selectedEarlier = EarlierChoices.FirstOrDefault(c => c.Days == View.EarlierDays) ?? EarlierChoices[1];
+        Office.IsDrawnLook = View.OfficeLook == OfficeLook.Drawn;
         Office.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(OfficeViewModel.Focused)) SyncFocusedCard();
@@ -122,6 +123,30 @@ public sealed partial class AgentActivityViewModel : ObservableObject, IStudioHi
 
     /// <summary>The office beside the cards, with the same agents at their desks.</summary>
     public OfficeViewModel Office { get; } = new();
+
+    /// <summary>The drawn rooms instead of today's office (Settings › Office look).</summary>
+    public bool IsDrawnLook
+    {
+        get => View.OfficeLook == OfficeLook.Drawn;
+        set
+        {
+            if (IsDrawnLook == value) return;
+            View.OfficeLook = value ? OfficeLook.Drawn : OfficeLook.Classic;
+            _state.SaveAppSettings();
+            Office.IsDrawnLook = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(IsClassicLook));
+        }
+    }
+
+    public bool IsClassicLook
+    {
+        get => !IsDrawnLook;
+        set
+        {
+            if (value) IsDrawnLook = false;
+        }
+    }
 
     public bool ShowOffice
     {

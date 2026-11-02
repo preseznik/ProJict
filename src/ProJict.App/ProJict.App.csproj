@@ -42,6 +42,7 @@
 
   <ItemGroup>
     <Resource Include="Assets\ProJict.ico" />
+    <Resource Include="Assets\Office\**" />
   </ItemGroup>
 
   <ItemGroup>

@@ -12,6 +12,9 @@ public enum AgentsFold { None, Page, Office }
 /// What the Agents view shows (its Settings panel), kept in the app settings. Each Claude Code session stays connected
 /// until it's closed, so by default only agents that did something in the past hour get a card.
 /// </summary>
+/// <summary>Classic: the office drawn by ProJict, as it always was. Drawn: pictures of the rooms (made with ComfyUI) behind the desks and robots.</summary>
+public enum OfficeLook { Classic, Drawn }
+
 public sealed class AgentsViewSettings
 {
     /// <summary>"Working now": called a tool or said what it's doing this recently.</summary>
@@ -28,6 +31,8 @@ public sealed class AgentsViewSettings
     public bool AgentListOpen { get; set; }
     /// <summary>The project's channel under the office, with the list of all agents beside it.</summary>
     public bool ShowChannel { get; set; }
+    /// <summary>How the office and studios look: today's drawing, or the drawn rooms.</summary>
+    public OfficeLook OfficeLook { get; set; }
     /// <summary>How much of the view's width the office side gets beside the page (the divider).</summary>
     public double OfficeShare { get; set; } = DefaultOfficeShare;
     public const double DefaultOfficeShare = 0.42;
