@@ -1111,7 +1111,7 @@ public sealed partial class ProjectViewModel : ObservableObject
             _state.StatusText = "Nothing to copy — no open items.";
             return;
         }
-        var text = PromptBuilder.Build(Project, list, _state.Store.AttachmentPath);
+        var text = PromptBuilder.Build(Project, list, _state.Store.AttachmentPath, _state.Settings.AgentInstructions);
         try
         {
             Clipboard.SetText(text);

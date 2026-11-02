@@ -189,6 +189,11 @@ public sealed class WorkspaceSettings
     public bool MarkCopiedInProgress { get; set; }
     /// <summary>The priorities of items AI agents may work on (None = items without one); items on hold never. See AgentAccess.</summary>
     public List<Priority> AgentPriorities { get; set; } = [.. AgentAccess.DefaultPriorities];
+    /// <summary>
+    /// Your instructions for every AI agent in every project (Settings › AI agents), e.g. not to add themselves as co-authors of
+    /// commits: told to each agent when it connects and with current_project, and put at the top of Copy prompt.
+    /// </summary>
+    public string? AgentInstructions { get; set; }
     public Guid? LastCaptureProjectId { get; set; }
     public string? LastCaptureCategory { get; set; }
     /// <summary>Projects left out of the sidebar list and the dashboard (shown again from either eye dropdown).</summary>

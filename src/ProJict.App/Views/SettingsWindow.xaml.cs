@@ -45,6 +45,7 @@ public partial class SettingsWindow : Window
         ReadOnlyTokensUseChat.IsChecked = state.AppSettings.ReadOnlyTokensUseChat;
         foreach (var box in AgentPriorities.Children.OfType<CheckBox>())
             box.IsChecked = s.AgentPriorities.Contains(Enum.Parse<Priority>((string)box.Tag));
+        AgentInstructions.Text = s.AgentInstructions ?? "";
         UserName.Text = state.UserName;
         CommentFileLimit.Text = s.CommentFileLimitMb.ToString();
         var notifications = state.AppSettings.Notifications;
@@ -103,7 +104,8 @@ public partial class SettingsWindow : Window
         if (UpdatesSummary == null) return; // still loading
         var priorities = AgentPriorities.Children.OfType<CheckBox>().Where(b => b.IsChecked == true).Select(b => Enum.Parse<Priority>((string)b.Tag)).ToList();
         AgentsSummary.Text = AllowAgents.IsChecked != true ? "Off: agents can't connect"
-            : "On · they may work on " + (AgentAccess.Describe(priorities) ?? "no items (they can still read and comment)");
+            : "On · they may work on " + (AgentAccess.Describe(priorities) ?? "no items (they can still read and comment)") +
+              (string.IsNullOrWhiteSpace(AgentInstructions.Text) ? "" : " · with your instructions");
         ApiSummary.Text = ApiStatus.Text;
         ToolsSummary.Text = ToolsSummaryOf(App.Current.MainVm.Tools.Tools);
         var kinds = NotifyKinds.Children.OfType<CheckBox>().Where(b => b.IsChecked == true).Select(b => (string)b.Content).ToList();
@@ -409,6 +411,7 @@ public partial class SettingsWindow : Window
         s.EnsureDefaultGroups();
         s.AgentPriorities = AgentPriorities.Children.OfType<CheckBox>().Where(b => b.IsChecked == true)
             .Select(b => Enum.Parse<Priority>((string)b.Tag)).ToList();
+        s.AgentInstructions = string.IsNullOrWhiteSpace(AgentInstructions.Text) ? null : AgentInstructions.Text.Replace("\r\n", "\n").Trim();
 
         App.ApplyTheme(s.Theme);
         _state.AppSettings.CheckForUpdates = CheckUpdates.IsChecked == true;

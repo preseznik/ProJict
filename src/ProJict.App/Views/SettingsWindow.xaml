@@ -80,6 +80,11 @@
                     </WrapPanel>
                     <TextBlock Style="{StaticResource MutedText}" Margin="2,4,0,0" TextWrapping="Wrap"
                                Text="Items on hold (Alt+5) are always left alone. Agents can still read and comment on the others, but can't check them out, change, attach to or complete them. A sub-item without a priority goes by the item it belongs to." />
+                    <TextBlock Text="Instructions for all agents" Margin="0,12,0,0" />
+                    <TextBox x:Name="AgentInstructions" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="64" MaxHeight="180" VerticalScrollBarVisibility="Auto"
+                             Margin="0,4,0,0" AutomationProperties.Name="Instructions for all agents" />
+                    <TextBlock Style="{StaticResource MutedText}" Margin="2,4,0,0" TextWrapping="Wrap"
+                               Text="Every agent gets these, in every project: when it connects, with the project (current_project), and at the top of Copy prompt. A project's own instructions (its Details) come after them. For example: Don't add yourself as a co-author of commits (no Co-Authored-By lines)." />
                 </StackPanel>
                 <!-- How to add ProJict to each agent; folded away once it's set up. -->
                 <Expander x:Name="ConnectAgent" Header="Connect an AI agent (Claude Code, Codex, OpenCode, …)" Margin="0,8,0,0">

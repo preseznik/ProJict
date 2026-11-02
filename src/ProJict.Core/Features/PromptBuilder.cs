@@ -7,7 +7,8 @@ namespace ProJict.Core.Features;
 public static class PromptBuilder
 {
     /// <param name="attachmentPath">Where an attached file is stored; attachments are listed by that path so the agent can open them.</param>
-    public static string Build(Project project, IEnumerable<TodoItem> selection, Func<Attachment, string>? attachmentPath = null)
+    /// <param name="forAllAgents">Your instructions for every agent (Settings › AI agents); they come before the project's own.</param>
+    public static string Build(Project project, IEnumerable<TodoItem> selection, Func<Attachment, string>? attachmentPath = null, string? forAllAgents = null)
     {
         var selected = selection.Select(i => i.Id).ToHashSet();
         var sb = new StringBuilder();
@@ -15,6 +16,7 @@ public static class PromptBuilder
         if (!string.IsNullOrWhiteSpace(project.RepoPath)) sb.Append("Local repo: ").Append(project.RepoPath.Trim()).Append('\n');
         if (!string.IsNullOrWhiteSpace(project.GitHubUrl)) sb.Append("GitHub: ").Append(project.GitHubUrl.Trim()).Append('\n');
         sb.Append('\n');
+        if (!string.IsNullOrWhiteSpace(forAllAgents)) sb.Append(forAllAgents.Trim()).Append("\n\n");
         if (!string.IsNullOrWhiteSpace(project.PromptPreamble)) sb.Append(project.PromptPreamble.Trim()).Append("\n\n");
         sb.Append("Please work on the following items:\n");
 

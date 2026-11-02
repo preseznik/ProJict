@@ -52,7 +52,7 @@ public sealed partial class AgentTools : IMcpToolHost
             Schema(), ListProjects, readOnly: true);
         Add("current_project", "Current project",
             "Finds the project for a folder (by default your working directory): by its local repo folder, the git remote, or the folder name. " +
-            "Returns the project's categories and the user's standing instructions for it.",
+            "Returns the project's categories and the user's standing instructions: for all agents (instructionsForAllAgents) and for this project (instructions).",
             Schema(("path", "string", "Folder to look up; defaults to the agent's working directory.", false),
                 ("project", "string", "Project name or key, instead of a folder.", false)), CurrentProject, readOnly: true);
         Add("update_project", "Update project details",
@@ -316,7 +316,11 @@ public sealed partial class AgentTools : IMcpToolHost
         "prints a line for each chat message for you, as it comes, so you can answer while you're idle or busy with other things. " +
         "Projects another ProJict shares with this one are reachable too, and so are its #channels (named like #hud (Sam's)): list_projects " +
         "says what you may do there; what you do there is signed with your name and the user's, like Ada (via Alice). " +
-        "Ids (items, comments and messages) may be shortened to their first 8 characters.";
+        "Ids (items, comments and messages) may be shortened to their first 8 characters." +
+        (ForAllAgents is { } mine ? " The user's instructions for all agents, in every project (a project's own instructions add to them): " + mine : "");
+
+    /// <summary>The user's instructions for every agent in every project (Settings › AI agents); null when there are none.</summary>
+    private string? ForAllAgents => _state.Settings.AgentInstructions?.Trim() is { Length: > 0 } text ? text : null;
 
     public void SessionStarted(McpSession session)
     {
@@ -588,6 +592,7 @@ public sealed partial class AgentTools : IMcpToolHost
             json["tools"] = tools;
             json["toolsNote"] = "Outside tools set up for this project; list_tools says how to reach each (use_tool_key gets an API key, with the user's OK; run_workflow runs a ComfyUI workflow).";
         }
+        if (ForAllAgents is { } forAll) json["instructionsForAllAgents"] = forAll;
         if (!string.IsNullOrWhiteSpace(match.Project.PromptPreamble)) json["instructions"] = match.Project.PromptPreamble.Trim();
         json["agentsMayWorkOn"] = (AgentAccess.Describe(RulesFor(match.Project).Allowed) ?? "no items at the moment (you can still read, comment and add items)") +
                                   "; never items on hold";
