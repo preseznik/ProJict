@@ -3,27 +3,32 @@ using System.Globalization;
 namespace ProJict.Core.Features;
 
 /// <summary>How a timeline (the Feed, the Agents view's history) is grouped.</summary>
-public enum ActivityGrouping { Day, Week, Month }
+public enum ActivityGrouping { Day, Week, Month, Year }
 
 /// <summary>The periods a timeline is grouped in: where one starts and ends, what it's called, and its chart's slots.</summary>
 public static class ActivityPeriods
 {
-    /// <summary>The start of the day, of the week (Monday) or of the month the moment falls in.</summary>
+    /// <summary>The start of the day, of the week (Monday), of the month or of the year the moment falls in.</summary>
     public static DateTime StartOf(DateTime at, ActivityGrouping grouping) => grouping switch
     {
         ActivityGrouping.Day => at.Date,
         ActivityGrouping.Week => at.Date.AddDays(-(((int)at.DayOfWeek + 6) % 7)),
-        _ => new DateTime(at.Year, at.Month, 1),
+        ActivityGrouping.Month => new DateTime(at.Year, at.Month, 1),
+        _ => new DateTime(at.Year, 1, 1),
     };
 
     public static DateTime EndOf(DateTime start, ActivityGrouping grouping) => grouping switch
     {
         ActivityGrouping.Day => start.AddDays(1),
         ActivityGrouping.Week => start.AddDays(7),
-        _ => start.AddMonths(1),
+        ActivityGrouping.Month => start.AddMonths(1),
+        _ => start.AddYears(1),
     };
 
-    /// <summary>"Today", "Yesterday", "Wednesday 29 October"; "This week", "Last week", "13 – 19 October"; "This month", "Last month", "August 2026".</summary>
+    /// <summary>
+    /// "Today", "Yesterday", "Wednesday 29 October"; "This week", "Last week", "13 – 19 October"; "This month", "Last month",
+    /// "August 2026"; "This year", "Last year", "2024".
+    /// </summary>
     public static string Label(DateTime start, ActivityGrouping grouping, DateTime today, CultureInfo culture)
     {
         string Year(DateTime d) => d.Year == today.Year ? "" : " " + d.Year.ToString(CultureInfo.InvariantCulture);
@@ -41,19 +46,25 @@ public static class ActivityPeriods
                 return start.Month == end.Month
                     ? $"{start.Day} – {end.ToString("d MMMM", culture)}{Year(end)}"
                     : $"{start.ToString("d MMMM", culture)}{(start.Year != end.Year ? Year(start) : "")} – {end.ToString("d MMMM", culture)}{Year(end)}";
-            default:
+            case ActivityGrouping.Month:
                 var thisMonth = StartOf(today, grouping);
                 if (start == thisMonth) return "This month";
                 if (start == thisMonth.AddMonths(-1)) return "Last month";
                 return start.ToString("MMMM yyyy", culture);
+            default:
+                if (start.Year == today.Year) return "This year";
+                if (start.Year == today.Year - 1) return "Last year";
+                return start.Year.ToString(CultureInfo.InvariantCulture);
         }
     }
 
-    /// <summary>The bars of a period's activity chart: its hours for a day, its days for a week or month.</summary>
+    /// <summary>The bars of a period's activity chart: its hours for a day, its days for a week or month, its months for a year.</summary>
     public static IReadOnlyList<(DateTime Start, DateTime End, string Label)> Slots(DateTime start, ActivityGrouping grouping, CultureInfo culture)
     {
         if (grouping == ActivityGrouping.Day)
             return Enumerable.Range(0, 24).Select(h => (start.AddHours(h), start.AddHours(h + 1), h.ToString("00", CultureInfo.InvariantCulture))).ToList();
+        if (grouping == ActivityGrouping.Year)
+            return Enumerable.Range(0, 12).Select(m => (start.AddMonths(m), start.AddMonths(m + 1), start.AddMonths(m).ToString("MMM", culture))).ToList();
         var end = EndOf(start, grouping);
         var slots = new List<(DateTime, DateTime, string)>();
         for (var day = start; day < end; day = day.AddDays(1))

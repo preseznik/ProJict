@@ -505,6 +505,8 @@ public sealed partial class AgentActivityViewModel : ObservableObject, IStudioHi
     {
         _state.AppSettings.AgentsGrouping = value.Grouping;
         _state.SaveAppSettings();
+        // By year, earlier work goes back all the way (a year of a week says little).
+        if (value.Grouping == ActivityGrouping.Year && SelectedEarlier.Days != 0) SelectedEarlier = EarlierChoices[^1];
         _historyLimit = HistoryShown;
         BuildHistory();
     }

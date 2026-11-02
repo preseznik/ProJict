@@ -117,6 +117,8 @@ public sealed partial class FeedViewModel : ObservableObject
     {
         _state.AppSettings.FeedGrouping = value.Grouping;
         _state.SaveAppSettings();
+        // A year of a week or a month says little: by year, the Feed goes back all the way.
+        if (value.Grouping == ActivityGrouping.Year && Period.Days != null) Period = Periods[^1];
         Reapply();
     }
 

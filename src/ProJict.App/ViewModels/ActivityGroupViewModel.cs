@@ -10,7 +10,7 @@ namespace ProJict.App.ViewModels;
 public sealed record GroupingOption(string Label, ActivityGrouping Grouping)
 {
     public static IReadOnlyList<GroupingOption> All { get; } =
-        [new("By day", ActivityGrouping.Day), new("By week", ActivityGrouping.Week), new("By month", ActivityGrouping.Month)];
+        [new("By day", ActivityGrouping.Day), new("By week", ActivityGrouping.Week), new("By month", ActivityGrouping.Month), new("By year", ActivityGrouping.Year)];
 
     public static GroupingOption For(ActivityGrouping grouping) => All.FirstOrDefault(o => o.Grouping == grouping) ?? All[0];
 
@@ -180,7 +180,7 @@ public sealed class ActivityStatsViewModel
         AgentsOnly = agentsOnly;
         FilterNote = filterNote;
         IsEmpty = stats.Total == 0;
-        ChartTitle = grouping == ActivityGrouping.Day ? "When (by hour)" : "When (by day)";
+        ChartTitle = grouping switch { ActivityGrouping.Day => "When (by hour)", ActivityGrouping.Year => "When (by month)", _ => "When (by day)" };
 
         string Split(int people, int agents) => agentsOnly ? ActivityGroupViewModel.Count(agents, "action")
             : people + agents == 0 ? "nothing"
@@ -201,11 +201,23 @@ public sealed class ActivityStatsViewModel
         tiles.Add(new(stats.CountOf(FeedKind.Done).ToString(culture), "items finished"));
         if (agentsOnly) tiles.Add(new(stats.CountOf(FeedKind.Comment).ToString(culture), "comments"));
         if (stats.OverTime.MaxBy(s => s.Total) is { Total: > 0 } busiest)
-            tiles.Add(grouping == ActivityGrouping.Day
-                ? new(busiest.Start.ToString("HH:00", culture), $"busiest hour ({busiest.Total})", $"{busiest.Start:HH:00}–{busiest.Start.AddHours(1):HH:00}: {Split(busiest.People, busiest.Agents)}")
-                : new(busiest.Start.ToString("ddd d", culture), $"busiest day ({busiest.Total})", $"{busiest.Start.ToString("dddd d MMMM", culture)}: {Split(busiest.People, busiest.Agents)}"));
+            tiles.Add(grouping switch
+            {
+                ActivityGrouping.Day => new(busiest.Start.ToString("HH:00", culture), $"busiest hour ({busiest.Total})",
+                    $"{busiest.Start:HH:00}–{busiest.Start.AddHours(1):HH:00}: {Split(busiest.People, busiest.Agents)}"),
+                ActivityGrouping.Year => new(busiest.Start.ToString("MMM", culture), $"busiest month ({busiest.Total})",
+                    $"{busiest.Start.ToString("MMMM yyyy", culture)}: {Split(busiest.People, busiest.Agents)}"),
+                _ => new(busiest.Start.ToString("ddd d", culture), $"busiest day ({busiest.Total})", $"{busiest.Start.ToString("dddd d MMMM", culture)}: {Split(busiest.People, busiest.Agents)}"),
+            });
         if (grouping == ActivityGrouping.Day && stats.First is { } first && stats.Last is { } last && last - first >= TimeSpan.FromMinutes(1))
             tiles.Add(new($"{first.ToString("HH:mm", culture)}–{last.ToString("HH:mm", culture)}", "first to last"));
+        else if (grouping == ActivityGrouping.Year && !IsEmpty)
+        {
+            // The months so far, for this year.
+            var months = start.Year == DateTime.Today.Year ? DateTime.Today.Month : 12;
+            var active = stats.OverTime.Count(s => s.Total > 0);
+            tiles.Add(new($"{active} of {Math.Max(months, active)}", "months with activity", start.Year == DateTime.Today.Year ? "Months so far" : null));
+        }
         else if (grouping != ActivityGrouping.Day && !IsEmpty)
         {
             var end = ActivityPeriods.EndOf(start, grouping);
@@ -220,10 +232,15 @@ public sealed class ActivityStatsViewModel
             grouping switch
             {
                 ActivityGrouping.Day => i % 3 == 0 ? s.Label : "",
-                ActivityGrouping.Week => s.Label,
+                ActivityGrouping.Week or ActivityGrouping.Year => s.Label,
                 _ => s.Start.Day == 1 || s.Start.Day % 5 == 0 ? s.Label : "",
             },
-            (grouping == ActivityGrouping.Day ? $"{s.Start:HH:00}–{s.Start.AddHours(1):HH:00}" : s.Start.ToString("dddd d MMMM", culture)) +
+            grouping switch
+            {
+                ActivityGrouping.Day => $"{s.Start:HH:00}–{s.Start.AddHours(1):HH:00}",
+                ActivityGrouping.Year => s.Start.ToString("MMMM yyyy", culture),
+                _ => s.Start.ToString("dddd d MMMM", culture),
+            } +
             ": " + Split(s.People, s.Agents))).ToList();
 
         Kinds = Rows(stats.ByKind, c => $"{c.Label}: {Split(c.Count - c.ByAgents, c.ByAgents)}");
