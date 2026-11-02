@@ -71,11 +71,25 @@ public sealed partial class WikiViewModel : ObservableObject
         RebuildResults();
     }
 
+    /// <summary>History stays on from page to page (showing the open page's), until you turn it off or start editing.</summary>
+    private bool _keepHistory;
+
     partial void OnPageChanged(WikiPageViewModel? oldValue, WikiPageViewModel? newValue)
     {
+        if (oldValue != null) oldValue.PropertyChanged -= PagePropertyChanged;
         oldValue?.Leave();
+        if (newValue != null)
+        {
+            if (_keepHistory) newValue.ShowHistory();
+            newValue.PropertyChanged += PagePropertyChanged;
+        }
         OnPropertyChanged(nameof(HasPage));
         SelectNode(newValue?.Model);
+    }
+
+    private void PagePropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(WikiPageViewModel.IsHistory) && sender is WikiPageViewModel page && page == Page) _keepHistory = page.IsHistory;
     }
 
     // ───────────── Showing ─────────────
