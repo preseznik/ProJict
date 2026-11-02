@@ -22,8 +22,57 @@ public sealed partial class OfficeViewModel
     /// <summary>The drawn room at night (the dark theme): the furniture's pictures get the same night tint as the room.</summary>
     public bool IsDarkRoom => IsDrawnLook && (_dark ??= Views.MermaidDiagram.IsDark());
 
-    partial void OnStudioNameChanged(string? value) => OnPropertyChanged(nameof(RoomPicture));
+    partial void OnStudioNameChanged(string? value)
+    {
+        OnPropertyChanged(nameof(RoomPicture));
+        ArrangeDesks();
+    }
+
     partial void OnIsFilmChanged(bool value) => OnPropertyChanged(nameof(RoomPicture));
+    partial void OnIsDrawnLookChanged(bool value) => ArrangeDesks();
+
+    /// <summary>
+    /// The drawn office has a wide, shallow floor (the classic room's back desks would stand on its back wall): its desks
+    /// stand in two rows on either side of the cooler, the back row's robots between the front row's, so none hides
+    /// another. Its seat (where the robot sits) and how far down the floor (y) for the left side's desks, back to front
+    /// as <see cref="DeskDepths"/>; the right side's are the same, mirrored.
+    /// </summary>
+    private static readonly (double SeatX, double Y)[] DrawnOfficeDesks = [(305, 400), (185, 405), (262, 466), (115, 468)];
+
+    /// <summary>Where talkers stand around the cooler in the drawn office: close in, between the desks on either side.</summary>
+    private static readonly (double X, double Y)[] DrawnOfficeCoolerSpots =
+        [.. new (double X, double Y)[] { (-62, 6), (62, 6), (-38, 30), (38, 30), (-92, 26), (92, 26), (-30, -26), (30, -26) }
+            .Select(o => StandingAt(CoolerX + o.X, CoolerY + o.Y))];
+
+    /// <summary>Where talkers stand around the cooler in this room.</summary>
+    private (double X, double Y)[] TalkSpots => IsDrawnLook && !IsStudio ? DrawnOfficeCoolerSpots : CoolerSpots;
+
+    /// <summary>The studio's lobby in the drawn studios: a step forward, onto their floor (the bench it stands by is the classic room's).</summary>
+    private static readonly (double X, double Y)[] DrawnLobbySpots =
+        [.. Enumerable.Range(0, 5).Select(i => StandingAt(344 + 28 * i, 350)), .. Enumerable.Range(0, 4).Select(i => StandingAt(358 + 28 * i, 372))];
+
+    /// <summary>Where agents not hired yet wait in this studio.</summary>
+    private (double X, double Y)[] Lobby => IsDrawnLook ? DrawnLobbySpots : LobbySpots;
+
+    /// <summary>Stands the desks where this room has them: against the walls, or in the drawn office out on its floor.</summary>
+    private void ArrangeDesks()
+    {
+        if (Desks == null) return;
+        var perSide = DeskDepths.Length;
+        for (var i = 0; i < Desks.Count; i++)
+        {
+            var desk = Desks[i];
+            if (!IsDrawnLook || IsStudio)
+            {
+                desk.StandAt(WallPoint(desk.Left, desk.Depth));
+                continue;
+            }
+            var (seatX, y) = DrawnOfficeDesks[i % perSide];
+            var scale = ScaleAt(y);
+            var x = seatX - 89 * scale;
+            desk.StandAt((desk.Left ? x : Width - x, y));
+        }
+    }
 
     /// <summary>The theme changed (checked as the office updates): the room follows it.</summary>
     private void SyncTheme()
