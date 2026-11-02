@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.38
+
+- **Agents hear when you accept their wiki page.** **Looks good** on a page an agent changed now tells that agent (and anyone else whose changes you accepted with it), once, so work that waited for your review goes on without being asked.
+
 ## 0.1.37 (2026-11-02)
 
 - **Audio and video play in place.** ElevenLabs clips, VRCapture recordings and other audio and video files play right where they are, in Chat, discussions, items and notes, linked media and wiki pages: play/pause, a seek bar with the time, volume and mute, and a button to open the file in its own app. A video shows a frame from it until it plays. One plays at a time, and a file Windows can't play says so.
