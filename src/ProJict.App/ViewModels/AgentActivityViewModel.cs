@@ -522,6 +522,12 @@ public sealed partial class AgentActivityViewModel : ObservableObject, IStudioHi
 
     partial void OnProjectFilterChanged(string value)
     {
+        // Remembered, so the view opens here again (with the project's studio).
+        if (View.ProjectId != FilterProject?.Id)
+        {
+            View.ProjectId = FilterProject?.Id;
+            _state.SaveAppSettings();
+        }
         _historyLimit = HistoryShown;
         Refresh();
     }
@@ -537,11 +543,13 @@ public sealed partial class AgentActivityViewModel : ObservableObject, IStudioHi
     }
 
     /// <summary>Shows the view, for one project or all of them.</summary>
+    /// <param name="project">A project to show (right-click a project › Agents); null opens the view as you left it.</param>
     public void Show(Project? project)
     {
         ProjectChoices = [AllProjects, .. _state.Projects.Where(p => p.Remote == null).Select(p => p.Name).Order(StringComparer.CurrentCultureIgnoreCase)];
         OnPropertyChanged(nameof(ProjectChoices));
-        _showIdle = _showOlder = false;
+        // As you left it: the project (and so its studio), and the idle and older agents you showed.
+        project ??= _state.Projects.FirstOrDefault(p => p.Id == View.ProjectId && p.Remote == null);
         _historyLimit = HistoryShown;
         if (ProjectFilter != (project?.Name ?? AllProjects)) ProjectFilter = project?.Name ?? AllProjects; // refreshes
         else Refresh();

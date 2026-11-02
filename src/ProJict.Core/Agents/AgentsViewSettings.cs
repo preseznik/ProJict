@@ -33,6 +33,8 @@ public sealed class AgentsViewSettings
     public bool ShowChannel { get; set; }
     /// <summary>How the office and studios look: today's drawing, or the drawn rooms.</summary>
     public OfficeLook OfficeLook { get; set; }
+    /// <summary>The project the view showed last (its studio with it); null for all projects. The sidebar opens it there again.</summary>
+    public Guid? ProjectId { get; set; }
     /// <summary>How much of the view's width the office side gets beside the page (the divider).</summary>
     public double OfficeShare { get; set; } = DefaultOfficeShare;
     public const double DefaultOfficeShare = 0.42;
