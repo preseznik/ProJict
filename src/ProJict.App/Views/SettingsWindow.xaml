@@ -263,6 +263,8 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
                     <TextBlock Text="Files in Chat" VerticalAlignment="Center" />
                     <StackPanel Grid.Column="1" Orientation="Horizontal">
@@ -271,12 +273,25 @@
                                  ToolTip="The largest file you, people you share with or AI agents may post in Chat (up to 2048 MB)" />
                         <TextBlock Text="MB each" VerticalAlignment="Center" Margin="8,0,0,0" />
                     </StackPanel>
-                    <TextBlock Grid.Row="1" Text="Private conversations" VerticalAlignment="Center" Margin="0,8,0,0" />
+                    <TextBlock Grid.Row="1" Text="Big channel files" VerticalAlignment="Center" Margin="0,8,0,0" />
                     <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="0,8,0,0">
-                        <TextBlock Text="keep their files" VerticalAlignment="Center" Margin="0,0,8,0" />
-                        <TextBox x:Name="PrivateFilesDays" Width="50" AutomationProperties.Name="Days to keep private conversations' files"
-                                 ToolTip="After this many days, a file sent in a private conversation is deleted from this computer" />
+                        <TextBlock Text="over" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <TextBox x:Name="BigChannelFile" Width="70" AutomationProperties.Name="Channel files bigger than this go to the Chat cache, MB"
+                                 ToolTip="A channel's files bigger than this (builds, captures) go to the Chat cache too; 0 keeps them all with your other files" />
+                        <TextBlock Text="MB go to the Chat cache too (0: none)" VerticalAlignment="Center" Margin="8,0,0,0" />
+                    </StackPanel>
+                    <TextBlock Grid.Row="2" Text="Chat cache" VerticalAlignment="Center" Margin="0,8,0,0" />
+                    <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal" Margin="0,8,0,0">
+                        <TextBlock Text="clean out files nobody opened for" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <TextBox x:Name="PrivateFilesDays" Width="50" AutomationProperties.Name="Days a file nobody opened stays in the Chat cache"
+                                 ToolTip="A file in the Chat cache nobody opened, saved or fetched for this many days is deleted from this computer" />
                         <TextBlock Text="days (0 keeps them)" VerticalAlignment="Center" Margin="8,0,0,0" />
+                    </StackPanel>
+                    <StackPanel Grid.Row="3" Grid.Column="1" Orientation="Horizontal" Margin="0,8,0,0">
+                        <TextBlock Text="and keep it under" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <TextBox x:Name="ChatCacheMax" Width="50" AutomationProperties.Name="Largest the Chat cache grows, GB"
+                                 ToolTip="Past this, the least recently used files go first; never one used in the last two days" />
+                        <TextBlock Text="GB (0: no limit)" VerticalAlignment="Center" Margin="8,0,0,0" />
                     </StackPanel>
                 </Grid>
                 <DockPanel Margin="0,8,0,0">
@@ -289,7 +304,7 @@
                     <TextBlock x:Name="PrivateFilesHolds" Style="{StaticResource MutedText}" TextWrapping="Wrap" VerticalAlignment="Center" />
                 </DockPanel>
                 <TextBlock Style="{StaticResource MutedText}" Margin="2,6,0,0" TextWrapping="Wrap"
-                           Text="Files sent in private conversations are kept in this folder on this computer, not in the data folder, so they aren't backed up or mirrored; once cleaned out, the conversation says so. Files in channels stay with your other files." />
+                           Text="The Chat cache holds private conversations' files and channels' big ones, in this folder on this computer, not in the data folder, so they aren't backed up or mirrored. Opening a file keeps it longer; right-click one › Keep it to keep it for good. Once cleaned out, its message says so. Files on items, wiki pages and comments are never in it." />
             </StackPanel>
         </Expander>
 

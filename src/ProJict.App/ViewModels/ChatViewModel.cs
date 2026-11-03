@@ -810,9 +810,9 @@ public sealed partial class ChatViewModel : ObservableObject
         var files = new List<Attachment>();
         try
         {
-            // Copied into the data folder (as for comments), a private conversation's into the cache for them; the originals are only read.
-            var cached = channel.Direct;
-            files = Pending.Select(f => f.Stored ?? (f.Data != null ? _state.Store.WriteAttachment(f.Name, f.Data, cached) : _state.Store.ImportAttachment(f.Path!, cached))).ToList();
+            // Copied into the data folder (as for comments), a private conversation's and big ones into the Chat cache; the originals are only read.
+            bool Cached(PendingFile f) => _state.AppSettings.GoesToChatCache(channel.Direct, f.Size);
+            files = Pending.Select(f => f.Stored ?? (f.Data != null ? _state.Store.WriteAttachment(f.Name, f.Data, Cached(f)) : _state.Store.ImportAttachment(f.Path!, Cached(f)))).ToList();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

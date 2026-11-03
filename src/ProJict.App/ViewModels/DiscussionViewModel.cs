@@ -516,11 +516,12 @@ public sealed partial class ChoiceOptionViewModel(ChoiceViewModel choice, string
 public sealed partial class PendingFile(string name, long size, string? path, byte[]? data, ObservableCollection<PendingFile>? list)
 {
     public string Name { get; } = name;
+    public long Size { get; } = size;
     public string? Path { get; } = path;
     public byte[]? Data { get; } = data;
     /// <summary>Already in the data folder (a marked-up copy).</summary>
     public Attachment? Stored { get; init; }
-    public string SizeText => AttachmentViewModel.FormatSize(size);
+    public string SizeText => AttachmentViewModel.FormatSize(Size);
 
     [RelayCommand] private void Remove() => list?.Remove(this);
 }

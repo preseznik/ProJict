@@ -149,6 +149,14 @@
         <DataTemplate x:Key="ChatFileChip" DataType="{x:Type vm:AttachmentViewModel}">
             <Button Style="{StaticResource SubtleButton}" Padding="0" Margin="0,0,6,4" Command="{Binding OpenCommand}"
                     ToolTip="{Binding ShortToolTip}" AutomationProperties.Name="{Binding FileName}">
+                <!-- A file in the Chat cache can be kept for good, so it's never cleaned out. -->
+                <Button.ContextMenu>
+                    <ContextMenu Visibility="{Binding CanKeep, Converter={StaticResource BoolToVis}}">
+                        <MenuItem Header="Keep it" IsCheckable="True" IsChecked="{Binding IsKept}"
+                                  ToolTip="The Chat cache never cleans it out (Settings › Chat)" />
+                        <MenuItem Header="Show in folder" Command="{Binding ShowInFolderCommand}" />
+                    </ContextMenu>
+                </Button.ContextMenu>
                 <Border Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
                         BorderThickness="1" CornerRadius="4" Padding="6,3">
                     <Grid>
