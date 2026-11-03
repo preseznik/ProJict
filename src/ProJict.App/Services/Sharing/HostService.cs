@@ -12,6 +12,7 @@ using System.Windows.Threading;
 using ProJict.App.ViewModels;
 using ProJict.Core.Agents;
 using ProJict.Core.Chat;
+using ProJict.Core.Features;
 using ProJict.Core.Model;
 using ProJict.Core.Sharing;
 using ProJict.Core.Storage;
@@ -595,7 +596,8 @@ public sealed partial class HostService
         var attachment = Visible(session.Account).SelectMany(p => p.Attachments()).FirstOrDefault(a => a.Id == id) ?? ChatAttachment(session, id) ?? WikiAttachment(session, id);
         if (attachment == null) return;
         var path = _state.Store.AttachmentPath(attachment);
-        // Off the UI thread; a big one in pieces, each sent before the next is read.
+        // Fetched by another ProJict counts as used. Off the UI thread; a big one in pieces, each sent before the next is read.
+        if (attachment.Cached) PrivateFiles.Touch(path);
         if (File.Exists(path)) _ = Task.Run(() => session.SendFileAsync(Wire.Message("file", ("id", id.ToString())), new OutgoingFile(attachment.FileName, Path: path)));
     }
 

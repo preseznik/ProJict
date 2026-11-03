@@ -26,9 +26,8 @@ public sealed partial class ProjectViewModel : ObservableObject
     private const string NoTag = "No tag";
 
     private readonly AppState _state;
-    private readonly List<string> _undo = [];
-    private readonly List<string> _redo = [];
-    private bool _textEditOpen;
+    /// <summary>Undo and redo, by snapshots of the project (in Core, so another front end can use it too).</summary>
+    private readonly UndoHistory _history = new(MaxUndo);
     private Guid? _focusedItemId;
 
     public ProjectViewModel(AppState state, MainViewModel main, Project project)
@@ -58,7 +57,8 @@ public sealed partial class ProjectViewModel : ObservableObject
     public ObservableCollection<Release> Releases { get; } = [];
     public ObservableCollection<ArchivedFile> Archive { get; } = [];
 
-    public static IReadOnlyList<string> TagChoices { get; } = ["BUG", "ADD", "ISSUE", "CHANGE", "FIX", "IDEA"];
+    /// <summary>The types to pick from: ProJict's own, the ones you added, then any other this project's items have.</summary>
+    public IReadOnlyList<string> TagList => Core.Features.TagChoices.For(_state.Settings.CustomTags, Project.Walk().Select(l => l.Item.Tag));
     public static IReadOnlyList<ProjectStatus> Statuses { get; } = Enum.GetValues<ProjectStatus>();
     /// <summary>A copy, so raising Groups gives the header's group box a fresh list.</summary>
     public IReadOnlyList<string> Groups => [.. _state.Settings.Groups];
@@ -543,7 +543,7 @@ public sealed partial class ProjectViewModel : ObservableObject
             Categories.Clear();
             foreach (var vm in list) Categories.Add(vm);
         }
-        TagFilters = [AllTags, NoTag, .. TagChoices.Union(Project.Walk().Select(l => l.Item.Tag).OfType<string>(), StringComparer.OrdinalIgnoreCase)];
+        TagFilters = [AllTags, NoTag, .. TagList];
         OnPropertyChanged(nameof(TagFilters));
         ApplyFilter();
         OnCategoryExpandedChanged();
@@ -627,13 +627,13 @@ public sealed partial class ProjectViewModel : ObservableObject
     {
         FocusedRow = row;
         _focusedItemId = row.Item.Id;
-        _textEditOpen = false;
+        _history.EndTyping();
     }
 
     public void OnRowLostFocus(ItemRowViewModel row)
     {
         if (_focusedItemId == row.Item.Id) _focusedItemId = null;
-        _textEditOpen = false;
+        _history.EndTyping();
         var item = row.Item;
 
         // "BUG: crash" typed into the text becomes a tag.
@@ -667,22 +667,17 @@ public sealed partial class ProjectViewModel : ObservableObject
         }
     }
 
-    public void OnHeaderGotFocus() => _textEditOpen = false;
+    public void OnHeaderGotFocus() => _history.EndTyping();
 
     /// <summary>Called before a text field changes; the first change after focusing records one undo step.</summary>
     public void BeforeTextChange()
     {
-        if (!CanEdit) return;
-        if (_textEditOpen) return;
-        Push(_undo, Json.Serialize(Project));
-        _redo.Clear();
-        _textEditOpen = true;
-        NotifyUndo();
+        if (CanEdit && _history.BeforeTyping(() => Json.Serialize(Project))) NotifyUndo();
     }
 
     private void RefreshTagFilters()
     {
-        TagFilters = [AllTags, NoTag, .. TagChoices.Union(Project.Walk().Select(l => l.Item.Tag).OfType<string>(), StringComparer.OrdinalIgnoreCase)];
+        TagFilters = [AllTags, NoTag, .. TagList];
         OnPropertyChanged(nameof(TagFilters));
     }
 
@@ -690,49 +685,29 @@ public sealed partial class ProjectViewModel : ObservableObject
 
     public void Checkpoint()
     {
-        Push(_undo, Json.Serialize(Project));
-        _redo.Clear();
-        _textEditOpen = false;
+        _history.Checkpoint(Json.Serialize(Project));
         NotifyUndo();
     }
 
-    private static void Push(List<string> stack, string snapshot)
-    {
-        stack.Add(snapshot);
-        if (stack.Count > MaxUndo) stack.RemoveAt(0);
-    }
-
-    private static string Pop(List<string> stack)
-    {
-        var s = stack[^1];
-        stack.RemoveAt(stack.Count - 1);
-        return s;
-    }
-
-    private bool CanUndo() => _undo.Count > 0;
-    private bool CanRedo() => _redo.Count > 0;
+    private bool CanUndo() => _history.CanUndo;
+    private bool CanRedo() => _history.CanRedo;
 
     [RelayCommand(CanExecute = nameof(CanUndo))]
     public void Undo()
     {
-        if (_undo.Count == 0) return;
-        Push(_redo, Json.Serialize(Project));
-        Restore(Pop(_undo));
+        if (_history.CanUndo) Restore(_history.Undo(Json.Serialize(Project))!);
     }
 
     [RelayCommand(CanExecute = nameof(CanRedo))]
     public void Redo()
     {
-        if (_redo.Count == 0) return;
-        Push(_undo, Json.Serialize(Project));
-        Restore(Pop(_redo));
+        if (_history.CanRedo) Restore(_history.Redo(Json.Serialize(Project))!);
     }
 
     private void Restore(string json)
     {
         var focus = _focusedItemId;
         Project.RestoreFrom(Json.Deserialize<Project>(json)!);
-        _textEditOpen = false;
         Categories.Clear();
         RebuildAll();
         ReloadSideLists();
@@ -831,50 +806,23 @@ public sealed partial class ProjectViewModel : ObservableObject
     {
         if (SortedByPriority()) return;
         var list = SiblingsOf(row);
-        var index = list.IndexOf(row.Item);
-        TodoItem? previous = null;
-        for (var i = index - 1; i >= 0; i--)
-        {
-            // Top-level TODO and DONE items share one list; only indent under a neighbour from the same section.
-            if (row.Parent != null || list[i].IsDone == row.Item.IsDone)
-            {
-                previous = list[i];
-                break;
-            }
-        }
-        if (previous == null) return;
-        Mutate(() =>
-        {
-            list.Remove(row.Item);
-            previous.Children.Add(row.Item);
-        }, [row.Category], row.Item.Id, caret);
+        if (BoardEdits.IndentTarget(list, row.Item, topLevel: row.Parent == null) is not { } under) return;
+        Mutate(() => BoardEdits.Indent(list, row.Item, under), [row.Category], row.Item.Id, caret);
     }
 
     public void Outdent(ItemRowViewModel row, int caret)
     {
-        if (row.Parent == null || Project.Find(row.Parent.Id) is not { } parentLoc) return;
-        Mutate(() =>
-        {
-            row.Parent.Children.Remove(row.Item);
-            parentLoc.Siblings.Insert(parentLoc.Siblings.IndexOf(row.Parent) + 1, row.Item);
-        }, [row.Category], row.Item.Id, caret);
+        if (row.Parent == null || Project.Find(row.Parent.Id) == null) return;
+        Mutate(() => BoardEdits.Outdent(Project, row.Item, row.Parent), [row.Category], row.Item.Id, caret);
     }
 
     public void Move(ItemRowViewModel row, int delta, int caret)
     {
         if (SortedByPriority()) return;
         var list = SiblingsOf(row);
-        var index = list.IndexOf(row.Item);
-        var target = index + delta;
-        while (target >= 0 && target < list.Count && row.Parent == null && list[target].IsDone != row.Item.IsDone) target += delta;
-
-        if (target >= 0 && target < list.Count)
+        if (BoardEdits.MoveTarget(list, row.Item, delta, topLevel: row.Parent == null) is { } target)
         {
-            Mutate(() =>
-            {
-                list.RemoveAt(index);
-                list.Insert(target, row.Item);
-            }, [row.Category], row.Item.Id, caret);
+            Mutate(() => BoardEdits.MoveTo(list, row.Item, target), [row.Category], row.Item.Id, caret);
             return;
         }
 
@@ -886,9 +834,7 @@ public sealed partial class ProjectViewModel : ObservableObject
         var other = Categories[neighbour];
         Mutate(() =>
         {
-            list.Remove(row.Item);
-            if (delta < 0) other.Model.Items.Add(row.Item);
-            else other.Model.Items.Insert(0, row.Item);
+            BoardEdits.MoveInto(list, row.Item, other.Model, delta);
             other.IsExpanded = true;
         }, [row.Category, other], row.Item.Id, caret);
     }
@@ -938,6 +884,15 @@ public sealed partial class ProjectViewModel : ObservableObject
         Mutate(() => SiblingsOf(row).Remove(row.Item), [row.Category], focus?.Item.Id);
     }
 
+    /// <summary>The tag picker's Other…: a type of your own, kept in the list for every project, given to the item.</summary>
+    public void AddNewTag(ItemRowViewModel row)
+    {
+        var typed = InputDialog.Ask(Application.Current.MainWindow!, "New type", "A type for items, like BUG or ADD (it's added to the list):", "");
+        if (Core.Features.TagChoices.Clean(typed) is not { } tag) return;
+        if (Core.Features.TagChoices.Remember(_state.Settings.CustomTags ??= [], tag)) _state.MarkSettingsDirty();
+        SetTag(row, tag);
+    }
+
     public void SetTag(ItemRowViewModel row, string? tag)
     {
         Checkpoint();
@@ -961,23 +916,16 @@ public sealed partial class ProjectViewModel : ObservableObject
     /// <summary>Drag &amp; drop: place <paramref name="source"/> before or after <paramref name="target"/> as its sibling.</summary>
     public void MoveItem(ItemRowViewModel source, ItemRowViewModel target, bool after)
     {
-        if (source.Item == target.Item || source.Item.Descendants().Contains(target.Item) || SortedByPriority()) return;
-        Mutate(() =>
-        {
-            SiblingsOf(source).Remove(source.Item);
-            var list = SiblingsOf(target);
-            list.Insert(list.IndexOf(target.Item) + (after ? 1 : 0), source.Item);
-        }, [source.Category, target.Category]);
+        if (!BoardEdits.CanPlaceBeside(source.Item, target.Item) || SortedByPriority()) return;
+        Mutate(() => BoardEdits.PlaceBeside(SiblingsOf(source), source.Item, SiblingsOf(target), target.Item, after), [source.Category, target.Category]);
     }
 
     public void MoveCategory(CategoryViewModel category, int delta)
     {
-        var index = Project.Categories.IndexOf(category.Model);
-        var target = index + delta;
+        var target = Project.Categories.IndexOf(category.Model) + delta;
         if (target < 0 || target >= Project.Categories.Count || Refused(EditKind.Edit)) return;
         Checkpoint();
-        Project.Categories.RemoveAt(index);
-        Project.Categories.Insert(target, category.Model);
+        BoardEdits.MoveCategory(Project, category.Model, target);
         Touch();
         RebuildAll();
     }
@@ -989,8 +937,7 @@ public sealed partial class ProjectViewModel : ObservableObject
         var target = top ? 0 : Project.Categories.Count - 1;
         if (index < 0 || index == target || Refused(EditKind.Edit)) return;
         Checkpoint();
-        Project.Categories.RemoveAt(index);
-        Project.Categories.Insert(target, category.Model);
+        BoardEdits.MoveCategory(Project, category.Model, target);
         Touch();
         RebuildAll();
     }
@@ -999,8 +946,7 @@ public sealed partial class ProjectViewModel : ObservableObject
     {
         if (category == target || Refused(EditKind.Edit)) return;
         Checkpoint();
-        Project.Categories.Remove(category.Model);
-        Project.Categories.Insert(Project.Categories.IndexOf(target.Model), category.Model);
+        BoardEdits.MoveCategoryBefore(Project, category.Model, target.Model);
         Touch();
         RebuildAll();
     }
@@ -1317,9 +1263,14 @@ public sealed partial class ProjectViewModel : ObservableObject
 
     private bool AttachmentExists(AttachmentViewModel attachment)
     {
-        if (File.Exists(attachment.Path)) return true;
+        if (File.Exists(attachment.Path))
+        {
+            // Opening one from the Chat cache counts as using it: it stays as long again.
+            if (attachment.Model.Cached) PrivateFiles.Touch(attachment.Path);
+            return true;
+        }
         _state.StatusText = attachment.CleanedOut
-            ? $"{attachment.FileName} was cleaned out: private conversations' files are kept {_state.AppSettings.PrivateFilesDays} days (Settings › Chat)."
+            ? $"{attachment.FileName} was cleaned out: nobody had opened it for {_state.AppSettings.PrivateFilesDays} days (Settings › Chat)."
             : $"{attachment.FileName} is missing from the data folder.";
         return false;
     }
@@ -1430,9 +1381,7 @@ public sealed partial class ProjectViewModel : ObservableObject
         var focus = _focusedItemId;
         var caret = focus is { } focused ? CaretOf?.Invoke(focused) : null;
         if (!change()) return false;
-        Push(_undo, snapshot);
-        _redo.Clear();
-        _textEditOpen = false;
+        _history.Checkpoint(snapshot);
         NotifyUndo();
         Touch();
         RebuildAll();
@@ -1493,9 +1442,7 @@ public sealed partial class ProjectViewModel : ObservableObject
         var focus = _focusedItemId;
         var caret = focus is { } focused ? CaretOf?.Invoke(focused) : null;
         Project.RestoreFrom(snapshot, keepIssueLinks: false);
-        _undo.Clear();
-        _redo.Clear();
-        _textEditOpen = false;
+        _history.Clear();
         NotifyUndo();
         RebuildAll();
         ReloadSideLists();
@@ -1509,10 +1456,7 @@ public sealed partial class ProjectViewModel : ObservableObject
     {
         var focus = _focusedItemId;
         var caret = focus is { } focused ? CaretOf?.Invoke(focused) : null;
-        Push(_undo, Json.Serialize(Project));
-        _redo.Clear();
-        _textEditOpen = false;
-        NotifyUndo();
+        Checkpoint();
         Project.RestoreFrom(accepted);
         RebuildAll();
         ReloadSideLists();

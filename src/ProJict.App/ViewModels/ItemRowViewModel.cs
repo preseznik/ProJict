@@ -48,6 +48,9 @@ public sealed partial class ItemRowViewModel : ObservableObject
 
     public string? Tag => Item.Tag;
     public bool HasTag => !string.IsNullOrWhiteSpace(Item.Tag);
+    /// <summary>No type yet: a faint chip (while you point at the row) offers one, like the priority's.</summary>
+    public bool ShowTagButton => !HasTag && !Item.IsDone && Owner.CanEdit;
+    public string TagToolTip => $"{Item.Tag} · click to change the type";
     public Priority Priority => Item.Priority;
     public bool HasPriority => Item.Priority != Priority.None;
     public string PriorityText => Priorities.Label(Item.Priority);
@@ -209,6 +212,7 @@ public sealed partial class ItemRowViewModel : ObservableObject
     [RelayCommand] private void ToggleDone() => Owner.SetState(this, Item.IsDone ? ItemState.Todo : ItemState.Done);
     [RelayCommand] private void ToggleInProgress() => Owner.SetState(this, Item.State == ItemState.InProgress ? ItemState.Todo : ItemState.InProgress);
     [RelayCommand] private void SetTag(string? tag) => Owner.SetTag(this, string.IsNullOrWhiteSpace(tag) ? null : tag);
+    [RelayCommand] private void AddNewTag() => Owner.AddNewTag(this);
     [RelayCommand] private void MoveToCategory(CategoryViewModel? target)
     {
         if (target != null) Owner.MoveToCategory(this, target);

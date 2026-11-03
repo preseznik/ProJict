@@ -2,6 +2,7 @@ using System.IO;
 using System.Text.Json.Nodes;
 using System.Windows.Threading;
 using ProJict.Core.Chat;
+using ProJict.Core.Features;
 using ProJict.Core.Model;
 using ProJict.Core.Sharing;
 using ProJict.Core.Storage;
@@ -174,6 +175,7 @@ public sealed partial class GuestService
             .SelectMany(m => m.Attachments ?? []).FirstOrDefault(a => a.Id == id);
         if (attachment == null) return;
         var path = _state.Store.AttachmentPath(attachment);
+        if (attachment.Cached) PrivateFiles.Touch(path);
         if (File.Exists(path)) _ = connection.SendFileAsync(Wire.Message("backFile", ("id", id.ToString())), new OutgoingFile(attachment.FileName, Path: path));
     }
 

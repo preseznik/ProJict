@@ -43,6 +43,9 @@ public partial class SettingsWindow : Window
         CheckUpdates.IsChecked = state.AppSettings.CheckForUpdates;
         AllowAgents.IsChecked = state.AppSettings.AllowAgents;
         AgentsUseChat.IsChecked = state.AppSettings.AgentsUseChat;
+        ApproveInChat.IsChecked = state.AppSettings.ApproveInChat;
+        HookCommand.Text = App.Current.MainVm.AgentTools.PermissionHookCommand ?? "(it needs ProJictBridge.exe, which comes with ProJict's installer)";
+        ShowClaudeHook();
         ReadOnlyTokensUseChat.IsChecked = state.AppSettings.ReadOnlyTokensUseChat;
         foreach (var box in AgentPriorities.Children.OfType<CheckBox>())
             box.IsChecked = s.AgentPriorities.Contains(Enum.Parse<Priority>((string)box.Tag));
@@ -51,6 +54,8 @@ public partial class SettingsWindow : Window
         CommentFileLimit.Text = s.CommentFileLimitMb.ToString();
         ChatFileLimit.Text = s.ChatFileLimitMb.ToString();
         PrivateFilesDays.Text = state.AppSettings.PrivateFilesDays.ToString();
+        BigChannelFile.Text = state.AppSettings.BigChannelFileMb.ToString();
+        ChatCacheMax.Text = state.AppSettings.ChatCacheMaxGb.ToString();
         PrivateFilesFolder.Text = state.PrivateFilesRoot;
         ShowPrivateFiles();
         var notifications = state.AppSettings.Notifications;
@@ -119,8 +124,9 @@ public partial class SettingsWindow : Window
                             (MarkInProgress.IsChecked == true ? " · copying a prompt marks items in progress" : "");
         CommentsSummary.Text = "You sign as " + (string.IsNullOrWhiteSpace(UserName.Text) ? Environment.UserName : UserName.Text.Trim()) +
                                $" · files in comments up to {CommentFileLimit.Text.Trim()} MB";
-        ChatSummary.Text = $"Files up to {ChatFileLimit.Text.Trim()} MB · private conversations' files " +
-                           (int.TryParse(PrivateFilesDays.Text, out var days) && days > 0 ? $"kept {days} day{(days == 1 ? "" : "s")}" : "kept");
+        ChatSummary.Text = $"Files up to {ChatFileLimit.Text.Trim()} MB · the cache cleans out files " +
+                           (int.TryParse(PrivateFilesDays.Text, out var days) && days > 0 ? $"unopened for {days} day{(days == 1 ? "" : "s")}" : "never") +
+                           (int.TryParse(ChatCacheMax.Text, out var gb) && gb > 0 ? $", under {gb} GB" : "");
         CaptureSummary.Text = (string.IsNullOrEmpty(Hotkey.Text) ? "No hotkey" : "Hotkey " + Hotkey.Text) + " · " +
                               (CloseToTray.IsChecked == true ? "closing keeps it in the tray" : "closing quits");
         GitHubSummary.Text = string.IsNullOrWhiteSpace(GitHubAccount.Text) ? "No account"
@@ -303,6 +309,53 @@ public partial class SettingsWindow : Window
         McpWhere.Text = setup.Where;
     }
 
+    /// <summary>Where Claude Code keeps its settings: your user folder (a test points it elsewhere).</summary>
+    internal static Func<string> ClaudeHome = () => Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
+    private string ClaudeSettings => ProJict.Core.Agents.ClaudeHookSetup.SettingsPath(ClaudeHome());
+
+    /// <summary>Whether Claude Code has ProJict's hook: the button sets it up or takes it out.</summary>
+    private void ShowClaudeHook(string? said = null)
+    {
+        string? json = null;
+        try { json = File.Exists(ClaudeSettings) ? File.ReadAllText(ClaudeSettings) : null; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+        var setUp = ProJict.Core.Agents.ClaudeHookSetup.IsSetUp(json);
+        ClaudeHook.Content = setUp ? "Remove from Claude Code" : "Set up in Claude Code";
+        ClaudeHook.IsEnabled = App.Current.MainVm.AgentTools.PermissionHookCommand != null;
+        ClaudeHookStatus.Text = said ?? (setUp ? "Set up in Claude Code." : "Not set up in Claude Code yet.");
+    }
+
+    private void ClaudeHook_Click(object sender, RoutedEventArgs e)
+    {
+        if (App.Current.MainVm.AgentTools.PermissionHookCommand is not { } command) return;
+        try
+        {
+            var path = ClaudeSettings;
+            var json = File.Exists(path) ? File.ReadAllText(path) : null;
+            var setUp = ProJict.Core.Agents.ClaudeHookSetup.IsSetUp(json);
+            var changed = setUp ? ProJict.Core.Agents.ClaudeHookSetup.Remove(json!) : ProJict.Core.Agents.ClaudeHookSetup.Add(json, command);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            if (json != null) File.WriteAllText(path + ".projict-backup", json);
+            File.WriteAllText(path, changed);
+            ShowClaudeHook(setUp ? "Taken out of Claude Code; start its sessions again." : "Set up in Claude Code: start its sessions again to use it.");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            ShowClaudeHook(ex.Message);
+        }
+    }
+
+    private void CopyHookCommand_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            Clipboard.SetText(HookCommand.Text);
+            _state.StatusText = "Copied the permission hook's command.";
+        }
+        catch (System.Runtime.InteropServices.ExternalException) { }
+    }
+
     private void CopyMcpCommand_Click(object sender, RoutedEventArgs e)
     {
         try
@@ -385,11 +438,11 @@ public partial class SettingsWindow : Window
     {
         if ((string)CleanOutPrivate.Content == "Clean out now")
         {
-            CleanOutPrivate.Content = "Click again to delete them all";
+            CleanOutPrivate.Content = "Click again to delete them (not the ones you keep)";
             return;
         }
         var (files, bytes) = PrivateFiles.CleanOut(_state.PrivateFilesRoot, null, DateTime.Now);
-        _state.StatusText = $"Cleaned out {files} file{(files == 1 ? "" : "s")} ({AttachmentViewModel.FormatSize(bytes)}) of private conversations.";
+        _state.StatusText = $"Cleaned out {files} file{(files == 1 ? "" : "s")} ({AttachmentViewModel.FormatSize(bytes)}) from the Chat cache.";
         ShowPrivateFiles();
     }
 
@@ -427,7 +480,17 @@ public partial class SettingsWindow : Window
         }
         if (!int.TryParse(PrivateFilesDays.Text, out var privateDays) || privateDays is < 0 or > PrivateFiles.MaxDays)
         {
-            ShowError("Keep private conversations' files for a number of days (0 keeps them).", ChatSection);
+            ShowError("The Chat cache keeps files for a number of days (0 keeps them).", ChatSection);
+            return;
+        }
+        if (!int.TryParse(BigChannelFile.Text, out var bigChannelFile) || bigChannelFile is < 0 or > WorkspaceSettings.MaxFileLimitMb)
+        {
+            ShowError($"Big channel files can start from 1 to {WorkspaceSettings.MaxFileLimitMb} MB (0: none go to the cache).", ChatSection);
+            return;
+        }
+        if (!int.TryParse(ChatCacheMax.Text, out var cacheMax) || cacheMax is < 0 or > 10000)
+        {
+            ShowError("Keep the Chat cache under a number of GB (0: no limit).", ChatSection);
             return;
         }
         if (string.IsNullOrWhiteSpace(PrivateFilesFolder.Text))
@@ -452,6 +515,8 @@ public partial class SettingsWindow : Window
         s.CommentFileLimitMb = fileLimit;
         s.ChatFileLimitMb = chatLimit;
         _state.AppSettings.PrivateFilesDays = privateDays;
+        _state.AppSettings.BigChannelFileMb = bigChannelFile;
+        _state.AppSettings.ChatCacheMaxGb = cacheMax;
         var privateFolder = PrivateFilesFolder.Text.Trim();
         if (!string.Equals(privateFolder, _state.PrivateFilesRoot, StringComparison.OrdinalIgnoreCase))
             _state.MovePrivateFiles(string.Equals(privateFolder, _state.DefaultPrivateFilesRoot, StringComparison.OrdinalIgnoreCase) ? null : privateFolder);
@@ -474,6 +539,7 @@ public partial class SettingsWindow : Window
         _state.AppSettings.CheckForUpdates = CheckUpdates.IsChecked == true;
         _state.AppSettings.AllowAgents = AllowAgents.IsChecked == true;
         _state.AppSettings.AgentsUseChat = AgentsUseChat.IsChecked == true;
+        _state.AppSettings.ApproveInChat = ApproveInChat.IsChecked == true;
         _state.AppSettings.ReadOnlyTokensUseChat = ReadOnlyTokensUseChat.IsChecked == true;
         _state.AppSettings.UserName = string.IsNullOrWhiteSpace(UserName.Text) || UserName.Text.Trim() == Environment.UserName ? null : UserName.Text.Trim();
         App.Current.SetAgentAccess(_state.AppSettings.AllowAgents);

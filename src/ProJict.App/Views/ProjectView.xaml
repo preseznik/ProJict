@@ -161,10 +161,24 @@
                                 </StackPanel>
                             </Grid>
                         </Button>
-                        <Border Style="{StaticResource TagChip}" Background="{Binding Tag, Converter={StaticResource TagToBrush}}"
-                                Visibility="{Binding HasTag, Converter={StaticResource BoolToVis}}" VerticalAlignment="Top" Margin="0,6,4,0">
-                            <TextBlock Text="{Binding Tag}" Style="{StaticResource ChipText}" />
-                        </Border>
+                        <!-- Its type (BUG, ADD…): a click picks another from the list, or a new one. -->
+                        <Button Style="{StaticResource SubtleButton}" Padding="0" Margin="0,6,4,0" VerticalAlignment="Top" Click="TagChip_Click"
+                                ToolTip="{Binding TagToolTip}" AutomationProperties.Name="Type"
+                                Visibility="{Binding HasTag, Converter={StaticResource BoolToVis}}">
+                            <Border Style="{StaticResource TagChip}" Background="{Binding Tag, Converter={StaticResource TagToBrush}}">
+                                <TextBlock Text="{Binding Tag}" Style="{StaticResource ChipText}" />
+                            </Border>
+                        </Button>
+                        <!-- No type yet: an empty dashed chip while you point at the row; a click gives it one. -->
+                        <Button x:Name="NoTag" Style="{StaticResource SubtleButton}" Padding="0" Margin="0,5,4,0" VerticalAlignment="Top" Click="TagChip_Click"
+                                Opacity="0" ToolTip="No type yet: click to give it one (BUG, ADD, CHANGE… or your own)"
+                                AutomationProperties.Name="Give it a type"
+                                Visibility="{Binding ShowTagButton, Converter={StaticResource BoolToVis}}">
+                            <Grid>
+                                <Rectangle RadiusX="4" RadiusY="4" StrokeThickness="1" StrokeDashArray="2 2" Stroke="{DynamicResource TextFillColorSecondaryBrush}" />
+                                <TextBlock Text="type" FontSize="10.5" Margin="7,1,7,2" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                            </Grid>
+                        </Button>
                     </StackPanel>
                     <TextBox x:Name="RowText" Grid.Column="3" Uid="RowText" Style="{StaticResource RowTextBox}" IsReadOnly="{Binding Owner.IsReadOnlyBoard}"
                              Text="{Binding Text, UpdateSourceTrigger=PropertyChanged}" Loaded="RowText_Loaded"
@@ -282,6 +296,7 @@
                     <Setter TargetName="RowMore" Property="Opacity" Value="1" />
                     <Setter TargetName="RowChat" Property="Opacity" Value="1" />
                     <Setter TargetName="NoPriority" Property="Opacity" Value="1" />
+                    <Setter TargetName="NoTag" Property="Opacity" Value="1" />
                 </Trigger>
                 <DataTrigger Binding="{Binding InDoneSection}" Value="True">
                     <Setter TargetName="RowText" Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />

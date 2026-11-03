@@ -60,10 +60,24 @@ public sealed class AppSettings
     public bool AllowAgents { get; set; } = true;
     /// <summary>Let AI agents read and post in Chat (Settings › AI agents).</summary>
     public bool AgentsUseChat { get; set; } = true;
-    /// <summary>How many days private conversations' files are kept in their cache on this computer (0 keeps them; Settings › Chat).</summary>
+    /// <summary>
+    /// When an agent needs your permission (its PermissionRequest hook runs ProJictBridge.exe --permission-hook), it asks
+    /// you in Chat too, and your 👍 or 👎 answers it (Settings › AI agents).
+    /// </summary>
+    public bool ApproveInChat { get; set; } = true;
+    /// <summary>
+    /// The Chat cache on this computer (Settings › Chat): files nobody used for this many days are cleaned out (0 keeps
+    /// them). It holds private conversations' files, and channels' big ones.
+    /// </summary>
     public int PrivateFilesDays { get; set; } = ProJict.Core.Features.PrivateFiles.DefaultDays;
     /// <summary>Where that cache is; null for %LocalAppData%\ProJict\Chat files.</summary>
     public string? PrivateFilesFolder { get; set; }
+    /// <summary>A channel's files bigger than this (MB) go to the Chat cache too (0: none do).</summary>
+    public int BigChannelFileMb { get; set; } = 50;
+    /// <summary>Past this size (GB) the cache cleans out its least recently used files (0: no limit).</summary>
+    public int ChatCacheMaxGb { get; set; } = 10;
+    /// <summary>Whether a file of this size, posted in such a channel, goes to the Chat cache.</summary>
+    public bool GoesToChatCache(bool direct, long size) => direct || (BigChannelFileMb > 0 && size > (long)BigChannelFileMb * 1024 * 1024);
     /// <summary>Read-only API tokens may still use Chat fully: post, start channels, invite (Settings › API).</summary>
     public bool ReadOnlyTokensUseChat { get; set; } = true;
     /// <summary>Chat lists the agents' private conversations with each other (the toggle in its header).</summary>
@@ -183,6 +197,9 @@ public sealed class WorkspaceSettings
     public bool HideEmptyCategories { get; set; }
     /// <summary>The largest file you, a guest or an agent may post in a discussion, in MB.</summary>
     public int CommentFileLimitMb { get; set; } = DefaultCommentFileLimitMb;
+    /// <summary>Item types you added (the tag picker's Other…), offered in every project after ProJict's own.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public List<string>? CustomTags { get; set; }
     public const int DefaultCommentFileLimitMb = 10;
     [System.Text.Json.Serialization.JsonIgnore] public long CommentFileLimitBytes => (long)Math.Max(1, CommentFileLimitMb) * 1024 * 1024;
     /// <summary>The largest file you, a guest or an agent may post in Chat, in MB (Settings › Chat).</summary>

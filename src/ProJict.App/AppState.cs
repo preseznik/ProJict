@@ -33,10 +33,12 @@ public sealed partial class AppState : ObservableObject
         _saveTimer.Tick += (_, _) => SaveNow();
         Chat = new ChatRoom(store.LoadChannels(), () => UserName);
         store.CacheRoot = PrivateFilesRoot;
-        // A private conversation's files go to their cache, out of the data folder (the composer puts them there itself).
+        // A private conversation's files, and a channel's big ones, go to the Chat cache, out of the data folder (the
+        // composer puts them there itself).
         Chat.Posted += (channel, message) =>
         {
-            if (channel.Direct) foreach (var file in message.Attachments ?? []) Store.MoveToCache(file);
+            foreach (var file in message.Attachments ?? [])
+                if (AppSettings.GoesToChatCache(channel.Direct, file.Size)) Store.MoveToCache(file);
         };
         Chat.Changed += channel =>
         {
@@ -219,10 +221,10 @@ public sealed partial class AppState : ObservableObject
             _cleanOutTimer.Tick += (_, _) => CleanOutPrivateFiles();
             _cleanOutTimer.Start();
         }
-        var (root, days) = (PrivateFilesRoot, AppSettings.PrivateFilesDays);
+        var (root, days, cap) = (PrivateFilesRoot, AppSettings.PrivateFilesDays, (long)AppSettings.ChatCacheMaxGb * 1024 * 1024 * 1024);
         Task.Run(() =>
         {
-            try { PrivateFiles.CleanOut(root, days, DateTime.Now); }
+            try { PrivateFiles.CleanOut(root, days, DateTime.Now, cap); }
             catch (Exception) { /* the next round tries again */ }
         });
     }

@@ -101,7 +101,8 @@ public partial class App : Application
             }),
             () => MainWindow is { IsVisible: true, IsActive: true } window && window.WindowState != WindowState.Minimized);
 
-        _agents = new AgentPipeServer(AgentPipeServer.PipeName(dataRoot), MainVm.AgentTools, UpdateService.CurrentVersionText, MainVm.AgentTools.WatchOverPipeAsync);
+        _agents = new AgentPipeServer(AgentPipeServer.PipeName(dataRoot), MainVm.AgentTools, UpdateService.CurrentVersionText, MainVm.AgentTools.WatchOverPipeAsync,
+            MainVm.AgentTools.ApproveOverPipeAsync);
         // The bridge agents start, outside the install folder so updates don't cut them off. Not from a ProJict on another
         // data folder (a test or second copy): the bridge would start that one for every agent.
         if (dataArg == null) Task.Run(BridgeInstaller.Refresh);

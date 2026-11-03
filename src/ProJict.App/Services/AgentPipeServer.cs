@@ -7,11 +7,13 @@ namespace ProJict.App.Services;
 
 /// <summary>
 /// Accepts AI agents (through <see cref="McpBridge"/>) on a named pipe that only the current Windows user can open,
-/// one MCP session per connection, and chat watchers (<c>ProJict.exe --watch-chat</c>), which get a line per chat
-/// message instead. Nothing listens on the network.
+/// one MCP session per connection, chat watchers (<c>ProJict.exe --watch-chat</c>), which get a line per chat
+/// message instead, and permission hooks (<c>ProJictBridge.exe --permission-hook</c>), which wait for your answer in
+/// Chat. Nothing listens on the network.
 /// </summary>
 public sealed class AgentPipeServer(string pipeName, IMcpToolHost host, string version,
-    Func<string, Stream, TextReader, CancellationToken, Task>? watch = null) : IDisposable
+    Func<string, Stream, TextReader, CancellationToken, Task>? watch = null,
+    Func<System.Text.Json.Nodes.JsonObject, string?, Stream, TextReader, CancellationToken, Task>? approve = null) : IDisposable
 {
     private CancellationTokenSource? _stop;
 
@@ -75,6 +77,10 @@ public sealed class AgentPipeServer(string pipeName, IMcpToolHost host, string v
                 var first = await reader.ReadLineAsync(stop);
                 if (first == null) return;
                 if (watch != null && McpServer.WatchRequest(first) is { } agent) await watch(agent, pipe, reader, stop);
+                else if (PermissionAsk.Request(first) is { } request)
+                {
+                    if (approve != null) await approve(request.Hook, request.Agent, pipe, reader, stop);
+                }
                 else await McpServer.RunAsync(reader, first, pipe, host, new McpSession(), version, stop);
             }
             catch (Exception)
