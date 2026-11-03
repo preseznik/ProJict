@@ -62,7 +62,9 @@ public sealed partial class AgentActivityViewModel
     internal void RefreshChannel()
     {
         _officeChannel = ShowChannel ? FindOfficeChannel() : null;
-        ChannelLines = _officeChannel == null ? [] : [.. _officeChannel.Messages.Where(m => !m.Notice && !m.Deleted).TakeLast(ChannelLinesShown).Select(m =>
+        // Not the messages of those you ignore in Chat (unless they mention you).
+        ChannelLines = _officeChannel is not { } shown ? [] : [.. shown.Messages
+            .Where(m => !m.Notice && !m.Deleted && !ChatIgnoring.Hides(shown, m, _state.UserName, _state.Settings.IgnoredInChat)).TakeLast(ChannelLinesShown).Select(m =>
         {
             var mine = !m.Agent && string.Equals(m.By, _state.UserName, StringComparison.OrdinalIgnoreCase);
             var text = string.Join(' ', m.Text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)).Trim();

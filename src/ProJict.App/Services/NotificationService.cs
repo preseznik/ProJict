@@ -171,7 +171,7 @@ public sealed class NotificationService
             .Concat(_main.Host.BackChats.Where(b => b.MyName != null)
                 .SelectMany(b => b.Chat.Channels.Select(ch => (Channel: ch, Me: b.MyName!, Host: (string?)b.OwnerName))));
         foreach (var (channel, me, host) in places)
-            foreach (var message in ProJict.Core.Chat.ChatRoom.Unread(channel, me).Where(m => !m.Notice))
+            foreach (var message in ProJict.Core.Chat.ChatIgnoring.Unread(channel, me, _state.Settings.IgnoredInChat).Where(m => !m.Notice))
             {
                 var mention = channel.Direct || ProJict.Core.Chat.ChatRoom.Mentions(channel, message, me);
                 var where = ProJict.Core.Chat.ChatRoom.Title(channel, me) + (host != null ? $" ({host}'s ProJict)" : "");

@@ -175,6 +175,48 @@
         <!-- A message's file: audio and video play in place, other files show as their chip. -->
         <local:PlayableTemplateSelector x:Key="ChatFile" Chip="{StaticResource ChatFileChip}" Player="{StaticResource PlayerTemplate}" />
 
+        <!-- The Media tab's grid: a tile per picture, video (a frame of it, with a play mark) or sound; a click opens it. -->
+        <DataTemplate x:Key="MediaTile" DataType="{x:Type vm:ChatFileViewModel}">
+            <Button Style="{StaticResource SubtleButton}" Padding="0" Margin="0,0,8,8" Command="{Binding File.OpenCommand}" ToolTip="{Binding ToolTip}"
+                    AutomationProperties.Name="{Binding FileName}">
+                <Button.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="Show it in the chat" Command="{Binding ShowInChatCommand}" />
+                        <MenuItem Header="Show in folder" Command="{Binding File.ShowInFolderCommand}" />
+                        <MenuItem Header="Keep it" IsCheckable="True" IsChecked="{Binding File.IsKept}" Visibility="{Binding File.CanKeep, Converter={StaticResource BoolToVis}}"
+                                  ToolTip="The Chat cache never cleans it out (Settings › Chat)" />
+                    </ContextMenu>
+                </Button.ContextMenu>
+                <Border Width="168" Height="126" CornerRadius="6" ClipToBounds="True" Background="{DynamicResource ControlFillColorDefaultBrush}"
+                        BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}" BorderThickness="1">
+                    <Grid>
+                        <Image Source="{Binding Picture}" Stretch="UniformToFill" Visibility="{Binding HasPicture, Converter={StaticResource BoolToVis}}" />
+                        <TextBlock Style="{StaticResource Icon}" Text="&#xE8D6;" FontSize="34" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,0,18"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" Visibility="{Binding IsAudio, Converter={StaticResource BoolToVis}}" />
+                        <Border Width="34" Height="34" CornerRadius="17" Background="#99000000" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                Visibility="{Binding IsVideo, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE768;" FontSize="14" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="2,0,0,0" />
+                        </Border>
+                        <Border VerticalAlignment="Bottom" Background="#B3000000" Padding="6,3">
+                            <TextBlock Text="{Binding FileName}" FontSize="11" Foreground="White" TextTrimming="CharacterEllipsis" />
+                        </Border>
+                    </Grid>
+                </Border>
+            </Button>
+        </DataTemplate>
+
+        <!-- A row of the Files tab (and of Media as a list): the file as in a message, who posted it and when, and a way to its message. -->
+        <DataTemplate x:Key="FileRow" DataType="{x:Type vm:ChatFileViewModel}">
+            <DockPanel Margin="0,0,0,10">
+                <Button DockPanel.Dock="Right" Style="{StaticResource SubtleButton}" Content="In the chat" Padding="8,3" VerticalAlignment="Top" Margin="8,0,0,0"
+                        Command="{Binding ShowInChatCommand}" ToolTip="Show the message it was posted in" />
+                <StackPanel>
+                    <ContentControl Content="{Binding File}" ContentTemplateSelector="{StaticResource ChatFile}" Focusable="False" HorizontalAlignment="Left" />
+                    <TextBlock Text="{Binding Details}" Style="{StaticResource MutedText}" FontSize="11.5" Margin="2,0,0,0" />
+                </StackPanel>
+            </DockPanel>
+        </DataTemplate>
+
         <DataTemplate x:Key="PendingFile" DataType="{x:Type vm:PendingFile}">
             <Border Background="{DynamicResource SubtleFillColorSecondaryBrush}" CornerRadius="4" Padding="6,2,2,2" Margin="0,4,6,0">
                 <StackPanel Orientation="Horizontal">
@@ -308,8 +350,10 @@
         <DataTemplate x:Key="Member" DataType="{x:Type vm:ChatMemberViewModel}">
             <DockPanel Margin="0,0,0,8" Background="Transparent">
                 <DockPanel.ContextMenu>
-                    <ContextMenu Visibility="{Binding CanMessage, Converter={StaticResource BoolToVis}}">
-                        <MenuItem Header="Private message" Command="{Binding PrivateMessageCommand}" />
+                    <ContextMenu Visibility="{Binding HasMenu, Converter={StaticResource BoolToVis}}">
+                        <MenuItem Header="Private message" Command="{Binding PrivateMessageCommand}" Visibility="{Binding CanMessage, Converter={StaticResource BoolToVis}}" />
+                        <MenuItem Header="{Binding IgnoreHeader}" Command="{Binding ToggleIgnoreCommand}" Visibility="{Binding CanIgnore, Converter={StaticResource BoolToVis}}"
+                                  ToolTip="Only for you: their messages are hidden in channels, except those that mention you. They aren't told." />
                     </ContextMenu>
                 </DockPanel.ContextMenu>
                 <Button DockPanel.Dock="Right" Style="{StaticResource SubtleIconButton}" Content="&#xE712;" FontSize="12" Padding="5,3" VerticalAlignment="Center"
@@ -568,6 +612,11 @@
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">
                     <Button x:Name="JoinButton" Style="{StaticResource AccentButtonStyle}" Content="Join" Command="{Binding JoinCommand}" Margin="0,0,8,0"
                             ToolTip="Join to see what's new here and be notified" Visibility="{Binding ShowJoin, Converter={StaticResource BoolToVis}}" />
+                    <ToggleButton x:Name="MentionsToggle" Style="{StaticResource SubtleToggle}" IsChecked="{Binding OnlyMentions}" Margin="0,0,6,0"
+                                  ToolTip="Only the messages that mention you (by name or @everyone), in every channel, until you turn it off. What it hides stays new."
+                                  AutomationProperties.Name="Only what mentions you" Visibility="{Binding IsDirect, Converter={StaticResource InvBoolToVis}}">
+                        <TextBlock Text="@" FontWeight="SemiBold" />
+                    </ToggleButton>
                     <ToggleButton x:Name="MembersToggle" Style="{StaticResource SubtleToggle}" IsChecked="{Binding ShowMembers}" ToolTip="Show or hide the members"
                                   AutomationProperties.Name="Members">
                         <StackPanel Orientation="Horizontal">
@@ -617,8 +666,34 @@
                 </StackPanel>
             </DockPanel>
 
+            <!-- The channel's tabs: its messages, its pictures, videos and sounds, and its other files; the last two searchable -->
+            <DockPanel x:Name="ChannelTabs" DockPanel.Dock="Top" Margin="0,0,0,8">
+                <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
+                    <ToggleButton Style="{StaticResource SubtleToggle}" IsChecked="{Binding ShowsMessages, Mode=OneWay}" Command="{Binding ShowTabCommand}" CommandParameter="Messages"
+                                  Content="Messages" Padding="9,3" Margin="0,0,4,0" AutomationProperties.Name="Messages" />
+                    <ToggleButton x:Name="MediaTab" Style="{StaticResource SubtleToggle}" IsChecked="{Binding ShowsMedia, Mode=OneWay}" Command="{Binding ShowTabCommand}" CommandParameter="Media"
+                                  Content="{Binding MediaTabText}" Padding="9,3" Margin="0,0,4,0" AutomationProperties.Name="Media"
+                                  ToolTip="The pictures, videos and sounds posted here, newest first" />
+                    <ToggleButton x:Name="FilesTab" Style="{StaticResource SubtleToggle}" IsChecked="{Binding ShowsFiles, Mode=OneWay}" Command="{Binding ShowTabCommand}" CommandParameter="Files"
+                                  Content="{Binding FilesTabText}" Padding="9,3" AutomationProperties.Name="Files"
+                                  ToolTip="The other files posted here, newest first" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Visibility="{Binding ShowsMessages, Converter={StaticResource InvBoolToVis}}">
+                    <ToggleButton Style="{StaticResource SubtleToggle}" IsChecked="{Binding MediaAsList}" Padding="7,4" Margin="0,0,6,0" AutomationProperties.Name="As a list"
+                                  ToolTip="As a list, where videos and sounds play in place (off: a grid of pictures)" Visibility="{Binding ShowsMedia, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Style="{StaticResource Icon}" Text="&#xE8FD;" FontSize="13" />
+                    </ToggleButton>
+                    <Grid Width="220">
+                        <TextBox x:Name="FileSearchBox" Text="{Binding FileSearch, UpdateSourceTrigger=PropertyChanged, Delay=150}" Padding="8,5,8,5"
+                                 AutomationProperties.Name="Search the files" ToolTip="Files with all these words, in their name, who posted them or the message" />
+                        <TextBlock Text="Search the files" Margin="11,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"
+                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}" Visibility="{Binding FileSearch, Converter={StaticResource InvEmptyToVis}}" />
+                    </Grid>
+                </StackPanel>
+            </DockPanel>
+
             <!-- Writing -->
-            <StackPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
+            <StackPanel DockPanel.Dock="Bottom" Margin="0,8,0,0" Visibility="{Binding ShowsMessages, Converter={StaticResource BoolToVis}}">
                 <Border CornerRadius="6" Padding="10,5" Margin="0,0,0,4" Background="{DynamicResource SubtleFillColorSecondaryBrush}"
                         Visibility="{Binding IsReplying, Converter={StaticResource BoolToVis}}">
                     <DockPanel>
@@ -686,14 +761,29 @@
                            Text="Enter sends, Shift+Enter starts a new line, Up edits your last message. @name mentions someone, #name links a channel, # and an item's id (#4e84570c) links the item." />
             </StackPanel>
 
+            <Grid>
+            <!-- The Media and Files tabs -->
+            <ScrollViewer x:Name="FileScroller" VerticalScrollBarVisibility="Auto" Visibility="{Binding ShowsMessages, Converter={StaticResource InvBoolToVis}}">
+                <StackPanel Margin="0,0,6,6">
+                    <TextBlock Text="{Binding FilesNote}" Style="{StaticResource MutedText}" Margin="2,4,0,12" Visibility="{Binding FilesNote, Converter={StaticResource EmptyToVis}}" />
+                    <ItemsControl x:Name="MediaGrid" ItemsSource="{Binding Files}" ItemTemplate="{StaticResource MediaTile}" ItemsPanel="{StaticResource Wrap}" Focusable="False"
+                                  Visibility="{Binding ShowsFileGrid, Converter={StaticResource BoolToVis}}" />
+                    <ItemsControl x:Name="FileList" ItemsSource="{Binding Files}" ItemTemplate="{StaticResource FileRow}" Focusable="False"
+                                  Visibility="{Binding ShowsFileList, Converter={StaticResource BoolToVis}}" />
+                </StackPanel>
+            </ScrollViewer>
             <!-- Messages -->
-            <ScrollViewer x:Name="MessageScroller" VerticalScrollBarVisibility="Auto" ScrollChanged="MessageScroller_ScrollChanged">
+            <ScrollViewer x:Name="MessageScroller" VerticalScrollBarVisibility="Auto" ScrollChanged="MessageScroller_ScrollChanged"
+                          Visibility="{Binding ShowsMessages, Converter={StaticResource BoolToVis}}">
                 <StackPanel Margin="0,0,6,6">
                     <Button Content="Show earlier messages" HorizontalAlignment="Center" Margin="0,4,0,8" Click="ShowEarlier_Click"
                             Visibility="{Binding HasEarlier, Converter={StaticResource BoolToVis}}" />
+                    <TextBlock x:Name="MentionsNote" Text="{Binding MentionsNote}" Style="{StaticResource MutedText}" HorizontalAlignment="Center" Margin="0,4,0,10"
+                               Visibility="{Binding MentionsNote, Converter={StaticResource EmptyToVis}}" />
                     <ItemsControl x:Name="MessageList" ItemsSource="{Binding Messages}" ItemTemplate="{StaticResource ChatMessage}" Focusable="False" />
                 </StackPanel>
             </ScrollViewer>
+            </Grid>
         </DockPanel>
 
         <!-- Members -->

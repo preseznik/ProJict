@@ -200,6 +200,9 @@ public sealed class WorkspaceSettings
     /// <summary>Item types you added (the tag picker's Other…), offered in every project after ProJict's own.</summary>
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public List<string>? CustomTags { get; set; }
+    /// <summary>People and agents whose messages you don't see in Chat's channels (see <see cref="Chat.ChatIgnoring"/>).</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public List<string>? IgnoredInChat { get; set; }
     public const int DefaultCommentFileLimitMb = 10;
     [System.Text.Json.Serialization.JsonIgnore] public long CommentFileLimitBytes => (long)Math.Max(1, CommentFileLimitMb) * 1024 * 1024;
     /// <summary>The largest file you, a guest or an agent may post in Chat, in MB (Settings › Chat).</summary>

@@ -172,17 +172,36 @@ public sealed partial class ChatViewModel : ObservableObject
     public bool ShowEmptyPane => Channel == null && !IsCreating && !IsBrowsing;
 
     /// <summary>Unread messages in your channels, and whether one @mentions you.</summary>
-    public int UnreadCount => AllChannels.Sum(c => ChatRoom.Unread(c, NameIn(c)).Count());
+    public int UnreadCount => AllChannels.Sum(c => UnreadIn(c).Count());
     /// <summary>An @mention of you, or a private message, waits: the count shows red.</summary>
-    public bool HasMention => AllChannels.Any(c => c.Direct ? ChatRoom.Unread(c, NameIn(c)).Any() : ChatRoom.UnreadMentions(c, NameIn(c)).Any());
+    public bool HasMention => AllChannels.Any(c => c.Direct ? UnreadIn(c).Any() : ChatRoom.UnreadMentions(c, NameIn(c)).Any());
     public string UnreadToolTip
     {
         get
         {
-            var lines = AllChannels.Select(c => (c, n: ChatRoom.Unread(c, NameIn(c)).Count(), m: ChatRoom.UnreadMentions(c, NameIn(c)).Count()))
+            var lines = AllChannels.Select(c => (c, n: UnreadIn(c).Count(), m: ChatRoom.UnreadMentions(c, NameIn(c)).Count()))
                 .Where(x => x.n > 0).Select(x => $"{(PlaceOf(x.c).Host is { } h ? h.OwnerName + ": " : "")}{ChatRoom.Title(x.c, NameIn(x.c))}: {Count(x.n, "new message")}" + (x.m > 0 ? $" ({(x.m == 1 ? "one mentions" : $"{x.m} mention")} you)" : "")).ToList();
             return lines.Count == 0 ? "Live chat with AI agents in #channels" : string.Join("\n", lines);
         }
+    }
+
+    /// <summary>What's new for you in the channel, without the messages of those you ignore.</summary>
+    internal IEnumerable<ChatMessage> UnreadIn(ChatChannel channel) => ChatIgnoring.Unread(channel, NameIn(channel), _state.Settings.IgnoredInChat);
+
+    /// <summary>You ignore them: their messages are hidden from you in channels, except those that @mention you.</summary>
+    internal bool IsIgnored(string name) => ChatIgnoring.IsIgnored(_state.Settings.IgnoredInChat, name);
+
+    /// <summary>A member's right-click › Ignore, or Stop ignoring: the channel, its counts and the channel under the office follow.</summary>
+    internal void SetIgnored(string name, bool on)
+    {
+        _state.Settings.IgnoredInChat = ChatIgnoring.Set(_state.Settings.IgnoredInChat, name, on);
+        _state.MarkSettingsDirty();
+        _state.StatusText = on ? $"Ignoring {name}: their messages are hidden in channels, except those that mention you. Right-click them again to stop."
+            : $"Not ignoring {name} any more: their messages show again.";
+        RefreshPresence();
+        SyncMessages();
+        Refresh();
+        _main.AgentActivity.RefreshChannel();
     }
 
     /// <summary>Opens the view, at a channel (and a message in it) or where you were.</summary>
@@ -216,10 +235,10 @@ public sealed partial class ChatViewModel : ObservableObject
     /// <summary>Back at the channel: the "New" line goes above what came while you were away.</summary>
     private void MarkNew()
     {
-        if (Channel == null || ChatRoom.Member(Channel, NameIn(Channel)) is not { } me || !ChatRoom.Unread(Channel, NameIn(Channel)).Any()) return;
+        if (Channel == null || ChatRoom.Member(Channel, NameIn(Channel)) is not { } me || !UnreadIn(Channel).Any()) return;
         UnreadFrom = me.LastRead ?? DateTime.MinValue;
         // The New line shows, with a little of what came before it, unless it's far back.
-        if (ChatRoom.Unread(Channel, NameIn(Channel)).FirstOrDefault() is { } first)
+        if (UnreadIn(Channel).FirstOrDefault() is { } first)
             ShowFrom(Math.Max(Channel.Messages.Count - MostToShowNew, Channel.Messages.IndexOf(first) - 2));
         SyncMessages();
     }
@@ -244,6 +263,9 @@ public sealed partial class ChatViewModel : ObservableObject
         Editing = null;
         Draft = value != null && _drafts.Remove(value.Id, out var draft) ? draft : "";
         Pending.Clear();
+        // Another channel opens on its messages.
+        FileSearch = "";
+        Tab = ChannelTab.Messages;
         // The "New" line goes above what you hadn't read when you opened the channel.
         UnreadFrom = null;
         SyncChannel();
@@ -275,6 +297,8 @@ public sealed partial class ChatViewModel : ObservableObject
     private void ReadIfLooking()
     {
         if (Channel == null || !IsShown || !IsLooking() || Channel == _keptUnread) return;
+        // The @ filter hides most of it, and the Media and Files tabs all of it: what's hidden stays new.
+        if ((OnlyMentions && !Channel.Direct) || Tab != ChannelTab.Messages) return;
         var place = Here;
         if (place.Host is { } host)
         {
@@ -547,15 +571,19 @@ public sealed partial class ChatViewModel : ObservableObject
     private void SyncMessages()
     {
         var models = Channel?.Messages ?? [];
-        var start = Start(models);
+        // The @ filter looks through all of the channel, not a page of it.
+        var onlyMentions = OnlyMentions && Channel is { Direct: false };
+        var start = onlyMentions ? 0 : Start(models);
         var shown = models.GetRange(start, models.Count - start);
-        _oldestShown = shown.FirstOrDefault()?.Id;
-        HasEarlier = start > 0;
+        if (!onlyMentions) _oldestShown = shown.FirstOrDefault()?.Id;
+        HasEarlier = !onlyMentions && start > 0;
         OnPropertyChanged(nameof(HasEarlier));
+        // Not the messages of those you ignore (unless they mention you), or only what mentions you.
+        var me = NameIn(Channel);
+        if (Channel is { } channel) shown = ChatIgnoring.Shown(channel, shown, me, _state.Settings.IgnoredInChat, onlyMentions);
         // A host's version of a message is a new object: it gets a new row.
         var wanted = shown.Select(m => _messageVms.TryGetValue(m.Id, out var vm) && vm.Model == m ? vm : _messageVms[m.Id] = new ChatMessageViewModel(m, this)).ToList();
         // Core lays them out: day headers, the New line, and the names over runs of messages.
-        var me = NameIn(Channel);
         var laid = ChatTimeline.Lay(shown, UnreadFrom, m => !m.Agent && string.Equals(m.By, me, StringComparison.OrdinalIgnoreCase), DateTime.Today, CultureInfo.CurrentCulture);
         for (var i = 0; i < wanted.Count; i++) wanted[i].Refresh(laid[i]);
         // Where the rows don't line up with what's wanted (another channel, say), they're built again.
@@ -568,8 +596,27 @@ public sealed partial class ChatViewModel : ObservableObject
         }
         else Messages.Clear();
         foreach (var vm in wanted.Skip(Messages.Count)) Messages.Add(vm);
+        OnPropertyChanged(nameof(MentionsNote));
+        RefreshFiles();
         MessagesChanged?.Invoke();
     }
+
+    /// <summary>
+    /// The @ toggle in a channel's header: only the messages that @mention you (by name or @everyone), in every channel,
+    /// until you turn it off. Meanwhile the channel isn't marked read, so what it hides stays new.
+    /// </summary>
+    [ObservableProperty] private bool _onlyMentions;
+
+    partial void OnOnlyMentionsChanged(bool value)
+    {
+        SyncMessages();
+        if (!value) ReadIfLooking();
+    }
+
+    /// <summary>Above the messages while the @ filter is on: how many mention you here, or that none do.</summary>
+    public string? MentionsNote => !OnlyMentions || Channel is not { Direct: false } ? null
+        : Messages.Count == 0 ? "Nothing here mentions you. Turn off @ to see every message."
+        : $"Only what mentions you: {Count(Messages.Count, "message")}. Turn off @ to see every message.";
 
     /// <summary>Where the shown messages start in the channel's.</summary>
     private int Start(List<ChatMessage> models) =>
@@ -1284,9 +1331,9 @@ public sealed partial class ChannelRowViewModel(ChatChannel model, ChatViewModel
     public bool IsSelected => owner.Channel == model;
     /// <summary>A channel's topic shows only while it's open (it's in the tooltip too); a private conversation's last line always.</summary>
     public bool ShowSubtitle => Subtitle != null && (model.Direct || IsSelected);
-    public int Unread { get; } = ChatRoom.Unread(model, owner.NameIn(model)).Count();
+    public int Unread { get; } = owner.UnreadIn(model).Count();
     public bool HasUnread => Unread > 0;
-    public bool HasMention { get; } = model.Direct ? ChatRoom.Unread(model, owner.NameIn(model)).Any() : ChatRoom.UnreadMentions(model, owner.NameIn(model)).Any();
+    public bool HasMention { get; } = model.Direct ? owner.UnreadIn(model).Any() : ChatRoom.UnreadMentions(model, owner.NameIn(model)).Any();
     public string ToolTip => string.Join("\n", new[]
     {
         model.Direct ? "Private conversation" : model.Topic, model.Link != null ? "About " + owner.LinkTextOf(model) : null,
@@ -1377,7 +1424,18 @@ public sealed partial class ChatMemberViewModel(ChatMember model, ChatChannel ch
         !IsOwner && IsMe ? "you" : null, IsOwner ? null : model.Agent ? owner.ClientOf(model.Name) : Place.Host == null && owner.IsGuestName(model.Name) ? "guest" : null,
         !IsOwner && model.Moderator ? "moderator" : null,
         Presence != PresenceState.Online ? Core.Chat.Presence.Word(Presence) : null,
+        IsIgnored ? "ignored" : null,
     }.Where(s => s != null));
+
+    /// <summary>You ignore them: their messages are hidden from you in channels, except those that mention you.</summary>
+    public bool IsIgnored => owner.IsIgnored(model.Name);
+    /// <summary>Anyone but you can be ignored.</summary>
+    public bool CanIgnore => !IsMe;
+    public string IgnoreHeader => IsIgnored ? "Stop ignoring" : "Ignore: hide their messages";
+    /// <summary>Its right-click menu has something in it.</summary>
+    public bool HasMenu => CanMessage || CanIgnore;
+
+    [RelayCommand] private void ToggleIgnore() => owner.SetIgnored(model.Name, !IsIgnored);
 
     /// <summary>Online, away (idle a while) or offline (not connected), worked out when the members were listed.</summary>
     public PresenceState Presence { get; } = owner.PresenceOf(owner.PlaceOf(channel), model);
