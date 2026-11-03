@@ -77,6 +77,7 @@ public sealed partial class OfficeViewModel : ObservableObject
     {
         Desks = DeskDepths.Select(d => new OfficeDeskViewModel(left: true, d)).Concat(DeskDepths.Select(d => new OfficeDeskViewModel(left: false, d))).ToList();
         foreach (var desk in Desks) Scene.Add(desk);
+        foreach (var desk in Desks) Scene.Add(new OfficePlateViewModel(desk, Desks));
         Scene.Add(Cooler);
         Scene.Add(Dim);
         Scene.Add(Screen);

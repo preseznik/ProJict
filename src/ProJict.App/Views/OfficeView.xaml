@@ -17,6 +17,30 @@
         <SolidColorBrush x:Key="Ink" Color="#1F2937" />
 
         <!--
+            In the studio: a station's name plate, on the front of its desk, placed like the desk but drawn after the next
+            desk in front, so that desk's monitor or thing never covers it (a robot sitting there still does).
+        -->
+        <DataTemplate DataType="{x:Type vm:OfficePlateViewModel}">
+            <Canvas IsHitTestVisible="False" Visibility="{Binding Desk.IsShown, Converter={StaticResource BoolToVis}}">
+                <Canvas.RenderTransform>
+                    <TransformGroup>
+                        <ScaleTransform ScaleX="{Binding Desk.ScaleX}" ScaleY="{Binding Desk.Scale}" />
+                        <TranslateTransform X="{Binding Desk.X}" Y="{Binding Desk.Y}" />
+                    </TransformGroup>
+                </Canvas.RenderTransform>
+                <Border x:Name="Plate" Canvas.Left="4" Canvas.Top="-52" Width="58" Height="14" CornerRadius="3" Background="#E61F2937"
+                        Visibility="{Binding Desk.RoleName, Converter={StaticResource EmptyToVis}}" RenderTransformOrigin="0.5,0.5">
+                    <Border.RenderTransform>
+                        <ScaleTransform ScaleX="{Binding Desk.TextFlip}" />
+                    </Border.RenderTransform>
+                    <Viewbox Stretch="Uniform" StretchDirection="DownOnly" Margin="4,1">
+                        <TextBlock Text="{Binding Desk.RoleName}" FontSize="10" FontWeight="SemiBold" Foreground="White" />
+                    </Viewbox>
+                </Border>
+            </Canvas>
+        </DataTemplate>
+
+        <!--
             A desk against the wall (drawn for the left wall; mirrored on the right), its monitor and its chair. Clicks go
             through it, to a robot behind it or the room.
         -->
@@ -63,16 +87,6 @@
                         </Rectangle>
                     </Grid>
                 </Canvas>
-                <!-- In the studio: its role's name plate, on the front of the desk -->
-                <Border x:Name="Plate" Canvas.Left="4" Canvas.Top="-52" Width="58" Height="14" CornerRadius="3" Background="#E61F2937"
-                        Visibility="{Binding RoleName, Converter={StaticResource EmptyToVis}}" RenderTransformOrigin="0.5,0.5">
-                    <Border.RenderTransform>
-                        <ScaleTransform ScaleX="{Binding TextFlip}" />
-                    </Border.RenderTransform>
-                    <Viewbox Stretch="Uniform" StretchDirection="DownOnly" Margin="4,1">
-                        <TextBlock Text="{Binding RoleName}" FontSize="10" FontWeight="SemiBold" Foreground="White" />
-                    </Viewbox>
-                </Border>
                 <!-- In the studio: the station's things, by role: a board on the wall above the monitor, something on the desk -->
                 <Canvas x:Name="ClassicThings">
                 <Canvas x:Name="LeadThings" Visibility="Collapsed">
@@ -1012,6 +1026,8 @@
                         <Rectangle Canvas.Left="238" Canvas.Top="222" Width="26" Height="30" Fill="#A0784C" Opacity="0.6" />
                         <Rectangle Canvas.Left="238" Canvas.Top="258" Width="26" Height="34" Fill="#A0784C" Opacity="0.6" />
                         <Ellipse Canvas.Left="260" Canvas.Top="256" Width="5" Height="5" Fill="#FCD34D" />
+                        <!-- The lobby's sign and bench, while agents wait there (the project's office is closed) -->
+                        <Canvas Visibility="{Binding ShowsLobby, Converter={StaticResource BoolToVis}}">
                         <Border Canvas.Left="232" Canvas.Top="198" Width="38" Height="12" CornerRadius="2" Background="#1F2937">
                             <TextBlock Text="LOBBY" FontSize="7.5" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Border>
@@ -1020,7 +1036,9 @@
                         <Rectangle Canvas.Left="340" Canvas.Top="289" Width="4" Height="11" Fill="{StaticResource Metal}" />
                         <Rectangle Canvas.Left="464" Canvas.Top="289" Width="4" Height="11" Fill="{StaticResource Metal}" />
                         </Canvas>
+                        </Canvas>
                         <Canvas x:Name="DrawnLobby" Visibility="{Binding IsDrawnLook, Converter={StaticResource BoolToVis}}">
+                        <Canvas Visibility="{Binding ShowsLobby, Converter={StaticResource BoolToVis}}">
                             <Grid Canvas.Left="{Binding BenchX}" Canvas.Top="{Binding BenchY}" Width="{Binding BenchWidth}" Height="{Binding BenchHeight}">
                                 <Image Source="/ProJict;component/Assets/Office/Props/bench.png" Stretch="Fill" />
                                 <Rectangle Fill="#8C0B122E" Visibility="{Binding IsDarkRoom, Converter={StaticResource BoolToVis}}">
@@ -1032,6 +1050,7 @@
                             <Border Canvas.Left="{Binding LobbySignX}" Canvas.Top="{Binding LobbySignY}" Width="38" Height="12" CornerRadius="2" Background="#1F2937">
                                 <TextBlock Text="LOBBY" FontSize="7.5" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </Border>
+                        </Canvas>
                         </Canvas>
                     </Canvas>
                     <!-- How warm it is: a tint over the room, and the thermostat (only for fun) -->

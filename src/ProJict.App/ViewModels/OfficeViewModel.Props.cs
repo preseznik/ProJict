@@ -1,3 +1,4 @@
+using CommunityToolkit.Mvvm.ComponentModel;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using ProJict.Core.Model;
@@ -18,7 +19,6 @@ public sealed partial class OfficeViewModel
     /// </summary>
     public double ThermostatX => !IsDrawnLook ? 228 : !IsStudio ? 303 : IsFilm ? 467 : 195;
     public double ThermostatY => !IsDrawnLook ? 204 : !IsStudio ? 238 : IsFilm ? 210 : 203;
-
     /// <summary>The milestone board: over the game studio's storyboard wall, or on the film studio's free wall right of its posters.</summary>
     public double MilestoneX => IsDrawnLook && IsFilm ? 700 : 484;
     public double MilestoneY => IsDrawnLook && IsFilm ? 112 : 102;
@@ -100,7 +100,33 @@ public sealed partial class OfficeDeskViewModel
         [StudioStation.Art] = "art", [StudioStation.Sound] = "sound", [StudioStation.QA] = "qa", [StudioStation.Production] = "production",
         [StudioStation.Director] = "director", [StudioStation.Writer] = "writer", [StudioStation.Capture] = "capture", [StudioStation.Editing] = "editing",
         [StudioStation.Mixing] = "mixing", [StudioStation.Graphics] = "graphics", [StudioStation.Publishing] = "publishing", [StudioStation.Producing] = "producing",
+        [StudioStation.UI] = "ui", [StudioStation.Cinematics] = "cinematics",
     };
 
     partial void OnStationChanged(StudioStation? oldValue, StudioStation? newValue) => OnPropertyChanged(nameof(Prop));
+}
+
+/// <summary>
+/// A station's name plate in the studio, on the front of its desk. The desks stand close (five a side), and the monitor
+/// or thing on the next desk in front would cover the name of the one behind it: the plate is level with that desk, drawn
+/// after it, so a robot sitting there still comes first.
+/// </summary>
+public sealed class OfficePlateViewModel : ObservableObject
+{
+    private readonly IReadOnlyList<OfficeDeskViewModel> _desks;
+
+    public OfficePlateViewModel(OfficeDeskViewModel desk, IReadOnlyList<OfficeDeskViewModel> desks)
+    {
+        Desk = desk;
+        _desks = desks;
+        // The desks move when the look changes.
+        foreach (var other in desks)
+            other.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(OfficeDeskViewModel.ZIndex)) OnPropertyChanged(nameof(ZIndex));
+            };
+    }
+
+    public OfficeDeskViewModel Desk { get; }
+    public int ZIndex => _desks.Where(d => d.Left == Desk.Left && d.Y > Desk.Y).MinBy(d => d.Y)?.ZIndex ?? Desk.ZIndex;
 }
