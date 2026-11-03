@@ -211,6 +211,7 @@ public sealed partial class OfficeViewModel : ObservableObject
         }
         StudioName = studio?.ProjectName;
         IsFilm = studio?.Studio.Kind == StudioKind.Film;
+        EnterRoom(studio?.Studio ?? OfficeRoom);
         ShowsLobby = studio is { HasOffice: false };
         ShowBoard(studio?.Board);
         for (var i = 0; i < Desks.Count; i++)

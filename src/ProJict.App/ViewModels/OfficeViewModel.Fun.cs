@@ -6,13 +6,13 @@ using ProJict.Core.Agents;
 
 namespace ProJict.App.ViewModels;
 
-/// <summary>How warm you set the office (the thermostat on the wall). Only for fun: the agents never hear of it.</summary>
+/// <summary>How warm you set a room (the thermostat on its wall). Only for fun: the agents never hear of it.</summary>
 public enum OfficeTemperature { Comfy, Hot, Cold }
 
 /// <summary>
 /// Fun in the office that never reaches the agents: poke a robot (Shift+click, or right-click › Poke) and it hops and
 /// giggles, grumbles when it's busy, mumbles when it was asleep and snaps after a few pokes in a row; turn the thermostat
-/// and the robots sweat or shiver.
+/// and the robots sweat or shiver. Each room has its own: the office, and each project's studios.
 /// </summary>
 public sealed partial class OfficeViewModel
 {
@@ -47,13 +47,30 @@ public sealed partial class OfficeViewModel
         return brush;
     }
 
-    [RelayCommand]
-    private void TurnThermostat() => Temperature = Temperature switch
+    /// <summary>Each room's thermostat, while ProJict runs: the office's, and each studio's (by the studio).</summary>
+    private readonly Dictionary<object, OfficeTemperature> _temperatureOf = [];
+    private static readonly object OfficeRoom = new();
+    private object _room = OfficeRoom;
+
+    /// <summary>The room shown is now the office or a studio: its thermostat shows, set as you left it there.</summary>
+    private void EnterRoom(object room)
     {
-        OfficeTemperature.Comfy => OfficeTemperature.Hot,
-        OfficeTemperature.Hot => OfficeTemperature.Cold,
-        _ => OfficeTemperature.Comfy,
-    };
+        if (room == _room) return;
+        _room = room;
+        Temperature = _temperatureOf.GetValueOrDefault(room);
+    }
+
+    [RelayCommand]
+    private void TurnThermostat()
+    {
+        Temperature = Temperature switch
+        {
+            OfficeTemperature.Comfy => OfficeTemperature.Hot,
+            OfficeTemperature.Hot => OfficeTemperature.Cold,
+            _ => OfficeTemperature.Comfy,
+        };
+        _temperatureOf[_room] = Temperature;
+    }
 
     partial void OnTemperatureChanged(OfficeTemperature value)
     {
