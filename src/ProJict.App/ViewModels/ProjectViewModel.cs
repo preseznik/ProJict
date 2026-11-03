@@ -505,9 +505,22 @@ public sealed partial class ProjectViewModel : ObservableObject
         return true;
     }
 
-    public bool IsFilterActive => !string.IsNullOrWhiteSpace(FilterText) || (TagFilter ?? AllTags) != AllTags || StateFilter?.State != null ||
-                                  StateFilter?.AttentionOnly == true ||
-                                  WorkedBy != null || PriorityFilter is { IsActive: true };
+    public bool IsFilterActive => Filter.IsActive;
+
+    /// <summary>What the board's filters say, for Core's <see cref="BoardFilter"/> to apply.</summary>
+    private BoardFilter Filter => new()
+    {
+        Text = FilterText,
+        Tag = TagFilter is { } tag && tag != AllTags && tag != NoTag ? tag : null,
+        Untagged = TagFilter == NoTag,
+        State = StateFilter?.State,
+        ReviewOnly = StateFilter?.ReviewOnly == true,
+        AttentionOnly = StateFilter?.AttentionOnly == true,
+        Unread = item => HasUnread(item.Id, item.Comments),
+        PriorityAtLeast = PriorityFilter?.AtLeast,
+        PriorityOnly = PriorityFilter?.Only,
+        WorkedBy = WorkedBy,
+    };
 
     public void Touch() => _state.MarkDirty(Project);
 
@@ -559,27 +572,10 @@ public sealed partial class ProjectViewModel : ObservableObject
             RefreshWorkingOnHint();
             return;
         }
-        var active = IsFilterActive;
-        var terms = (FilterText ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        var tag = TagFilter ?? AllTags;
-        var state = StateFilter?.State;
-        var reviewOnly = StateFilter?.ReviewOnly == true;
-        var attentionOnly = StateFilter?.AttentionOnly == true;
-
-        bool StateOk(TodoItem item) => (state == null || item.State == state) && (!reviewOnly || item.NeedsReview) &&
-                                       (!attentionOnly || item.NeedsReview || HasUnread(item.Id, item.Comments));
-
-        bool Matches(TodoItem item)
-        {
-            var tagOk = tag == AllTags || (tag == NoTag ? string.IsNullOrEmpty(item.Tag) : string.Equals(item.Tag, tag, StringComparison.OrdinalIgnoreCase));
-            var text = item.SearchText();
-            return tagOk && StateOk(item) && PriorityFilter?.Matches(item) != false && terms.All(t => text.Contains(t, StringComparison.OrdinalIgnoreCase)) &&
-                   (WorkedBy == null || item.Contributors().Any(c => string.Equals(c.Name, WorkedBy, StringComparison.OrdinalIgnoreCase)));
-        }
-
+        var filter = Filter;
         foreach (var category in Categories)
         {
-            if (!active)
+            if (!filter.IsActive)
             {
                 foreach (var row in category.AllRows) row.IsVisible = true;
                 category.IsVisible = !IsHiddenEmpty(category.Model);
@@ -587,18 +583,7 @@ public sealed partial class ProjectViewModel : ObservableObject
                 continue;
             }
 
-            // A match keeps its ancestors and descendants (those in the chosen state) visible so the tree still reads correctly.
-            var parents = new Dictionary<TodoItem, TodoItem>();
-            var matches = new List<TodoItem>();
-            foreach (var loc in category.Model.Walk())
-            {
-                if (loc.Parent != null) parents[loc.Item] = loc.Parent;
-                if (Matches(loc.Item)) matches.Add(loc.Item);
-            }
-            var visible = new HashSet<TodoItem>();
-            foreach (var item in matches.SelectMany(m => m.Descendants().Where(StateOk).Prepend(m)))
-                for (TodoItem? p = item; p != null && visible.Add(p); p = parents.GetValueOrDefault(p)) { }
-            var nameMatches = terms.Length > 0 && tag == AllTags && state == null && !attentionOnly && WorkedBy == null && PriorityFilter is not { IsActive: true } && terms.All(t => category.Name.Contains(t, StringComparison.OrdinalIgnoreCase));
+            var (nameMatches, visible) = filter.Apply(category.Model);
             foreach (var row in category.AllRows) row.IsVisible = nameMatches || visible.Contains(row.Item);
             category.IsVisible = (nameMatches || visible.Count > 0) && !IsHiddenEmpty(category.Model);
             category.RaiseShowDone();
