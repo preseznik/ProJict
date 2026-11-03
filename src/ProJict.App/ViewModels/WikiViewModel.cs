@@ -383,12 +383,22 @@ public sealed partial class WikiNodeViewModel(WikiViewModel owner, string name, 
     [ObservableProperty] private bool _isSelected;
 
     public string Glyph => IsHost ? "" : Page != null ? "" : "";
-    public bool NeedsAttention => Page is { } p && Host == null && (p.NeedsReview || p.HasClashes);
-    public string? ToolTip => Page is { } p
-        ? WikiPaths.Display(p.Path) + (p.HasClashes ? "\nTwo edits clashed: pick one" : p.NeedsReview ? $"\nChanged by {p.UpdatedBy}: {owner.WaitsText(p)}" : "")
-        : IsHost ? $"Pages {Host!.HostName} shares with you" : WikiPaths.Display(Path);
+    /// <summary>Its own page waits for you, or, while it's folded, a page under it does (the dot shows on the folder).</summary>
+    public bool NeedsAttention => PageWaits || !IsExpanded && WaitingBelow > 0;
+    private bool PageWaits => Page is { } p && Host == null && (p.NeedsReview || p.HasClashes);
+    /// <summary>How many pages under it wait for you.</summary>
+    private int WaitingBelow => Children.Sum(c => (c.PageWaits ? 1 : 0) + c.WaitingBelow);
+    public string? ToolTip => (Page is { } p
+            ? WikiPaths.Display(p.Path) + (p.HasClashes ? "\nTwo edits clashed: pick one" : p.NeedsReview ? $"\nChanged by {p.UpdatedBy}: {owner.WaitsText(p)}" : "")
+            : IsHost ? $"Pages {Host!.HostName} shares with you" : WikiPaths.Display(Path))
+        + (!IsExpanded && WaitingBelow is var waiting and > 0 ? $"\n{waiting} {(waiting == 1 ? "page" : "pages")} in it {(waiting == 1 ? "waits" : "wait")} for you" : "");
 
-    partial void OnIsExpandedChanged(bool value) => owner.Expanded(this, value);
+    partial void OnIsExpandedChanged(bool value)
+    {
+        owner.Expanded(this, value);
+        OnPropertyChanged(nameof(NeedsAttention));
+        OnPropertyChanged(nameof(ToolTip));
+    }
 
     partial void OnIsSelectedChanged(bool value)
     {
