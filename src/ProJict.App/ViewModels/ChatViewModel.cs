@@ -554,15 +554,10 @@ public sealed partial class ChatViewModel : ObservableObject
         OnPropertyChanged(nameof(HasEarlier));
         // A host's version of a message is a new object: it gets a new row.
         var wanted = shown.Select(m => _messageVms.TryGetValue(m.Id, out var vm) && vm.Model == m ? vm : _messageVms[m.Id] = new ChatMessageViewModel(m, this)).ToList();
-        ChatMessage? previous = null;
-        var newLine = false;
-        foreach (var vm in wanted)
-        {
-            var first = !newLine && UnreadFrom is { } from && vm.Model.At > from && !vm.Model.Notice && !vm.IsMine;
-            newLine |= first;
-            vm.Refresh(previous, first);
-            previous = vm.Model;
-        }
+        // Core lays them out: day headers, the New line, and the names over runs of messages.
+        var me = NameIn(Channel);
+        var laid = ChatTimeline.Lay(shown, UnreadFrom, m => !m.Agent && string.Equals(m.By, me, StringComparison.OrdinalIgnoreCase), DateTime.Today, CultureInfo.CurrentCulture);
+        for (var i = 0; i < wanted.Count; i++) wanted[i].Refresh(laid[i]);
         // Where the rows don't line up with what's wanted (another channel, say), they're built again.
         var lead = Messages.Count == 0 ? -1 : wanted.FindIndex(w => w.Model.Id == Messages[0].Model.Id);
         if (lead >= 0 && lead + Messages.Count <= wanted.Count && Messages.Select((m, i) => wanted[lead + i].Model.Id == m.Model.Id).All(same => same))
@@ -1283,13 +1278,8 @@ public sealed partial class ChannelRowViewModel(ChatChannel model, ChatViewModel
     [RelayCommand] private void Unarchive() => owner.SetArchived(model, false);
     /// <summary>Its topic, else what it's about; for a private conversation, the last thing said.</summary>
     public string? Subtitle => model.Direct
-        ? model.Messages.LastOrDefault(m => !m.Notice && !m.Deleted) is { } last ? Snippet(last.Text) : "No messages yet"
+        ? model.Messages.LastOrDefault(m => !m.Notice && !m.Deleted) is { } last ? ChatTimeline.Snippet(last.Text, 60) : "No messages yet"
         : model.Topic ?? (model.Link != null ? owner.LinkTextOf(model) : null);
-    private static string Snippet(string text)
-    {
-        var line = text.Replace("\r\n", "\n").Split('\n')[0];
-        return line.Length > 60 ? line[..60] + "…" : line;
-    }
     public bool IsInviteOnly => model.Access == ChannelAccess.InviteOnly;
     public bool IsSelected => owner.Channel == model;
     /// <summary>A channel's topic shows only while it's open (it's in the tooltip too); a private conversation's last line always.</summary>
@@ -1489,15 +1479,11 @@ public sealed partial class ChatMessageViewModel : ObservableObject
 
     [ObservableProperty] private bool _isHighlighted;
 
-    public void Refresh(ChatMessage? previous, bool firstUnread)
+    public void Refresh(ChatTimeline.Line line)
     {
-        var day = previous == null || previous.At.Date != Model.At.Date
-            ? ActivityPeriods.Label(Model.At.Date, ActivityGrouping.Day, DateTime.Today, CultureInfo.CurrentCulture) : null;
-        DayHeader = day;
-        IsFirstUnread = firstUnread;
-        ShowHeader = !Model.Notice && (day != null || firstUnread || previous == null || previous.Notice ||
-                                       !string.Equals(previous.By, Model.By, StringComparison.OrdinalIgnoreCase) || Model.At - previous.At > TimeSpan.FromMinutes(5) ||
-                                       Model.ReplyTo != null);
+        DayHeader = line.DayHeader;
+        IsFirstUnread = line.FirstUnread;
+        ShowHeader = line.ShowHeader;
         IsDeleted = Model.Deleted;
         EditedText = Model.EditedAt != null && !Model.Deleted ? "(edited)" : null;
         MentionsMe = !IsMine && _owner.Channel is { } here && ChatRoom.Mentions(here, Model, _owner.NameIn(here));
@@ -1510,14 +1496,8 @@ public sealed partial class ChatMessageViewModel : ObservableObject
         var replied = Model.ReplyTo is { } r ? _owner.Channel?.Messages.FirstOrDefault(m => m.Id == r) : null;
         HasReply = replied != null;
         ReplyBy = replied?.By;
-        ReplySnippet = replied == null ? null : replied.Deleted ? "(deleted)" : Snippet(replied.Text);
+        ReplySnippet = replied == null ? null : replied.Deleted ? "(deleted)" : ChatTimeline.Snippet(replied.Text);
         OnPropertyChanged(string.Empty);
-    }
-
-    private static string Snippet(string text)
-    {
-        var line = text.Replace("\r\n", "\n").Split('\n')[0];
-        return line.Length > 90 ? line[..90] + "…" : line;
     }
 
     // Thumbs: yours shows filled; on an agent's message it's a yes or no it hears.
