@@ -37,7 +37,7 @@ public sealed partial class ProjectViewModel : ObservableObject
         Project = project;
         _sideBySide = state.Settings.SideBySide;
         _hideEmpty = state.Settings.HideEmptyCategories;
-        _sortByPriority = state.Settings.SortByPriority;
+        _sort = state.Settings.ItemSort;
         RebuildAll();
         ReloadSideLists();
         RefreshPublish();
@@ -457,22 +457,32 @@ public sealed partial class ProjectViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(PriorityButtonText), nameof(IsPriorityViewActive))]
     private PriorityFilterOption _priorityFilter = PriorityFilters[0];
 
-    /// <summary>Open items are listed most pressing first (only on screen: their own order, used by exports, stays).</summary>
+    /// <summary>
+    /// How open items are listed: in their own order, most pressing first, by name, or newest or oldest first (only on
+    /// screen: their own order, used by exports, stays).
+    /// </summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(PriorityButtonText), nameof(IsPriorityViewActive))]
-    private bool _sortByPriority;
+    [NotifyPropertyChangedFor(nameof(PriorityButtonText), nameof(IsPriorityViewActive), nameof(SortByPriority))]
+    private BoardSort _sort;
+
+    /// <summary>Open items are listed most pressing first.</summary>
+    public bool SortByPriority
+    {
+        get => Sort == BoardSort.Priority;
+        set => Sort = value ? BoardSort.Priority : BoardSort.Board;
+    }
 
     partial void OnPriorityFilterChanged(PriorityFilterOption value) => ApplyFilter();
 
-    partial void OnSortByPriorityChanged(bool value)
+    partial void OnSortChanged(BoardSort value)
     {
-        _state.Settings.SortByPriority = value;
+        _state.Settings.ItemSort = value;
         _state.MarkSettingsDirty();
         foreach (var c in Categories) c.Refresh();
         ApplyFilter();
     }
 
-    public bool IsPriorityViewActive => SortByPriority || PriorityFilter is { IsActive: true };
+    public bool IsPriorityViewActive => Sort != BoardSort.Board || PriorityFilter is { IsActive: true };
 
     /// <summary>The toolbar button's label: what the board is filtered or sorted by.</summary>
     public string PriorityButtonText
@@ -480,7 +490,8 @@ public sealed partial class ProjectViewModel : ObservableObject
         get
         {
             var filter = PriorityFilter is { IsActive: true } f ? f.Label : null;
-            return filter != null ? SortByPriority ? $"{filter}, sorted" : filter : SortByPriority ? "By priority" : "Priority";
+            var sorted = Sort == BoardSort.Board ? null : BoardSorting.Label(Sort);
+            return filter != null ? sorted != null ? $"{filter}, {sorted.ToLowerInvariant()}" : filter : sorted ?? "Priority";
         }
     }
 
@@ -497,11 +508,11 @@ public sealed partial class ProjectViewModel : ObservableObject
         };
     }
 
-    /// <summary>Reordering by hand doesn't mix with a board sorted by priority; true (with a hint) when it's sorted.</summary>
+    /// <summary>Reordering by hand doesn't mix with a sorted board; true (with a hint) when it's sorted.</summary>
     private bool SortedByPriority()
     {
-        if (!SortByPriority) return false;
-        _state.StatusText = "The board is sorted by priority; turn that off (Priority › Sort by priority) to reorder items.";
+        if (Sort == BoardSort.Board) return false;
+        _state.StatusText = $"The board is sorted ({BoardSorting.Label(Sort).ToLowerInvariant()}); pick Priority › Board order to reorder items.";
         return true;
     }
 
