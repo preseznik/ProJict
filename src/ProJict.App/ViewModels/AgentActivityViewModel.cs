@@ -546,10 +546,9 @@ public sealed partial class AgentActivityViewModel : ObservableObject
     /// <param name="project">A project to show (right-click a project › Agents); null opens the view as you left it.</param>
     public void Show(Project? project)
     {
-        ProjectChoices = [AllProjects, .. _state.Projects.Where(p => p.Remote == null).Select(p => p.Name).Order(StringComparer.CurrentCultureIgnoreCase)];
-        OnPropertyChanged(nameof(ProjectChoices));
-        // As you left it: the project (and so its studio), and the idle and older agents you showed.
-        project ??= _state.Projects.FirstOrDefault(p => p.Id == View.ProjectId && p.Remote == null);
+        // As you left it: the project (and so its studio), and the idle and older agents you showed; not one you've hidden since.
+        project ??= _state.Projects.FirstOrDefault(p => p.Id == View.ProjectId && p.Remote == null && !_state.Settings.HiddenProjects.Contains(p.Id));
+        SetProjectChoices(project);
         _historyLimit = HistoryShown;
         if (ProjectFilter != (project?.Name ?? AllProjects)) ProjectFilter = project?.Name ?? AllProjects; // refreshes
         else Refresh();
@@ -557,6 +556,16 @@ public sealed partial class AgentActivityViewModel : ObservableObject
     }
 
     public void Hide() => _clock.Stop();
+
+    /// <summary>The projects to pick from: those the sidebar shows, and the one shown.</summary>
+    private void SetProjectChoices(Project? shown)
+    {
+        ProjectChoices = [AllProjects, .. AgentRoster.ProjectChoices(_state.Projects, _state.Settings.HiddenProjects, shown)];
+        OnPropertyChanged(nameof(ProjectChoices));
+    }
+
+    /// <summary>Projects were hidden or shown (in the sidebar or on the dashboard): the list follows.</summary>
+    public void RefreshProjectChoices() => SetProjectChoices(FilterProject);
 
     private Project? FilterProject => ProjectFilter == AllProjects ? null : _state.Projects.FirstOrDefault(p => p.Name == ProjectFilter);
 

@@ -223,6 +223,9 @@ public sealed partial class MainViewModel : ObservableObject
         SidebarFilter = new ProjectFilterViewModel(state, state.Settings.HiddenProjects);
         SidebarFilter.HiddenChanged += Dashboard.Filter.OnHiddenChangedElsewhere;
         Dashboard.Filter.HiddenChanged += SidebarFilter.OnHiddenChangedElsewhere;
+        // The Agents view's project list leaves out the projects hidden there.
+        SidebarFilter.HiddenChanged += AgentActivity.RefreshProjectChoices;
+        Dashboard.Filter.HiddenChanged += AgentActivity.RefreshProjectChoices;
         ProjectsView.Filter = o => o is ProjectListItemViewModel i && SidebarFilter.Matches(i.Project);
         SidebarFilter.Changed += () =>
         {
