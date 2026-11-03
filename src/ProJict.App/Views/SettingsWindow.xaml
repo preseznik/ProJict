@@ -85,6 +85,20 @@
                              Margin="0,4,0,0" AutomationProperties.Name="Instructions for all agents" />
                     <TextBlock Style="{StaticResource MutedText}" Margin="2,4,0,0" TextWrapping="Wrap"
                                Text="Every agent gets these, in every project: when it connects, with the project (current_project), and at the top of Copy prompt. A project's own instructions (its Details) come after them. For example: Don't add yourself as a co-author of commits (no Co-Authored-By lines)." />
+                    <!-- Approving an agent's request (a command, a file change) in Chat instead of its own window. -->
+                    <TextBlock Text="Approvals" Margin="0,12,0,0" />
+                    <CheckBox x:Name="ApproveInChat" Content="When an agent needs my permission, ask me in Chat (👍 allows it, 👎 refuses)" Margin="0,4,0,0" />
+                    <WrapPanel Margin="0,6,0,0">
+                        <Button x:Name="ClaudeHook" Content="Set up in Claude Code" Click="ClaudeHook_Click" />
+                        <TextBlock x:Name="ClaudeHookStatus" Style="{StaticResource MutedText}" VerticalAlignment="Center" Margin="10,0,0,0" TextWrapping="Wrap" />
+                    </WrapPanel>
+                    <TextBlock Style="{StaticResource MutedText}" Margin="2,6,0,0" TextWrapping="Wrap"
+                               Text="Claude Code and Codex ask before they run a command or change a file you haven't allowed yet. Set up, the agent also asks you privately in ProJict Chat, showing exactly what it wants to do, and your answer there goes back to it. Unanswered within about five minutes, or with ProJict closed, it asks in its own window as before. Set up in Claude Code adds a PermissionRequest hook to its settings (~/.claude/settings.json, kept as settings.json.projict-backup); start its sessions again to use it. For Codex, add a PermissionRequest hook that runs:" />
+                    <DockPanel Margin="0,4,0,0">
+                        <Button DockPanel.Dock="Right" Content="Copy" MinWidth="70" Margin="8,0,0,0" Click="CopyHookCommand_Click" />
+                        <TextBox x:Name="HookCommand" IsReadOnly="True" TextWrapping="Wrap" FontFamily="{StaticResource MonoFont}" FontSize="12"
+                                 AutomationProperties.Name="The permission hook's command" />
+                    </DockPanel>
                 </StackPanel>
                 <!-- How to add ProJict to each agent; folded away once it's set up. -->
                 <Expander x:Name="ConnectAgent" Header="Connect an AI agent (Claude Code, Codex, OpenCode, …)" Margin="0,8,0,0">

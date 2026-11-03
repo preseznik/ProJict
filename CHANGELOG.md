@@ -2,6 +2,7 @@
 
 ## 0.1.41
 
+- **Approve what agents ask, in ProJict Chat.** An agent that needed your permission (to post on GitHub, run a command, change a file) waited for you in Claude Code's own window. Now **Settings → AI agents → Set up in Claude Code** adds a PermissionRequest hook (ProJictBridge.exe --permission-hook) to Claude Code's settings: the agent asks you privately in Chat, with exactly what it wants to do, and your 👍 or 👎 answers it. Only you can answer; unanswered within about five minutes, or with ProJict closed, it asks in its own window as before. Codex can use the same hook.
 - **The Chat cache cleans out by use, and takes channels' big files too.** Private conversations' files were deleted 14 days after they were sent, used or not. Now it's 14 days after anyone last opened, saved or fetched one, so files you still use stay, also when a lot came at once. A channel's big files (over 50 MB) go to the cache too, out of the data folder and its backups. Past 10 GB the least recently used go first, never one used in the last two days, and right-click a file › **Keep it** keeps it for good. **Settings → Chat** has the size for big channel files and the cache's limit; **Clean out now** leaves the files you keep.
 - **Mark unread.** Right-click a channel or private conversation in Chat › **Mark unread** to come back to it later: its newest message from someone else counts as new again, in the list and in Chat's count, until you open it. The one you have open stays unread while you stay in it.
 

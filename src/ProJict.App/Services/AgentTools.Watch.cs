@@ -81,11 +81,22 @@ public sealed partial class AgentTools
     }
 
     /// <summary>The command an agent on this computer runs to watch Chat (with the data folder when it isn't the usual one, as for --mcp).</summary>
-    public string WatchCommand(string agent)
+    public string WatchCommand(string agent) => $"\"{BridgeInstaller.Command}\" --watch-chat --as \"{agent}\"{DataArgument}";
+
+    /// <summary>
+    /// The PermissionRequest hook's command, so agents ask you in Chat (#54ef1c15); null without the bridge (ProJict.exe
+    /// itself would start the app instead).
+    /// </summary>
+    public string? PermissionHookCommand => BridgeInstaller.BridgePath != null ? $"\"{BridgeInstaller.BridgePath}\" --permission-hook{DataArgument}" : null;
+
+    /// <summary>The data folder for the bridge, when it isn't the one ProJict remembers.</summary>
+    private string DataArgument
     {
-        var remembered = _state.AppSettings.DataRoot is { } root ? Path.GetFullPath(root) : null;
-        var data = string.Equals(remembered, _state.Store.DataRoot, StringComparison.OrdinalIgnoreCase) ? "" : $" --data \"{_state.Store.DataRoot}\"";
-        return $"\"{BridgeInstaller.Command}\" --watch-chat --as \"{agent}\"{data}";
+        get
+        {
+            var remembered = _state.AppSettings.DataRoot is { } root ? Path.GetFullPath(root) : null;
+            return string.Equals(remembered, _state.Store.DataRoot, StringComparison.OrdinalIgnoreCase) ? "" : $" --data \"{_state.Store.DataRoot}\"";
+        }
     }
 
     /// <summary>

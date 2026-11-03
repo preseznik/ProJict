@@ -61,6 +61,11 @@ public sealed class AppSettings
     /// <summary>Let AI agents read and post in Chat (Settings › AI agents).</summary>
     public bool AgentsUseChat { get; set; } = true;
     /// <summary>
+    /// When an agent needs your permission (its PermissionRequest hook runs ProJictBridge.exe --permission-hook), it asks
+    /// you in Chat too, and your 👍 or 👎 answers it (Settings › AI agents).
+    /// </summary>
+    public bool ApproveInChat { get; set; } = true;
+    /// <summary>
     /// The Chat cache on this computer (Settings › Chat): files nobody used for this many days are cleaned out (0 keeps
     /// them). It holds private conversations' files, and channels' big ones.
     /// </summary>

@@ -43,6 +43,9 @@ public partial class SettingsWindow : Window
         CheckUpdates.IsChecked = state.AppSettings.CheckForUpdates;
         AllowAgents.IsChecked = state.AppSettings.AllowAgents;
         AgentsUseChat.IsChecked = state.AppSettings.AgentsUseChat;
+        ApproveInChat.IsChecked = state.AppSettings.ApproveInChat;
+        HookCommand.Text = App.Current.MainVm.AgentTools.PermissionHookCommand ?? "(it needs ProJictBridge.exe, which comes with ProJict's installer)";
+        ShowClaudeHook();
         ReadOnlyTokensUseChat.IsChecked = state.AppSettings.ReadOnlyTokensUseChat;
         foreach (var box in AgentPriorities.Children.OfType<CheckBox>())
             box.IsChecked = s.AgentPriorities.Contains(Enum.Parse<Priority>((string)box.Tag));
@@ -306,6 +309,53 @@ public partial class SettingsWindow : Window
         McpWhere.Text = setup.Where;
     }
 
+    /// <summary>Where Claude Code keeps its settings: your user folder (a test points it elsewhere).</summary>
+    internal static Func<string> ClaudeHome = () => Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
+    private string ClaudeSettings => ProJict.Core.Agents.ClaudeHookSetup.SettingsPath(ClaudeHome());
+
+    /// <summary>Whether Claude Code has ProJict's hook: the button sets it up or takes it out.</summary>
+    private void ShowClaudeHook(string? said = null)
+    {
+        string? json = null;
+        try { json = File.Exists(ClaudeSettings) ? File.ReadAllText(ClaudeSettings) : null; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+        var setUp = ProJict.Core.Agents.ClaudeHookSetup.IsSetUp(json);
+        ClaudeHook.Content = setUp ? "Remove from Claude Code" : "Set up in Claude Code";
+        ClaudeHook.IsEnabled = App.Current.MainVm.AgentTools.PermissionHookCommand != null;
+        ClaudeHookStatus.Text = said ?? (setUp ? "Set up in Claude Code." : "Not set up in Claude Code yet.");
+    }
+
+    private void ClaudeHook_Click(object sender, RoutedEventArgs e)
+    {
+        if (App.Current.MainVm.AgentTools.PermissionHookCommand is not { } command) return;
+        try
+        {
+            var path = ClaudeSettings;
+            var json = File.Exists(path) ? File.ReadAllText(path) : null;
+            var setUp = ProJict.Core.Agents.ClaudeHookSetup.IsSetUp(json);
+            var changed = setUp ? ProJict.Core.Agents.ClaudeHookSetup.Remove(json!) : ProJict.Core.Agents.ClaudeHookSetup.Add(json, command);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            if (json != null) File.WriteAllText(path + ".projict-backup", json);
+            File.WriteAllText(path, changed);
+            ShowClaudeHook(setUp ? "Taken out of Claude Code; start its sessions again." : "Set up in Claude Code: start its sessions again to use it.");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            ShowClaudeHook(ex.Message);
+        }
+    }
+
+    private void CopyHookCommand_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            Clipboard.SetText(HookCommand.Text);
+            _state.StatusText = "Copied the permission hook's command.";
+        }
+        catch (System.Runtime.InteropServices.ExternalException) { }
+    }
+
     private void CopyMcpCommand_Click(object sender, RoutedEventArgs e)
     {
         try
@@ -489,6 +539,7 @@ public partial class SettingsWindow : Window
         _state.AppSettings.CheckForUpdates = CheckUpdates.IsChecked == true;
         _state.AppSettings.AllowAgents = AllowAgents.IsChecked == true;
         _state.AppSettings.AgentsUseChat = AgentsUseChat.IsChecked == true;
+        _state.AppSettings.ApproveInChat = ApproveInChat.IsChecked == true;
         _state.AppSettings.ReadOnlyTokensUseChat = ReadOnlyTokensUseChat.IsChecked == true;
         _state.AppSettings.UserName = string.IsNullOrWhiteSpace(UserName.Text) || UserName.Text.Trim() == Environment.UserName ? null : UserName.Text.Trim();
         App.Current.SetAgentAccess(_state.AppSettings.AllowAgents);
