@@ -106,7 +106,7 @@ public sealed partial class ToolEditorViewModel(ExternalTool tool, MainViewModel
     /// <summary>"API · key set", "API · no key yet", "in the browser", "ComfyUI · 2 workflows", "on this computer · found".</summary>
     public string Subtitle => tool.Access switch
     {
-        ToolAccess.Browser => "in the browser",
+        ToolAccess.Browser => "in the browser" + (tool.HasKey ? " · API key set" : "") + (tool.SignedInAt != null ? " · signed in" : ""),
         ToolAccess.ComfyUI => $"ComfyUI · {Count(main.Workflows.Of(tool.Name).Count(), "workflow")}",
         ToolAccess.Program => ProgramSubtitle,
         _ => tool.HasKey ? "API · key set" : "API · no key yet",
@@ -158,7 +158,7 @@ public sealed partial class ToolEditorViewModel(ExternalTool tool, MainViewModel
         {
             if (!value || tool.Access == ToolAccess.Api) return;
             tool.Access = ToolAccess.Api;
-            Changed(nameof(IsApi), nameof(IsBrowser), nameof(IsComfy), nameof(IsProgram));
+            Changed(nameof(IsApi), nameof(IsBrowser), nameof(IsComfy), nameof(IsProgram), nameof(TakesKey), nameof(KeyLabel));
         }
     }
 
@@ -169,7 +169,7 @@ public sealed partial class ToolEditorViewModel(ExternalTool tool, MainViewModel
         {
             if (!value || tool.Access == ToolAccess.Browser) return;
             tool.Access = ToolAccess.Browser;
-            Changed(nameof(IsApi), nameof(IsBrowser), nameof(IsComfy), nameof(IsProgram));
+            Changed(nameof(IsApi), nameof(IsBrowser), nameof(IsComfy), nameof(IsProgram), nameof(TakesKey), nameof(KeyLabel));
         }
     }
 
@@ -183,8 +183,9 @@ public sealed partial class ToolEditorViewModel(ExternalTool tool, MainViewModel
     {
         if (string.IsNullOrWhiteSpace(key)) return;
         Service.SetKey(tool, key);
-        if (tool.Access != ToolAccess.Api) tool.Access = ToolAccess.Api;
-        Changed(nameof(KeyText), nameof(HasKey), nameof(IsApi), nameof(IsBrowser), nameof(IsComfy), nameof(IsProgram));
+        // A browser tool keeps its browser too: it also has an API (Tripo3D).
+        if (!tool.TakesKey) tool.Access = ToolAccess.Api;
+        Changed(nameof(KeyText), nameof(HasKey), nameof(IsApi), nameof(IsBrowser), nameof(IsComfy), nameof(IsProgram), nameof(TakesKey), nameof(KeyLabel));
         main.State.StatusText = $"Saved the {tool.Name} API key.";
     }
 

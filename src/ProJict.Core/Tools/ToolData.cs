@@ -22,7 +22,10 @@ public sealed class ExternalTool
     public string Purpose { get; set; } = "";
     public string? Website { get; set; }
     public ToolAccess Access { get; set; }
-    /// <summary>The API key, protected for this Windows user (DPAPI); never in the workspace, the mirror folder or backups.</summary>
+    /// <summary>
+    /// The API key, protected for this Windows user (DPAPI); never in the workspace, the mirror folder or backups. A tool in
+    /// the browser may have one too, when it also has an API (Tripo3D: Studio in the browser, its API with a key).
+    /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? ProtectedKey { get; set; }
     /// <summary>The key's last characters, so you can tell which one is set without showing it.</summary>
@@ -31,6 +34,12 @@ public sealed class ExternalTool
     /// <summary>For a tool in the browser: how you're signed in there ("Google account, Pro plan"), so agents know what to expect.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? SignIn { get; set; }
+    /// <summary>
+    /// For a tool in the browser: when you last signed in to it in ProJict's own browser (Sign in…), whose sign-in is kept
+    /// in a browser profile of its own on this computer; null when you haven't, or signed out.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public DateTime? SignedInAt { get; set; }
     /// <summary>A budget agents are told ("$22 a month, Creator plan"); ProJict doesn't count what's used.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Budget { get; set; }
@@ -73,6 +82,9 @@ public sealed class ExternalTool
         : Endpoints?.FirstOrDefault(e => string.Equals(e.Name, name.Trim(), StringComparison.OrdinalIgnoreCase));
 
     public bool IsAlwaysAllowed(string agent) => AlwaysAllowed.Any(a => string.Equals(a, agent.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Agents can get its key with use_tool_key: an API tool's, or a browser tool's that also has an API.</summary>
+    [JsonIgnore] public bool TakesKey => Access is ToolAccess.Api or ToolAccess.Browser;
 
     /// <summary>"API", "in the browser", "ComfyUI" or "on this computer", for people.</summary>
     public string AccessText => Access switch

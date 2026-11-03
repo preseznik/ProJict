@@ -113,9 +113,23 @@
                                    Text="Agents get these in list_tools and run it themselves, on this computer; ProJict doesn't start it for them." />
                     </StackPanel>
 
-                    <!-- API: the key -->
-                    <StackPanel Visibility="{Binding IsApi, Converter={StaticResource BoolToVis}}">
-                        <TextBlock Text="API key" Style="{StaticResource Label}" />
+                    <!-- Browser: signed in once in ProJict's own browser, and how -->
+                    <StackPanel x:Name="SignInSection" Visibility="{Binding IsBrowser, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Text="ProJict's own browser, for agents (you sign in there once)" Style="{StaticResource Label}" />
+                        <StackPanel Orientation="Horizontal">
+                            <Button x:Name="SignInButton" Content="Sign in…" Command="{Binding OpenSignInCommand}" MinWidth="100"
+                                    ToolTip="Opens its website in a browser of its own, where you sign in yourself" />
+                            <Button Content="Sign out" Command="{Binding SignOutCommand}" Margin="8,0,0,0"
+                                    Visibility="{Binding IsSignedIn, Converter={StaticResource BoolToVis}}" ToolTip="Forgets the sign-in (deletes that browser's profile)" />
+                        </StackPanel>
+                        <TextBlock x:Name="SignInLine" Text="{Binding SignInText}" Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap" Margin="2,4,0,0" />
+                        <TextBlock Text="How you're signed in there (agents are told, e.g. “Google account, Pro plan”)" Style="{StaticResource Label}" />
+                        <TextBox Text="{Binding SignIn, UpdateSourceTrigger=LostFocus}" AutomationProperties.Name="How you're signed in" />
+                    </StackPanel>
+
+                    <!-- API: the key (a browser tool's too, when it also has an API) -->
+                    <StackPanel Visibility="{Binding TakesKey, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Text="{Binding KeyLabel}" Style="{StaticResource Label}" />
                         <DockPanel>
                             <Button DockPanel.Dock="Right" Content="Remove key" Margin="8,0,0,0" Command="{Binding RemoveKeyCommand}"
                                     Visibility="{Binding HasKey, Converter={StaticResource BoolToVis}}" />
@@ -125,11 +139,6 @@
                         <TextBlock Text="{Binding KeyText}" Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap" Margin="2,4,0,0" />
                     </StackPanel>
 
-                    <!-- Browser: how you're signed in -->
-                    <StackPanel Visibility="{Binding IsBrowser, Converter={StaticResource BoolToVis}}">
-                        <TextBlock Text="How you're signed in there (agents are told; you sign in yourself)" Style="{StaticResource Label}" />
-                        <TextBox Text="{Binding SignIn, UpdateSourceTrigger=LostFocus}" AutomationProperties.Name="How you're signed in" />
-                    </StackPanel>
 
                     <!-- ComfyUI: its servers and its workflow library -->
                     <StackPanel x:Name="ComfySection" Visibility="{Binding IsComfy, Converter={StaticResource BoolToVis}}">
@@ -202,7 +211,7 @@
                         </ScrollViewer>
                     </Border>
 
-                    <StackPanel Visibility="{Binding IsApi, Converter={StaticResource BoolToVis}}">
+                    <StackPanel Visibility="{Binding TakesKey, Converter={StaticResource BoolToVis}}">
                         <TextBlock Text="Agents that may always have the key" Style="{StaticResource Label}" />
                         <TextBlock Text="{Binding AllowedHint}" Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap" Margin="2,0,0,4" />
                         <ItemsControl ItemsSource="{Binding Allowed}" Focusable="False">

@@ -19,7 +19,7 @@ public sealed partial class ToolEditorViewModel
         {
             if (!value || tool.Access == ToolAccess.Program) return;
             tool.Access = ToolAccess.Program;
-            Changed(nameof(IsApi), nameof(IsBrowser), nameof(IsComfy), nameof(IsProgram), nameof(CheckText));
+            Changed(nameof(IsApi), nameof(IsBrowser), nameof(IsComfy), nameof(IsProgram), nameof(TakesKey), nameof(KeyLabel), nameof(CheckText));
         }
     }
 

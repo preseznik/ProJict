@@ -38,8 +38,9 @@ public sealed partial class AgentTools
         ["purpose"] = tool.Purpose.Length > 0 ? tool.Purpose : null,
         ["access"] = tool.Access switch { ToolAccess.Api => "api", ToolAccess.ComfyUI => "comfyui", ToolAccess.Program => "program", _ => "browser" },
         ["website"] = tool.Website,
-        ["keySet"] = tool.Access == ToolAccess.Api ? tool.HasKey : null,
+        ["keySet"] = tool.Access == ToolAccess.Api ? tool.HasKey : tool.Access == ToolAccess.Browser && tool.HasKey ? true : null,
         ["signedInAs"] = tool.Access == ToolAccess.Browser ? tool.SignIn : null,
+        ["signedInInProJictsBrowser"] = tool.Access == ToolAccess.Browser && tool.SignedInAt is { } at ? at.ToString("yyyy-MM-dd HH:mm") : null,
         ["budget"] = tool.Budget,
         ["forThisProject"] = project != null && tool.Projects.Contains(project.Id) ? true : null,
         ["projects"] = tool.Projects.Count > 0
@@ -47,7 +48,8 @@ public sealed partial class AgentTools
             : null,
         ["howToUse"] = tool.Access switch
         {
-            ToolAccess.Browser => $"On its website{(tool.Website != null ? $" ({tool.Website})" : "")}, with your own browser tools; the user signs in there themself.",
+            ToolAccess.Browser => $"On its website{(tool.Website != null ? $" ({tool.Website})" : "")}, with your own browser tools; the user signs in there themself." +
+                (tool.HasKey ? " It also has an API: get its key with use_tool_key (the website and the API may use separate credits)." : ""),
             ToolAccess.ComfyUI => tool.RunsOff ? "Read its workflows with get_workflow; the user doesn't let agents run them."
                 : "Run one of its workflows with run_workflow (ProJict queues it and attaches what it makes to an item), or get one with get_workflow and call ComfyUI yourself.",
             ToolAccess.Program => ProgramCheck.Of(tool.ProgramPath).Found
@@ -101,7 +103,7 @@ public sealed partial class AgentTools
         if (tool.Access == ToolAccess.Program)
             throw new McpToolException($"{tool.Name} is a program on the user's computer: it needs no key. " +
                                        (ProgramCheck.Clean(tool.ProgramPath) is { } path ? $"Run it yourself: {path}." : "Its place isn't set yet: ask the user to set it in Settings › Tools."));
-        if (tool.Access == ToolAccess.Browser)
+        if (tool.Access == ToolAccess.Browser && !tool.HasKey)
             throw new McpToolException($"{tool.Name} is used in the browser, without a key: {(tool.Website != null ? $"open {tool.Website} " : "open its website ")}" +
                                        "with your own browser tools; the user signs in there themself.");
         if (!tool.HasKey) throw new McpToolException($"The user hasn't set an API key for {tool.Name} yet: ask them to, in Settings › Tools.", ToolProblem.NotFound);
