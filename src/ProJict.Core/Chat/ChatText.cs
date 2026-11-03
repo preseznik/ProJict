@@ -4,11 +4,11 @@ public enum ChatSegmentKind { Text, Mention, Channel, Item, Link, Action }
 
 /// <summary>
 /// A piece of a message: plain text, an @mention, a #channel, an item (# and its id), a web link, or a word that is a
-/// button for you (an agent's "Approve" while its ship plan waits for you).
+/// button for you (an agent's "Approve" while its ship plan waits for you). <paramref name="Bold"/>: inside **…**.
 /// </summary>
-public sealed record ChatSegment(ChatSegmentKind Kind, string Text, string? Target = null);
+public sealed record ChatSegment(ChatSegmentKind Kind, string Text, string? Target = null, bool Bold = false);
 
-/// <summary>@mentions, #channel and item links, and web links in chat messages.</summary>
+/// <summary>@mentions, #channel and item links, web links and **bold** in chat messages (and bold in discussions).</summary>
 public static class ChatText
 {
     /// <summary>"@everyone" mentions everyone in the channel (see <see cref="ChatRoom.Mentions"/>).</summary>
@@ -47,19 +47,58 @@ public static class ChatText
     }
 
     /// <summary>
+    /// The text's **bold** parts, as Markdown marks them: "**" before a non-space opens, the next "**" after a non-space on
+    /// the same line closes, and the asterisks go. Asterisks without a pair stay as they are.
+    /// </summary>
+    public static IReadOnlyList<(string Text, bool Bold)> BoldSpans(string text)
+    {
+        var spans = new List<(string Text, bool Bold)>();
+        var from = 0;
+        for (var open = text.IndexOf("**", StringComparison.Ordinal); open >= 0; open = text.IndexOf("**", open + 2, StringComparison.Ordinal))
+        {
+            if (open < from || open + 2 >= text.Length || char.IsWhiteSpace(text[open + 2])) continue;
+            var close = -1;
+            for (var at = text.IndexOf("**", open + 3, StringComparison.Ordinal); at >= 0; at = text.IndexOf("**", at + 1, StringComparison.Ordinal))
+            {
+                if (text.IndexOf('\n', open, at - open) >= 0) break;
+                if (!char.IsWhiteSpace(text[at - 1]))
+                {
+                    close = at;
+                    break;
+                }
+            }
+            if (close < 0) continue;
+            if (open > from) spans.Add((text[from..open], false));
+            spans.Add((text[(open + 2)..close], true));
+            from = close + 2;
+            open = close;
+        }
+        if (from < text.Length) spans.Add((text[from..], false));
+        return spans;
+    }
+
+    /// <summary>
     /// Splits a message into pieces to show: @mentions of the given names (longest first) and @everyone, #channels that
-    /// exist, items as # and the first 8 characters of their id (#4e84570c), and http(s) links.
+    /// exist, items as # and the first 8 characters of their id (#4e84570c), and http(s) links; those inside **…** are bold.
     /// </summary>
     public static IReadOnlyList<ChatSegment> Parse(string text, IEnumerable<string> names, Func<string, bool> isChannel, Func<string, Guid?> findItem)
     {
         var candidates = names.Append(Everyone).Where(n => n.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).OrderByDescending(n => n.Length).ToList();
         var segments = new List<ChatSegment>();
+        foreach (var (span, bold) in BoldSpans(text))
+            segments.AddRange(Parse(span, bold, candidates, isChannel, findItem));
+        return segments;
+    }
+
+    private static List<ChatSegment> Parse(string text, bool bold, List<string> candidates, Func<string, bool> isChannel, Func<string, Guid?> findItem)
+    {
+        var segments = new List<ChatSegment>();
         var plain = new System.Text.StringBuilder();
         void Add(ChatSegment segment)
         {
-            if (plain.Length > 0) segments.Add(new ChatSegment(ChatSegmentKind.Text, plain.ToString()));
+            if (plain.Length > 0) segments.Add(new ChatSegment(ChatSegmentKind.Text, plain.ToString(), Bold: bold));
             plain.Clear();
-            segments.Add(segment);
+            segments.Add(segment with { Bold = bold });
         }
 
         var i = 0;
@@ -107,7 +146,7 @@ public static class ChatText
             plain.Append(c);
             i++;
         }
-        if (plain.Length > 0) segments.Add(new ChatSegment(ChatSegmentKind.Text, plain.ToString()));
+        if (plain.Length > 0) segments.Add(new ChatSegment(ChatSegmentKind.Text, plain.ToString(), Bold: bold));
         return segments;
     }
 

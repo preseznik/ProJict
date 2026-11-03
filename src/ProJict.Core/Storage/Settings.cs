@@ -1,4 +1,5 @@
 using ProJict.Core.Agents;
+using ProJict.Core.Features;
 using ProJict.Core.Model;
 
 namespace ProJict.Core.Storage;
@@ -214,8 +215,23 @@ public sealed class WorkspaceSettings
 
     /// <summary>The files posted in the groups' discussions (kept here, not in a project).</summary>
     public IEnumerable<Attachment> GroupAttachments() => (GroupComments ?? []).Values.SelectMany(threads => threads.Attachments());
-    /// <summary>The board lists open items by priority (most pressing first) instead of in their own order.</summary>
+    /// <summary>The board lists open items by priority (most pressing first) instead of in their own order (kept for older ProJicts: see <see cref="BoardSort"/>).</summary>
     public bool SortByPriority { get; set; }
+    /// <summary>How the board lists open items: in their own order, or by priority, name or date added.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public BoardSort BoardSort { get; set; }
+
+    /// <summary>How the board lists open items now, also when an older ProJict only set <see cref="SortByPriority"/>.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public BoardSort ItemSort
+    {
+        get => BoardSort == BoardSort.Board && SortByPriority ? BoardSort.Priority : BoardSort;
+        set
+        {
+            BoardSort = value;
+            SortByPriority = value == BoardSort.Priority;
+        }
+    }
     public bool MarkCopiedInProgress { get; set; }
     /// <summary>The priorities of items AI agents may work on (None = items without one); items on hold never. See AgentAccess.</summary>
     public List<Priority> AgentPriorities { get; set; } = [.. AgentAccess.DefaultPriorities];

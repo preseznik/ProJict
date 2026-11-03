@@ -10,7 +10,8 @@ using ProJict.App.ViewModels;
 namespace ProJict.App.Views;
 
 /// <summary>
-/// A chat message's text: @mentions stand out, #channels, items and web links can be clicked, and actions are buttons.
+/// A chat message's (or a comment's) text: @mentions stand out, #channels, items and web links can be clicked, actions are
+/// buttons, and **bold** is bold.
 /// You can select it, to copy part of a message (Ctrl+C, or right-click › Copy): it's plain text until the mouse comes
 /// over it, then a read-only text box that looks the same (a channel of plain texts opens much faster).
 /// </summary>
@@ -77,6 +78,7 @@ public sealed class ChatMessageText : Decorator
             if (segment.IsLink)
             {
                 var link = new Hyperlink(new Run(segment.Text)) { Command = segment.OpenCommand, ToolTip = segment.ToolTip };
+                if (segment.IsBold) link.FontWeight = FontWeights.SemiBold;
                 inlines.Add(link);
             }
             else if (segment.IsAction)
@@ -91,7 +93,7 @@ public sealed class ChatMessageText : Decorator
                 run.SetResourceReference(TextElement.ForegroundProperty, "AccentTextFillColorPrimaryBrush");
                 inlines.Add(run);
             }
-            else inlines.Add(new Run(segment.Text));
+            else inlines.Add(segment.IsBold ? new Run(segment.Text) { FontWeight = FontWeights.SemiBold } : new Run(segment.Text));
         }
     }
 }

@@ -13,12 +13,14 @@ namespace ProJict.App.ViewModels;
 public sealed partial class OfficeViewModel
 {
     /// <summary>
-    /// Where the thermostat hangs: by the classic room's door, or on a free bit of the drawn room's wall (its picture
-    /// fills the room's height from the left, so these are the picture's places): under the office's clock, under the
-    /// game studio's left speaker, between the film studio's green screen and its posters.
+    /// Where the thermostat hangs: on the classic office's back wall (in a classic studio right of the lobby door, clear of
+    /// its LOBBY sign), or on a free bit of the drawn room's wall (its picture fills the room's height from the left, so
+    /// these are the picture's places): under the office's clock, under the game studio's left speaker, between the film
+    /// studio's green screen and its posters.
     /// </summary>
-    public double ThermostatX => !IsDrawnLook ? 228 : !IsStudio ? 303 : IsFilm ? 467 : 195;
-    public double ThermostatY => !IsDrawnLook ? 204 : !IsStudio ? 238 : IsFilm ? 210 : 203;
+    public double ThermostatX => !IsDrawnLook ? IsStudio ? 284 : 228 : !IsStudio ? 303 : IsFilm ? 467 : 195;
+    public double ThermostatY => !IsDrawnLook ? IsStudio ? 214 : 204 : !IsStudio ? 238 : IsFilm ? 210 : 203;
+
     /// <summary>The milestone board: over the game studio's storyboard wall, or on the film studio's free wall right of its posters.</summary>
     public double MilestoneX => IsDrawnLook && IsFilm ? 700 : 484;
     public double MilestoneY => IsDrawnLook && IsFilm ? 112 : 102;

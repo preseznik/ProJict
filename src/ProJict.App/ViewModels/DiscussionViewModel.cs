@@ -150,6 +150,7 @@ public sealed partial class DiscussionViewModel : ObservableObject
 
     /// <summary>Shows and opens the files of this discussion: the project's own, or the Inbox's (the same data folder) for a group.</summary>
     internal ProjectViewModel AttachmentOwner => _main.GetProjectViewModel(Project ?? _state.Inbox);
+    internal ChatViewModel Chat => _main.Chat;
 
     [RelayCommand] private void AttachFiles() => AddFiles(Pending, AskForFiles());
 
@@ -174,6 +175,7 @@ public sealed partial class DiscussionViewModel : ObservableObject
     /// <summary>Adds files to a draft, leaving out (and saying so) the ones over the size limit (Settings › Comments &amp; history).</summary>
     internal void AddFiles(ObservableCollection<PendingFile> to, IEnumerable<string> paths)
     {
+        if (FolderZips.TakesFolders(paths, zipped => AddFiles(to, zipped), s => _state.StatusText = s)) return;
         foreach (var path in paths)
         {
             var info = new FileInfo(path);
@@ -316,6 +318,9 @@ public sealed partial class CommentViewModel : ObservableObject
     /// <summary>A robot for AI agents, a person otherwise.</summary>
     public string Glyph => Model.Agent ? "" : "";
     public string Text => Model.Deleted ? "(deleted)" : Model.Text;
+    /// <summary>The text as it shows: **…** bold, as agents often write it.</summary>
+    public IReadOnlyList<ChatSegmentViewModel> Segments =>
+        [.. ProJict.Core.Chat.ChatText.BoldSpans(Text).Select(s => new ChatSegmentViewModel(new ProJict.Core.Chat.ChatSegment(ProJict.Core.Chat.ChatSegmentKind.Text, s.Text, Bold: s.Bold), _owner.Chat))];
     public bool IsDeleted => Model.Deleted;
     public string WhenText => Model.At.Date == DateTime.Today
         ? Model.At.ToString("HH:mm", CultureInfo.CurrentCulture)
@@ -365,15 +370,18 @@ public sealed partial class CommentViewModel : ObservableObject
         else SendAnswersCommand.NotifyCanExecuteChanged();
     }
 
-    /// <summary>Your answers, kept on the question and posted as your reply (so the agent hears it).</summary>
+    /// <summary>
+    /// Your answers, kept on the question and posted as your reply (so the agent hears it). They go on the comment as it is
+    /// now, which may be a newer copy than the one the questions were shown from (another ProJict's, or after an undo).
+    /// </summary>
     [RelayCommand(CanExecute = nameof(CanSendAnswers))]
     private void SendAnswers()
     {
-        if (!CanSendAnswers()) return;
-        foreach (var choice in Choices) choice.Model.Answer = choice.Picked;
-        if (!_owner.Post(CommentChoices.AnswerText(Model.Choices!), Id))
+        if (!CanSendAnswers() || Model.Choices is not { } questions || questions.Count != Choices.Count) return;
+        for (var i = 0; i < questions.Count; i++) questions[i].Answer = Choices[i].Picked;
+        if (!_owner.Post(CommentChoices.AnswerText(questions), Id))
         {
-            foreach (var choice in Choices) choice.Model.Answer = null;
+            foreach (var question in questions) question.Answer = null;
             return;
         }
         foreach (var choice in Choices) choice.Refresh();
@@ -431,11 +439,23 @@ public sealed partial class CommentViewModel : ObservableObject
     private void Update(Comment model)
     {
         var changed = model.Text != Model.Text || model.Deleted != Model.Deleted || (model.Attachments?.Count ?? 0) != (Model.Attachments?.Count ?? 0);
+        var newChoices = !ReferenceEquals(model.Choices, Model.Choices);
         Model = model;
+        // A newer copy of the comment (another ProJict's, or after an undo): its questions are new objects too. Shown from
+        // them, keeping what you picked but haven't sent, so the answers go on the comment as it is.
+        if (newChoices && _choices != null)
+        {
+            var picked = _choices.Select(c => (c.Question, c.Picked)).ToList();
+            _choices = null;
+            for (var i = 0; i < Choices.Count && i < picked.Count; i++)
+                if (Choices[i].Question == picked[i].Question && !Choices[i].IsAnswered && picked[i].Picked != null) Choices[i].Picked = picked[i].Picked;
+            changed = true;
+        }
         if (changed)
         {
             _attachments = null;
             OnPropertyChanged(string.Empty);
+            SendAnswersCommand.NotifyCanExecuteChanged();
         }
         SyncList(Replies, model.Replies, _owner, Depth + 1);
         OnPropertyChanged(nameof(HasReplies));

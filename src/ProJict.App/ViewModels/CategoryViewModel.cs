@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using ProJict.Core.Features;
 using ProJict.Core.Model;
 
 namespace ProJict.App.ViewModels;
@@ -215,9 +216,9 @@ public sealed partial class CategoryViewModel : ObservableObject
         foreach (var child in Ordered(item.Children, done)) AddRows(rows, child, item, depth + 1, done);
     }
 
-    /// <summary>Open items most pressing first when the board is sorted by priority; otherwise (and in DONE) their own order.</summary>
+    /// <summary>Open items as the board is sorted (by priority, name or date added); otherwise (and in DONE) their own order.</summary>
     private IEnumerable<TodoItem> Ordered(IEnumerable<TodoItem> items, bool done) =>
-        Owner.SortByPriority && !done ? items.ByPriority() : items;
+        done ? items : items.Sorted(Owner.Sort);
 
     public IEnumerable<ItemRowViewModel> AllRows => OpenRows.Concat(DoneRows);
 

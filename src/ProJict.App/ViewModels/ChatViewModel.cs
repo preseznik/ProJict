@@ -913,6 +913,7 @@ public sealed partial class ChatViewModel : ObservableObject
 
     public void AddFiles(IEnumerable<string> paths)
     {
+        if (FolderZips.TakesFolders(paths, AddFiles, s => _state.StatusText = s)) return;
         foreach (var path in paths)
         {
             var info = new FileInfo(path);
@@ -1083,7 +1084,7 @@ public sealed partial class ChatViewModel : ObservableObject
     internal static IReadOnlyList<ChatSegment> WithShipButtons(IReadOnlyList<ChatSegment> segments, Project project) =>
         segments.SelectMany(s => s.Kind != ChatSegmentKind.Text ? [s]
             : ShipWords().Split(s.Text).Where(part => part.Length > 0)
-                .Select(part => part is "Approve" or "Decline" ? new ChatSegment(ChatSegmentKind.Action, part, $"{project.Id}:{part}") : new ChatSegment(ChatSegmentKind.Text, part)))
+                .Select(part => part is "Approve" or "Decline" ? new ChatSegment(ChatSegmentKind.Action, part, $"{project.Id}:{part}", s.Bold) : s with { Text = part }))
             .ToList();
 
     /// <summary>Who can be @mentioned in the channel: its members, and you.</summary>
@@ -1479,6 +1480,8 @@ public sealed partial class ChatSegmentViewModel(ChatSegment segment, ChatViewMo
     public bool IsLink => segment.Kind is ChatSegmentKind.Channel or ChatSegmentKind.Item or ChatSegmentKind.Link;
     public bool IsMention => segment.Kind == ChatSegmentKind.Mention;
     public bool IsAction => segment.Kind == ChatSegmentKind.Action;
+    /// <summary>Inside **…** in the message.</summary>
+    public bool IsBold => segment.Bold;
     public bool IsPrimaryAction => IsAction && segment.Text == "Approve";
     public string? ToolTip => segment.Kind switch
     {
