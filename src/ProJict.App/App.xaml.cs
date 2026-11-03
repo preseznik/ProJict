@@ -252,6 +252,7 @@ public partial class App : Application
         {
             MainVm?.Wiki.Page?.Leave();
             MainVm?.Diagrams.Close();
+            MainVm?.Browsers.CloseAll();
             State?.SaveNow();
         }
         catch (Exception) { }

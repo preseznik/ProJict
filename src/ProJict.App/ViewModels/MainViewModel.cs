@@ -113,6 +113,13 @@ public sealed partial class MainViewModel : ObservableObject
             OnPropertyChanged(nameof(HasPendingToolKey));
             OnPropertyChanged(nameof(AlwaysForText));
         };
+        Browsers = new Services.BrowserService(Tools, System.Windows.Threading.Dispatcher.CurrentDispatcher);
+        Browsers.Changed += () =>
+        {
+            OnPropertyChanged(nameof(BrowserInUse));
+            OnPropertyChanged(nameof(HasBrowserInUse));
+            OnPropertyChanged(nameof(BrowserInUseText));
+        };
         Host = new Services.Sharing.HostService(state, this, Sharing);
         Guest = new Services.Sharing.GuestService(state, this, Sharing);
         AgentTools = new Services.AgentTools(state, this, System.Windows.Threading.Dispatcher.CurrentDispatcher);
@@ -153,6 +160,7 @@ public sealed partial class MainViewModel : ObservableObject
         {
             Agents.Me = State.UserName;
             Agents.Tick(Services.UserIdle.Time);
+            Browsers.CloseIdle(DateTime.Now);
         };
         _presenceTimer.Start();
         Wiki = new WikiViewModel(state, this);
@@ -367,8 +375,39 @@ public sealed partial class MainViewModel : ObservableObject
 
     /// <summary>The outside tools agents may use (Settings › Tools), and their requests for API keys.</summary>
     public Services.ToolService Tools { get; }
+    /// <summary>ProJict's browser for agents, a browser per tool in the browser (Suno, Tripo3D).</summary>
+    public Services.BrowserService Browsers { get; }
     /// <summary>The ComfyUI workflows of the tools (in the data folder, so they're on every computer).</summary>
     public ProJict.Core.Tools.WorkflowLibrary Workflows { get; }
+
+    /// <summary>An agent is using a tool's browser: the bar at the bottom says who and which, with Watch and Stop.</summary>
+    public Services.BrowserSession? BrowserInUse => Browsers.Sessions.OrderByDescending(s => s.LastUsed).FirstOrDefault();
+    public bool HasBrowserInUse => BrowserInUse != null;
+    public string BrowserInUseText => BrowserInUse is { } s
+        ? $"{s.Agent} is using {s.Tool.Name} in ProJict's browser" + (Browsers.Sessions.Count > 1 ? $" (and {Browsers.Sessions.Count - 1} more)." : ".")
+        : "";
+
+    /// <summary>Shows the browser it's using, where you can click too (take over); closing it hides it again.</summary>
+    [RelayCommand]
+    private void WatchBrowser()
+    {
+        if (BrowserInUse is not { } session) return;
+        if (session.Watching is { } open)
+        {
+            open.Activate();
+            return;
+        }
+        new Views.BrowserWatchWindow(session) { Owner = System.Windows.Application.Current.MainWindow }.Show();
+    }
+
+    /// <summary>Stops the agent's use of the browser: it's closed, and the agent is told.</summary>
+    [RelayCommand]
+    private void StopBrowser()
+    {
+        if (BrowserInUse is not { } session) return;
+        Browsers.Stop(session);
+        State.StatusText = $"Stopped {session.Agent}'s use of {session.Tool.Name}'s browser; it's told on its next try.";
+    }
 
     /// <summary>An agent asks for a tool's API key: the bar at the bottom asks you.</summary>
     public Services.ToolKeyRequest? PendingToolKey => Tools.Waiting.FirstOrDefault();

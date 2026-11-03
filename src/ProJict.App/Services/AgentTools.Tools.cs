@@ -48,7 +48,9 @@ public sealed partial class AgentTools
             : null,
         ["howToUse"] = tool.Access switch
         {
-            ToolAccess.Browser => $"On its website{(tool.Website != null ? $" ({tool.Website})" : "")}, with your own browser tools; the user signs in there themself." +
+            ToolAccess.Browser => $"In ProJict's own browser: browser_open tool={tool.Name}, then browser_read, browser_click, browser_type and browser_wait. " +
+                (tool.SignedInAt != null ? "The user signed in there; " : "The user hasn't signed in there yet: if the site wants a sign-in, ask them; ") +
+                "leave paying, passwords and signing in to them." +
                 (tool.HasKey ? " It also has an API: get its key with use_tool_key (the website and the API may use separate credits)." : ""),
             ToolAccess.ComfyUI => tool.RunsOff ? "Read its workflows with get_workflow; the user doesn't let agents run them."
                 : "Run one of its workflows with run_workflow (ProJict queues it and attaches what it makes to an item), or get one with get_workflow and call ComfyUI yourself.",

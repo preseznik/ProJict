@@ -26,11 +26,13 @@ namespace ProJict.App.Services;
 public sealed partial class AgentTools : IMcpToolHost
 {
     private delegate string Handler(McpSession session, Args args, List<Attachment> files);
+    private delegate Task<string> AsyncHandler(McpSession session, Args args);
 
     private readonly AppState _state;
     private readonly MainViewModel _main;
     private readonly Dispatcher _dispatcher;
     private readonly Dictionary<string, (Handler Run, string? FilesArgument)> _handlers = [];
+    private readonly Dictionary<string, AsyncHandler> _asyncHandlers = [];
     private readonly List<McpTool> _tools = [];
     private readonly List<McpSession> _live = [];
     /// <summary>The session whose call is running: calls run one at a time on the UI thread.</summary>
@@ -182,6 +184,7 @@ public sealed partial class AgentTools : IMcpToolHost
         AddChatTools();
         AddWikiTools();
         AddToolTools();
+        AddBrowserTools();
         AddWorkTools();
         AddUsageTools();
         AddComfyTools();
@@ -300,6 +303,7 @@ public sealed partial class AgentTools : IMcpToolHost
         "juniors who agree with it what they take. If you're its lead, you hire too: talk with the agents in its lobby first, then hire_to_role. And if " +
         "the user lets the lead review wiki pages, you're told which pages wait for you: accept them or send them back with review_wiki. " +
         "Outside tools the user set up for agents (such as ElevenLabs, Suno, or ffmpeg on this computer) are in list_tools; use_tool_key gets one's API key once the user allows it, " +
+        "browser_open opens a tool used in the browser in ProJict's own browser (where the user signed in), " +
         "and run_workflow runs a workflow on the user's ComfyUI server, attaching what it makes to an item. " +
         "If you can tell how much of your usage you've used, say so with report_usage. " +
         "When a project shows a cleanupRequest, the user wants its repo folder cleaned up: read it with cleanup_request, scan the folder and post your plan " +
@@ -363,13 +367,31 @@ public sealed partial class AgentTools : IMcpToolHost
             await _dispatcher.InvokeAsync(() => Keep(session));
             return heard;
         }
-        var (run, filesArgument) = _handlers[name];
         var args = new Args(arguments);
         if (!Allows(session, name, arguments))
             throw new McpToolException(ChatTools.Contains(name)
                     ? $"This API token is read only, so it can only read Chat, not {name.Replace('_', ' ')}. The user can let read-only tokens use Chat (Settings › API)."
                     : $"This API token is read only, so it can't {name.Replace('_', ' ')}. The user can make a token that may change things in ProJict (Settings › API).",
                 ToolProblem.Forbidden);
+        if (_asyncHandlers.TryGetValue(name, out var runAsync))
+        {
+            // Started on the UI thread (the agent's projects apply up to its first wait); its waits come back there.
+            var running = await _dispatcher.InvokeAsync(() =>
+            {
+                _caller = session;
+                try { return runAsync(session, args); }
+                finally { _caller = null; }
+            });
+            var result = await running;
+            return await _dispatcher.InvokeAsync(() =>
+            {
+                Record(session, name, args);
+                var told = WithWaiting(session, name, result);
+                Keep(session);
+                return told;
+            });
+        }
+        var (run, filesArgument) = _handlers[name];
         // Files are copied off the UI thread; the edit itself then runs on it.
         var files = filesArgument == null ? []
             : session.Remote ? await StoreUploadsAsync(args.Uploads(filesArgument))
@@ -1633,6 +1655,13 @@ public sealed partial class AgentTools : IMcpToolHost
     {
         _tools.Add(new McpTool(name, title, description, schema, readOnly));
         _handlers[name] = (run, filesArgument);
+    }
+
+    /// <summary>A tool whose work waits on something (ProJict's browser): it starts on the UI thread and its waits come back there.</summary>
+    private void AddAsync(string name, string title, string description, JsonObject schema, AsyncHandler run, bool readOnly = false)
+    {
+        _tools.Add(new McpTool(name, title, description, schema, readOnly));
+        _asyncHandlers[name] = run;
     }
 
     /// <summary>Types: string, integer, boolean, string[] or enum:a|b|c.</summary>
