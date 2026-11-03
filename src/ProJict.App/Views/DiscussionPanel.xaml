@@ -62,8 +62,8 @@
                                         AutomationProperties.Name="Delete comment" Command="{Binding DeleteCommand}" />
                             </StackPanel>
                         </Grid>
-                        <TextBox x:Name="Text" Style="{StaticResource SelectableText}" Text="{Binding Text, Mode=OneWay}" Margin="18,2,4,0"
-                                 AutomationProperties.Name="Comment" Visibility="{Binding Text, Converter={StaticResource EmptyToVis}}" />
+                        <views:ChatMessageText x:Name="Text" Segments="{Binding Segments}" Margin="18,2,4,0"
+                                               AutomationProperties.Name="Comment" Visibility="{Binding Text, Converter={StaticResource EmptyToVis}}" />
                         <ItemsControl ItemsSource="{Binding Attachments}" ItemTemplateSelector="{StaticResource CommentFile}" ItemsPanel="{StaticResource Wrap}"
                                       Focusable="False" Margin="18,4,4,0" Visibility="{Binding HasAttachments, Converter={StaticResource BoolToVis}}" />
                         <!-- Questions to answer with a click: one is sent with the click, several together; once answered, the answer -->
@@ -142,8 +142,8 @@
                     <Setter TargetName="Body" Property="Padding" Value="6,4" />
                 </DataTrigger>
                 <DataTrigger Binding="{Binding IsDeleted}" Value="True">
-                    <Setter TargetName="Text" Property="FontStyle" Value="Italic" />
-                    <Setter TargetName="Text" Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}" />
+                    <Setter TargetName="Text" Property="TextElement.FontStyle" Value="Italic" />
+                    <Setter TargetName="Text" Property="TextElement.Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}" />
                     <Setter TargetName="CopyButton" Property="Visibility" Value="Collapsed" />
                 </DataTrigger>
             </DataTemplate.Triggers>

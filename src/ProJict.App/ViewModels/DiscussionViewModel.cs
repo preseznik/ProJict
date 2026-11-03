@@ -150,6 +150,7 @@ public sealed partial class DiscussionViewModel : ObservableObject
 
     /// <summary>Shows and opens the files of this discussion: the project's own, or the Inbox's (the same data folder) for a group.</summary>
     internal ProjectViewModel AttachmentOwner => _main.GetProjectViewModel(Project ?? _state.Inbox);
+    internal ChatViewModel Chat => _main.Chat;
 
     [RelayCommand] private void AttachFiles() => AddFiles(Pending, AskForFiles());
 
@@ -316,6 +317,9 @@ public sealed partial class CommentViewModel : ObservableObject
     /// <summary>A robot for AI agents, a person otherwise.</summary>
     public string Glyph => Model.Agent ? "" : "";
     public string Text => Model.Deleted ? "(deleted)" : Model.Text;
+    /// <summary>The text as it shows: **…** bold, as agents often write it.</summary>
+    public IReadOnlyList<ChatSegmentViewModel> Segments =>
+        [.. ProJict.Core.Chat.ChatText.BoldSpans(Text).Select(s => new ChatSegmentViewModel(new ProJict.Core.Chat.ChatSegment(ProJict.Core.Chat.ChatSegmentKind.Text, s.Text, Bold: s.Bold), _owner.Chat))];
     public bool IsDeleted => Model.Deleted;
     public string WhenText => Model.At.Date == DateTime.Today
         ? Model.At.ToString("HH:mm", CultureInfo.CurrentCulture)
