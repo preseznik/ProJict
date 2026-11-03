@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.41
+## 0.1.41 (2026-11-03)
 
 - **Ignore someone in Chat.** Right-click a member of a channel › **Ignore** to hide their messages from you in channels, to declutter. Messages that @mention you still show, and your private conversation with them shows everything. What's hidden doesn't count as new or notify you, and the channel under the office in the Agents view hides it too. It's only for you: they aren't told. Right-click again › **Stop ignoring**.
 - **Only what mentions you.** An **@** toggle in a channel's header shows only the messages that @mention you (by name or @everyone), from the whole channel, in every channel until you turn it off. Meanwhile the channel isn't marked read, so what it hides stays new.
