@@ -522,9 +522,32 @@ public sealed class ChatRoom
     {
         if (Member(channel, name) is not { } member || member.Archived) return [];
         var since = member.LastRead ?? DateTime.MinValue;
-        return channel.Messages.Where(m => m.At > since && !m.Deleted && !string.Equals(m.By, name, StringComparison.OrdinalIgnoreCase) &&
-                                           (!m.Notice || string.Equals(m.About, name, StringComparison.OrdinalIgnoreCase)));
+        return channel.Messages.Where(m => m.At > since && CountsFor(m, name));
     }
+
+    /// <summary>A message that's new for them until they read it: by someone else, not deleted, a line from ProJict only about them.</summary>
+    private static bool CountsFor(ChatMessage message, string name) =>
+        !message.Deleted && !string.Equals(message.By, name, StringComparison.OrdinalIgnoreCase) &&
+        (!message.Notice || string.Equals(message.About, name, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Right-click › Mark unread: the newest message from someone else counts as new again (the channel shows it, and
+    /// Chat's count), until they read the channel again.
+    /// </summary>
+    public void MarkUnread(ChatChannel channel, string name)
+    {
+        if (Member(channel, name) is not { } member) throw new ChatException("Only its members can mark a channel unread.");
+        if (channel.Messages.LastOrDefault(m => CountsFor(m, name)) is not { } newest)
+            throw new ChatException("There's nothing from anyone else in it to mark unread.");
+        var before = newest.At.AddTicks(-1);
+        if (member.LastRead <= before) return;
+        member.LastRead = before;
+        Changed?.Invoke(channel);
+    }
+
+    /// <summary>Whether they can mark it unread: they're in it (not archived), it has something from someone else, and they've read it all.</summary>
+    public static bool CanMarkUnread(ChatChannel channel, string name) =>
+        Member(channel, name) is { Archived: false } && channel.Messages.Any(m => CountsFor(m, name)) && !Unread(channel, name).Any();
 
     /// <summary>
     /// @mentions of someone who isn't in the channel and hasn't been given them yet (from the past week at most), so an

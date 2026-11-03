@@ -189,6 +189,7 @@ public sealed partial class ChatViewModel : ObservableObject
     public void Show(ChatChannel? channel = null, Guid? message = null)
     {
         IsShown = true;
+        _keptUnread = null;
         IsCreating = false;
         IsBrowsing = false;
         if (channel != null && channel != Channel) Channel = channel;
@@ -228,6 +229,7 @@ public sealed partial class ChatViewModel : ObservableObject
 
     partial void OnChannelChanging(ChatChannel? oldValue, ChatChannel? newValue)
     {
+        _keptUnread = null;
         if (oldValue == null) return;
         if (Editing == null && Draft.Trim().Length > 0) _drafts[oldValue.Id] = Draft;
         else _drafts.Remove(oldValue.Id);
@@ -267,9 +269,12 @@ public sealed partial class ChatViewModel : ObservableObject
         finally { _syncing = false; }
     }
 
+    /// <summary>The open channel you marked unread: it isn't read while you stay, only when you come back to it.</summary>
+    private ChatChannel? _keptUnread;
+
     private void ReadIfLooking()
     {
-        if (Channel == null || !IsShown || !IsLooking()) return;
+        if (Channel == null || !IsShown || !IsLooking() || Channel == _keptUnread) return;
         var place = Here;
         if (place.Host is { } host)
         {
@@ -318,6 +323,21 @@ public sealed partial class ChatViewModel : ObservableObject
     /// Puts one of your private conversations in the archive, where nothing new in it counts or notifies you, or takes it
     /// out (and opens it, so what came meanwhile is read there rather than announced).
     /// </summary>
+    /// <summary>Right-click › Mark unread: its newest message counts as new again until you come back to it (also when it's the one open).</summary>
+    internal void MarkUnread(ChatChannel channel)
+    {
+        // Held first: marking it tells Chat it changed, which reads the open one.
+        var held = _keptUnread;
+        if (channel == Channel) _keptUnread = channel;
+        if (!Try(() => Room.MarkUnread(channel, MyName)))
+        {
+            _keptUnread = held;
+            return;
+        }
+        _state.StatusText = $"Marked {ChatRoom.Title(channel, MyName)} unread: it stays that way until you come back to it.";
+        Refresh();
+    }
+
     internal void SetArchived(ChatChannel channel, bool archived)
     {
         if (!Try(() => Room.SetArchived(channel, MyName, archived))) return;
@@ -386,6 +406,13 @@ public sealed partial class ChatViewModel : ObservableObject
     {
         IsCreating = false;
         IsBrowsing = false;
+        // Clicking the one you marked unread is coming back to it.
+        if (channel == Channel && _keptUnread == channel)
+        {
+            _keptUnread = null;
+            MarkNew();
+            ReadIfLooking();
+        }
         Channel = channel;
         Refresh();
     }
@@ -1247,6 +1274,11 @@ public sealed partial class ChannelRowViewModel(ChatChannel model, ChatViewModel
     /// <summary>Your own private conversation (not another ProJict's): it can go in the archive, or come out.</summary>
     public bool CanArchive => model.Direct && owner.PlaceOf(model).Host == null && ChatRoom.Member(model, owner.NameIn(model)) != null;
     public bool IsArchived => ChatRoom.IsArchived(model, owner.NameIn(model));
+    /// <summary>One of your own ProJict's you've read: it can be marked unread, to come back to.</summary>
+    public bool CanMarkUnread => owner.PlaceOf(model).Host == null && ChatRoom.CanMarkUnread(model, owner.NameIn(model));
+    public bool HasMenu => CanArchive || CanMarkUnread;
+    public bool ShowArchive => CanArchive && !IsArchived;
+    [RelayCommand] private void MarkUnread() => owner.MarkUnread(model);
     [RelayCommand] private void Archive() => owner.SetArchived(model, true);
     [RelayCommand] private void Unarchive() => owner.SetArchived(model, false);
     /// <summary>Its topic, else what it's about; for a private conversation, the last thing said.</summary>

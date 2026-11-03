@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.41
+
+- **Mark unread.** Right-click a channel or private conversation in Chat › **Mark unread** to come back to it later: its newest message from someone else counts as new again, in the list and in Chat's count, until you open it. The one you have open stays unread while you stay in it.
+
 ## 0.1.40 (2026-11-03)
 
 - **Search one channel.** A **#** button beside Chat's search box keeps the search to the open channel or conversation, before or after you type; the box says where it searches ("Search #general"), and it follows you to the next channel you open.

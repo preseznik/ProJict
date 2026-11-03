@@ -66,10 +66,12 @@
                     <MouseBinding MouseAction="LeftClick" Command="{Binding DataContext.OpenCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                   CommandParameter="{Binding}" />
                 </Border.InputBindings>
-                <!-- Your private conversations go in the archive, and come out, from here. -->
+                <!-- Mark unread, to come back to; your private conversations go in the archive, and come out, from here. -->
                 <Border.ContextMenu>
-                    <ContextMenu Visibility="{Binding CanArchive, Converter={StaticResource BoolToVis}}">
-                        <MenuItem Header="Archive" Command="{Binding ArchiveCommand}" Visibility="{Binding IsArchived, Converter={StaticResource InvBoolToVis}}"
+                    <ContextMenu Visibility="{Binding HasMenu, Converter={StaticResource BoolToVis}}">
+                        <MenuItem Header="Mark unread" Command="{Binding MarkUnreadCommand}" Visibility="{Binding CanMarkUnread, Converter={StaticResource BoolToVis}}"
+                                  ToolTip="Its newest message counts as new again, until you come back to it" />
+                        <MenuItem Header="Archive" Command="{Binding ArchiveCommand}" Visibility="{Binding ShowArchive, Converter={StaticResource BoolToVis}}"
                                   ToolTip="Moves it to the Archive at the bottom: nothing new in it counts or notifies you until you open it or take it out" />
                         <MenuItem Header="Take out of the archive" Command="{Binding UnarchiveCommand}" Visibility="{Binding IsArchived, Converter={StaticResource BoolToVis}}" />
                     </ContextMenu>
