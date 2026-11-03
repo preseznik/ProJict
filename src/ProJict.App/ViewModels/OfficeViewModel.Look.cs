@@ -32,20 +32,20 @@ public sealed partial class OfficeViewModel
     partial void OnIsDrawnLookChanged(bool value) => ArrangeDesks();
 
     /// <summary>
-    /// The drawn office has a wide, shallow floor (the classic room's back desks would stand on its back wall): its desks
-    /// stand in two rows on either side of the cooler, the back row's robots between the front row's, so none hides
-    /// another. Its seat (where the robot sits) and how far down the floor (y) for the left side's desks, back to front
-    /// as <see cref="DeskDepths"/>; the right side's are the same, mirrored.
+    /// The drawn rooms' floors are wider and shallower than the classic room's (its back desks would stand on their back
+    /// walls): their desks stand in two rows on either side of the cooler, the back row's robots between the front row's,
+    /// so none hides another. Its seat (where the robot sits) and how far down the floor (y) for the left side's desks,
+    /// back to front as <see cref="DeskDepths"/>; the right side's are the same, mirrored.
     /// </summary>
-    private static readonly (double SeatX, double Y)[] DrawnOfficeDesks = [(305, 400), (185, 405), (262, 466), (115, 468)];
+    private static readonly (double SeatX, double Y)[] DrawnDesks = [(305, 400), (185, 405), (262, 466), (115, 468)];
 
-    /// <summary>Where talkers stand around the cooler in the drawn office: close in, between the desks on either side.</summary>
-    private static readonly (double X, double Y)[] DrawnOfficeCoolerSpots =
+    /// <summary>Where talkers stand around the cooler in the drawn rooms: close in, between the desks on either side.</summary>
+    private static readonly (double X, double Y)[] DrawnCoolerSpots =
         [.. new (double X, double Y)[] { (-62, 6), (62, 6), (-38, 30), (38, 30), (-92, 26), (92, 26), (-30, -26), (30, -26) }
             .Select(o => StandingAt(CoolerX + o.X, CoolerY + o.Y))];
 
     /// <summary>Where talkers stand around the cooler in this room.</summary>
-    private (double X, double Y)[] TalkSpots => IsDrawnLook && !IsStudio ? DrawnOfficeCoolerSpots : CoolerSpots;
+    private (double X, double Y)[] TalkSpots => IsDrawnLook ? DrawnCoolerSpots : CoolerSpots;
 
     /// <summary>The studio's lobby in the drawn studios: a step forward, onto their floor (the bench it stands by is the classic room's).</summary>
     private static readonly (double X, double Y)[] DrawnLobbySpots =
@@ -54,7 +54,7 @@ public sealed partial class OfficeViewModel
     /// <summary>Where agents not hired yet wait in this studio.</summary>
     private (double X, double Y)[] Lobby => IsDrawnLook ? DrawnLobbySpots : LobbySpots;
 
-    /// <summary>Stands the desks where this room has them: against the walls, or in the drawn office out on its floor.</summary>
+    /// <summary>Stands the desks where this room has them: against the walls, or in the drawn rooms out on their floor.</summary>
     private void ArrangeDesks()
     {
         if (Desks == null) return;
@@ -62,12 +62,12 @@ public sealed partial class OfficeViewModel
         for (var i = 0; i < Desks.Count; i++)
         {
             var desk = Desks[i];
-            if (!IsDrawnLook || IsStudio)
+            if (!IsDrawnLook)
             {
                 desk.StandAt(WallPoint(desk.Left, desk.Depth));
                 continue;
             }
-            var (seatX, y) = DrawnOfficeDesks[i % perSide];
+            var (seatX, y) = DrawnDesks[i % perSide];
             var scale = ScaleAt(y);
             var x = seatX - 89 * scale;
             desk.StandAt((desk.Left ? x : Width - x, y));

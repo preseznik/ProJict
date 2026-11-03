@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.41
+
+- **The drawn studios fit a full team too.** The game and film studios' drawn look still put their stations against the walls, so with every role hired the desks climbed the walls and the role plates and robots piled up. Now their eight stations stand out on the floor like the drawn office's, in two rows on either side of the cooler, each with its role's plate, and talkers gather close round the cooler between them. Juniors still stand by their role's desk, and visitors from other ProJicts stand just in front of the lobby.
+
 ## 0.1.40 (2026-11-03)
 
 - **Search one channel.** A **#** button beside Chat's search box keeps the search to the open channel or conversation, before or after you type; the box says where it searches ("Search #general"), and it follows you to the next channel you open.

@@ -119,10 +119,11 @@ public sealed partial class OfficeViewModel : ObservableObject
     /// <summary>Who's visiting from other ProJicts; only rebuilt when that changes.</summary>
     internal void SetVisitors(IReadOnlyList<AgentActivityViewModel.Visitor> visitors, Action<string> message)
     {
-        // In the drawn office they stand on its floor, at the back between the desks (its back wall is lower down).
-        var drawnOffice = IsDrawnLook && !IsStudio;
-        var (startX, feetY) = drawnOffice ? (334.0, 386.0) : (VisitorsX, VisitorsFeetY);
-        var signature = $"{drawnOffice}|" + string.Join("|", visitors.Select(v => $"{v.Name}:{v.From}:{v.Away}"));
+        // In the drawn rooms they stand on the floor at the back, between the desks (their back walls are lower down); in a
+        // studio just in front of its lobby.
+        var room = !IsDrawnLook ? "classic" : IsStudio ? "studio" : "office";
+        var (startX, feetY) = room switch { "office" => (334.0, 386.0), "studio" => (334.0, 398.0), _ => (VisitorsX, VisitorsFeetY) };
+        var signature = $"{room}|" + string.Join("|", visitors.Select(v => $"{v.Name}:{v.From}:{v.Away}"));
         if (signature == _visitorsSignature) return;
         _visitorsSignature = signature;
         foreach (var visitor in _visitors) Scene.Remove(visitor);
