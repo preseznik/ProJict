@@ -37,12 +37,12 @@ public partial class ToolsWindow : Window
 
     /// <summary>
     /// The key goes from the password box straight to the tool it was typed for (with Save key, Enter, another tool or
-    /// Close); it's never shown or kept in the window. A tool switched away from its API meanwhile gets none.
+    /// Close); it's never shown or kept in the window. A tool switched meanwhile to a kind without a key gets none.
     /// </summary>
     private void KeepTypedKey()
     {
         var tool = _keyFor;
-        if (tool is { IsApi: true } && KeyBox.Password.Trim().Length > 0) tool.SaveKey(KeyBox.Password);
+        if (tool is { TakesKey: true } && KeyBox.Password.Trim().Length > 0) tool.SaveKey(KeyBox.Password);
         KeyBox.Clear();
         _keyFor = null;
     }

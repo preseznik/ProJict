@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using ProJict.Core.Tools;
@@ -90,6 +91,51 @@ public sealed class ToolService
         foreach (var request in Requests.Where(r => r.Tool == tool).ToList()) Requests.Remove(request);
         _grants.RemoveWhere(g => g.Tool == tool.Id);
         Save();
+        _ = ForgetProfileAsync(tool);
+    }
+
+    // ───────────── Signing in to a tool in the browser ─────────────
+
+    /// <summary>
+    /// A browser tool's own browser profile (its sign-in, cookies), next to tools.json on this computer: never in the
+    /// workspace, its mirror or backups. Without a path (tests) under the temp folder.
+    /// </summary>
+    public string ProfileFolder(ExternalTool tool) =>
+        Path.Combine(_path != null ? Path.GetDirectoryName(_path)! : Path.Combine(Path.GetTempPath(), "ProJict-tools"), "browser", tool.Id.ToString("N"));
+
+    /// <summary>You signed in to it in ProJict's browser (Sign in… › Done).</summary>
+    public void SignedIn(ExternalTool tool)
+    {
+        tool.SignedInAt = DateTime.Now;
+        Save();
+    }
+
+    /// <summary>Signs out: forgets the sign-in by deleting its profile. False when it couldn't (the browser is still closing).</summary>
+    public async Task<bool> SignOutAsync(ExternalTool tool)
+    {
+        if (!await ForgetProfileAsync(tool)) return false;
+        tool.SignedInAt = null;
+        Save();
+        return true;
+    }
+
+    /// <summary>Deletes a tool's browser profile, trying for a few seconds: its browser may still be letting go of it.</summary>
+    private async Task<bool> ForgetProfileAsync(ExternalTool tool)
+    {
+        var folder = ProfileFolder(tool);
+        for (var attempt = 0; attempt < 12; attempt++)
+        {
+            try
+            {
+                if (Directory.Exists(folder)) Directory.Delete(folder, recursive: true);
+                return true;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                await Task.Delay(500);
+            }
+        }
+        return false;
     }
 
     /// <summary>

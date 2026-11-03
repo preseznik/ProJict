@@ -2,6 +2,7 @@ using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ProJict.Core.Chat;
+using ProJict.Core.Features;
 
 namespace ProJict.App.ViewModels;
 
@@ -41,7 +42,8 @@ public sealed partial class AgentActivityViewModel
         if (FilterProject is not { } project)
             return _main.Chat.Channel is { Direct: false } open && room.Channels.Contains(open) ? open
                 : room.Channels.Where(c => !c.Direct && ChatRoom.Member(c, _state.UserName) != null).OrderBy(c => c.Name, StringComparer.Ordinal).FirstOrDefault();
-        if (project.Studio?.ChannelId is { } id && room.Channels.FirstOrDefault(c => c.Id == id) is { } studio) return studio;
+        if ((ShownStudio ?? StudioFlow.OpenStudiosOf(project).FirstOrDefault())?.ChannelId is { } id && room.Channels.FirstOrDefault(c => c.Id == id) is { } studio)
+            return studio;
         return room.Channels.Where(c => !c.Direct && c.Link is { CategoryId: null, ItemId: null } link && link.ProjectId == project.Id)
             .OrderBy(c => c.Access == ChannelAccess.Open ? 0 : 1).ThenBy(c => c.CreatedAt).FirstOrDefault();
     }

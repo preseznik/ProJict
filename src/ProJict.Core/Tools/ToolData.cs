@@ -4,10 +4,10 @@ using ProJict.Core.Storage;
 namespace ProJict.Core.Tools;
 
 /// <summary>
-/// How agents reach a tool: through its API, with a key you set; on its website in the browser; or a ComfyUI server of
-/// yours, where ProJict runs workflows from the library.
+/// How agents reach a tool: through its API, with a key you set; on its website in the browser; a ComfyUI server of
+/// yours, where ProJict runs workflows from the library; or a program on this computer (ffmpeg), which they run themselves.
 /// </summary>
-public enum ToolAccess { Api, Browser, ComfyUI }
+public enum ToolAccess { Api, Browser, ComfyUI, Program }
 
 /// <summary>
 /// An outside tool agents may use for your work, such as ElevenLabs for voices or Suno for music: what it's for, where
@@ -22,7 +22,10 @@ public sealed class ExternalTool
     public string Purpose { get; set; } = "";
     public string? Website { get; set; }
     public ToolAccess Access { get; set; }
-    /// <summary>The API key, protected for this Windows user (DPAPI); never in the workspace, the mirror folder or backups.</summary>
+    /// <summary>
+    /// The API key, protected for this Windows user (DPAPI); never in the workspace, the mirror folder or backups. A tool in
+    /// the browser may have one too, when it also has an API (Tripo3D: Studio in the browser, its API with a key).
+    /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? ProtectedKey { get; set; }
     /// <summary>The key's last characters, so you can tell which one is set without showing it.</summary>
@@ -31,6 +34,12 @@ public sealed class ExternalTool
     /// <summary>For a tool in the browser: how you're signed in there ("Google account, Pro plan"), so agents know what to expect.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? SignIn { get; set; }
+    /// <summary>
+    /// For a tool in the browser: when you last signed in to it in ProJict's own browser (Sign in…), whose sign-in is kept
+    /// in a browser profile of its own on this computer; null when you haven't, or signed out.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public DateTime? SignedInAt { get; set; }
     /// <summary>A budget agents are told ("$22 a month, Creator plan"); ProJict doesn't count what's used.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Budget { get; set; }
@@ -44,13 +53,26 @@ public sealed class ExternalTool
     /// <summary>For a ComfyUI tool: agents may not run its workflows (they can still read them).</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool RunsOff { get; set; }
+    /// <summary>For a program on this computer: where it is (the program, or the folder it's in).</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ProgramPath { get; set; }
+    /// <summary>For a program: its documentation, a web page or a file or folder on this computer.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Docs { get; set; }
+    /// <summary>For a program: the folder where it saves what it makes (VRCapture's recordings).</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? OutputFolder { get; set; }
 
     [JsonIgnore] public bool HasKey => ProtectedKey != null;
-    /// <summary>Whether an agent can use it now: a browser tool always, an API tool once its key is set, ComfyUI with an endpoint.</summary>
+    /// <summary>
+    /// Whether an agent can use it now: a browser tool always, an API tool once its key is set, ComfyUI with an endpoint,
+    /// a program once it's where its path says.
+    /// </summary>
     [JsonIgnore] public bool Ready => Access switch
     {
         ToolAccess.Browser => true,
         ToolAccess.ComfyUI => Endpoints is { Count: > 0 },
+        ToolAccess.Program => ProgramCheck.Of(ProgramPath).Found,
         _ => HasKey,
     };
 
@@ -61,8 +83,14 @@ public sealed class ExternalTool
 
     public bool IsAlwaysAllowed(string agent) => AlwaysAllowed.Any(a => string.Equals(a, agent.Trim(), StringComparison.OrdinalIgnoreCase));
 
-    /// <summary>"API" or "in the browser", for people.</summary>
-    public string AccessText => Access switch { ToolAccess.Api => "API", ToolAccess.ComfyUI => "ComfyUI", _ => "in the browser" };
+    /// <summary>Agents can get its key with use_tool_key: an API tool's, or a browser tool's that also has an API.</summary>
+    [JsonIgnore] public bool TakesKey => Access is ToolAccess.Api or ToolAccess.Browser;
+
+    /// <summary>"API", "in the browser", "ComfyUI" or "on this computer", for people.</summary>
+    public string AccessText => Access switch
+    {
+        ToolAccess.Api => "API", ToolAccess.ComfyUI => "ComfyUI", ToolAccess.Program => "on this computer", _ => "in the browser",
+    };
 }
 
 /// <summary>
@@ -78,6 +106,9 @@ public sealed class ToolData
     /// <summary>The starting tools were put in (once, so removing one sticks).</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool Seeded { get; set; }
+    /// <summary>The starting programs (ffmpeg, VRCapture) were put in, also where the other starters already were.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool ProgramsSeeded { get; set; }
 
     public static string DefaultPath => Path.Combine(Path.GetDirectoryName(AppSettings.DefaultPath)!, "tools.json");
 
@@ -113,12 +144,32 @@ public sealed class ToolData
         };
     }
 
-    /// <summary>Puts the starting tools in, the first time.</summary>
-    public bool SeedOnce()
+    /// <summary>
+    /// The programs you start with, for video work: ffmpeg (found where Windows finds programs, when it's there) and
+    /// VRCapture (you say where it is). <paramref name="pathVariable"/> is the PATH to look in (Windows' own by default).
+    /// </summary>
+    public static IEnumerable<ExternalTool> ProgramStarters(string? pathVariable = null)
     {
-        if (Seeded) return false;
-        foreach (var tool in Starters().Where(s => Tools.All(t => !string.Equals(t.Name, s.Name, StringComparison.OrdinalIgnoreCase)))) Tools.Add(tool);
-        Seeded = true;
+        yield return new ExternalTool
+        {
+            Name = "ffmpeg", Access = ToolAccess.Program, Website = "https://ffmpeg.org", Docs = "https://ffmpeg.org/ffmpeg.html",
+            ProgramPath = ProgramCheck.FindOnPath("ffmpeg.exe", pathVariable),
+            Purpose = "Converts, cuts, joins and re-encodes video and audio, and makes stills, GIFs and thumbnails from video, from the command line.",
+        };
+        yield return new ExternalTool
+        {
+            Name = "VRCapture", Access = ToolAccess.Program,
+            Purpose = "Records VR play (what the headset shows, with its sound) to video files. You start and stop it in the headset; agents use the recordings in its output folder.",
+        };
+    }
+
+    /// <summary>Puts the starting tools in, the first time (and the starting programs, the first time there are any).</summary>
+    public bool SeedOnce(string? pathVariable = null)
+    {
+        if (Seeded && ProgramsSeeded) return false;
+        var starters = (Seeded ? [] : Starters()).Concat(ProgramsSeeded ? [] : ProgramStarters(pathVariable));
+        foreach (var tool in starters.Where(s => Tools.All(t => !string.Equals(t.Name, s.Name, StringComparison.OrdinalIgnoreCase)))) Tools.Add(tool);
+        Seeded = ProgramsSeeded = true;
         return true;
     }
 

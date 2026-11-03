@@ -1225,41 +1225,54 @@
                                        Text="Only on this computer: people you share with, and their agents, don't see it or its channels, even when its group is shared with them. You and your own agents still do." />
                         </StackPanel>
 
-                        <!-- The project's game studio: its roles and what each expects; hiring is in the Agents view. -->
-                        <TextBlock Grid.Row="9" Text="Studio" Visibility="{Binding CanHaveStudio, Converter={StaticResource BoolToVis}}" />
+                        <!-- The project's studios (a game studio, a film studio, or both): each one's roles and what each expects; hiring is in the Agents view. -->
+                        <TextBlock Grid.Row="9" Text="Studios" Visibility="{Binding CanHaveStudio, Converter={StaticResource BoolToVis}}" />
                         <StackPanel x:Name="StudioDetails" Grid.Row="9" Grid.Column="1" Margin="0,4" Visibility="{Binding CanHaveStudio, Converter={StaticResource BoolToVis}}">
-                            <StackPanel Orientation="Horizontal" Visibility="{Binding HasStudio, Converter={StaticResource InvBoolToVis}}">
-                                <Button Content="Set up a game studio" Command="{Binding SetUpStudioCommand}" CommandParameter="Game" />
-                                <Button Content="Set up a film studio" Command="{Binding SetUpStudioCommand}" CommandParameter="Film" Margin="8,0,0,0" />
+                            <StackPanel Orientation="Horizontal">
+                                <Button Content="Set up a game studio" Command="{Binding SetUpStudioCommand}" CommandParameter="Game" Margin="0,0,8,0"
+                                        Visibility="{Binding CanSetUpGameStudio, Converter={StaticResource BoolToVis}}" />
+                                <Button Content="Set up a film studio" Command="{Binding SetUpStudioCommand}" CommandParameter="Film"
+                                        Visibility="{Binding CanSetUpFilmStudio, Converter={StaticResource BoolToVis}}" />
                             </StackPanel>
                             <TextBlock Margin="0,4,0,6" FontSize="12" TextWrapping="Wrap" Text="{Binding StudioHint}" />
-                            <Button Content="{Binding RemoveStudioText}" Command="{Binding RemoveStudioCommand}" HorizontalAlignment="Left" Margin="0,0,0,8"
-                                    Visibility="{Binding HasStudio, Converter={StaticResource BoolToVis}}"
-                                    ToolTip="This project's room in the Agents view goes back to being the office; its roles and hires are removed" />
-                            <StackPanel x:Name="LeadReviewSettings" Margin="0,0,0,10" Visibility="{Binding HasStudio, Converter={StaticResource BoolToVis}}">
-                                <CheckBox Content="{Binding LeadReviewsWikiText}" IsChecked="{Binding LeadReviewsWiki}" />
-                                <StackPanel Orientation="Horizontal" Margin="28,4,0,0" Visibility="{Binding LeadReviewsWiki, Converter={StaticResource BoolToVis}}">
-                                    <TextBlock Text="Only pages in" VerticalAlignment="Center" Margin="0,0,8,0" />
-                                    <ComboBox IsEditable="True" MinWidth="220" ItemsSource="{Binding WikiFolders}" AutomationProperties.Name="Only pages in this wiki folder"
-                                              Text="{Binding LeadReviewFolder, UpdateSourceTrigger=LostFocus}"
-                                              ToolTip="A wiki folder, e.g. GRID2VR/Design; leave it empty for every page about the project" />
-                                </StackPanel>
-                                <TextBlock Margin="28,4,0,0" FontSize="12" TextWrapping="Wrap" Style="{StaticResource MutedText}" Text="{Binding LeadReviewHint}" />
-                            </StackPanel>
-                            <ItemsControl ItemsSource="{Binding StudioRoles}" Focusable="False" Visibility="{Binding HasStudio, Converter={StaticResource BoolToVis}}">
+                            <ItemsControl x:Name="StudioList" ItemsSource="{Binding Studios}" Focusable="False">
                                 <ItemsControl.ItemTemplate>
-                                    <DataTemplate DataType="{x:Type vm:StudioRoleRow}">
-                                        <Border Style="{StaticResource Card}" Padding="10,8" Margin="0,0,0,6">
-                                            <StackPanel>
-                                                <DockPanel>
-                                                    <TextBlock DockPanel.Dock="Right" Text="{Binding HolderText}" Style="{StaticResource MutedText}" FontSize="12"
-                                                               VerticalAlignment="Center" Margin="10,0,0,0" />
-                                                    <TextBox Text="{Binding Name, UpdateSourceTrigger=LostFocus}" FontWeight="SemiBold" AutomationProperties.Name="Role name" />
-                                                </DockPanel>
-                                                <TextBox Text="{Binding Definition, UpdateSourceTrigger=LostFocus}" AcceptsReturn="True" TextWrapping="Wrap" Margin="0,6,0,0"
-                                                         MinHeight="54" VerticalContentAlignment="Top" AutomationProperties.Name="What the role expects" />
+                                    <DataTemplate>
+                                        <StackPanel Margin="0,4,0,10">
+                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                                <TextBlock Text="{Binding Title}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                                <Button Content="{Binding OpenCloseText}" Command="{Binding OpenCloseCommand}" Margin="12,0,0,0" ToolTip="{Binding OpenCloseToolTip}" />
+                                                <Button Content="{Binding RemoveText}" Command="{Binding RemoveCommand}" Margin="8,0,0,0"
+                                                        ToolTip="Removes the studio from the project for good, with its roles and hires" />
                                             </StackPanel>
-                                        </Border>
+                                            <StackPanel x:Name="LeadReviewSettings" Margin="0,0,0,10">
+                                                <CheckBox Content="{Binding LeadReviewsWikiText}" IsChecked="{Binding LeadReviewsWiki}" />
+                                                <StackPanel Orientation="Horizontal" Margin="28,4,0,0" Visibility="{Binding LeadReviewsWiki, Converter={StaticResource BoolToVis}}">
+                                                    <TextBlock Text="Only pages in" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                                    <ComboBox IsEditable="True" MinWidth="220" ItemsSource="{Binding WikiFolders}" AutomationProperties.Name="Only pages in this wiki folder"
+                                                              Text="{Binding LeadReviewFolder, UpdateSourceTrigger=LostFocus}"
+                                                              ToolTip="A wiki folder, e.g. GRID2VR/Design; leave it empty for every page about the project" />
+                                                </StackPanel>
+                                                <TextBlock Margin="28,4,0,0" FontSize="12" TextWrapping="Wrap" Style="{StaticResource MutedText}" Text="{Binding LeadReviewHint}" />
+                                            </StackPanel>
+                                            <ItemsControl ItemsSource="{Binding Roles}" Focusable="False">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate DataType="{x:Type vm:StudioRoleRow}">
+                                                        <Border Style="{StaticResource Card}" Padding="10,8" Margin="0,0,0,6">
+                                                            <StackPanel>
+                                                                <DockPanel>
+                                                                    <TextBlock DockPanel.Dock="Right" Text="{Binding HolderText}" Style="{StaticResource MutedText}" FontSize="12"
+                                                                               VerticalAlignment="Center" Margin="10,0,0,0" />
+                                                                    <TextBox Text="{Binding Name, UpdateSourceTrigger=LostFocus}" FontWeight="SemiBold" AutomationProperties.Name="Role name" />
+                                                                </DockPanel>
+                                                                <TextBox Text="{Binding Definition, UpdateSourceTrigger=LostFocus}" AcceptsReturn="True" TextWrapping="Wrap" Margin="0,6,0,0"
+                                                                         MinHeight="54" VerticalContentAlignment="Top" AutomationProperties.Name="What the role expects" />
+                                                            </StackPanel>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>

@@ -19,7 +19,7 @@
     <DockPanel Margin="22,16">
         <TextBlock DockPanel.Dock="Top" Text="Tools" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,4" />
         <TextBlock DockPanel.Dock="Top" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,12"
-                   Text="Outside tools your AI agents may use for your work, such as ElevenLabs for voices or Suno for music. Agents see them with list_tools, and get an API key only when you allow it. They're kept on this computer: never in the workspace, its mirror or backups, or shared with anyone." />
+                   Text="Outside tools your AI agents may use for your work, such as ElevenLabs for voices, Suno for music or ffmpeg for video. Agents see them with list_tools, and get an API key only when you allow it. They're kept on this computer: never in the workspace, its mirror or backups, or shared with anyone." />
         <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
             <Button Content="Close" IsCancel="True" MinWidth="90" Click="Close_Click" />
         </StackPanel>
@@ -69,15 +69,67 @@
                     <TextBlock Text="{Binding WebsiteProblem}" Style="{StaticResource Problem}" Visibility="{Binding WebsiteProblem, Converter={StaticResource EmptyToVis}}" />
 
                     <TextBlock Text="Agents reach it" Style="{StaticResource Label}" />
-                    <StackPanel Orientation="Horizontal">
-                        <RadioButton x:Name="ByApi" Content="Through its API, with a key" IsChecked="{Binding IsApi}" Margin="0,0,18,0" />
-                        <RadioButton x:Name="ByBrowser" Content="In the browser" IsChecked="{Binding IsBrowser}" Margin="0,0,18,0" />
-                        <RadioButton x:Name="ByComfy" Content="ComfyUI (your own server)" IsChecked="{Binding IsComfy}" />
+                    <WrapPanel>
+                        <RadioButton x:Name="ByApi" Content="Through its API, with a key" IsChecked="{Binding IsApi}" Margin="0,0,18,4" />
+                        <RadioButton x:Name="ByBrowser" Content="In the browser" IsChecked="{Binding IsBrowser}" Margin="0,0,18,4" />
+                        <RadioButton x:Name="ByComfy" Content="ComfyUI (your own server)" IsChecked="{Binding IsComfy}" Margin="0,0,18,4" />
+                        <RadioButton x:Name="ByProgram" Content="A program on this computer" IsChecked="{Binding IsProgram}" Margin="0,0,0,4" />
+                    </WrapPanel>
+
+                    <!-- A program on this computer: where it is, its docs, where it saves what it makes -->
+                    <StackPanel x:Name="ProgramSection" Visibility="{Binding IsProgram, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Text="Where it is (the program, or the folder it's in)" Style="{StaticResource Label}" />
+                        <DockPanel>
+                            <Button DockPanel.Dock="Right" Content="Check" Margin="8,0,0,0" Command="{Binding CheckProgramCommand}"
+                                    ToolTip="Looks whether it's there (it doesn't start it)" />
+                            <Button DockPanel.Dock="Right" Content="Browse…" Margin="8,0,0,0" Command="{Binding BrowseProgramCommand}" />
+                            <TextBox x:Name="ProgramPathBox" Text="{Binding ProgramPath, UpdateSourceTrigger=LostFocus}" AutomationProperties.Name="Where it is" />
+                        </DockPanel>
+                        <TextBlock x:Name="CheckLine" Text="{Binding CheckText}" FontSize="12" TextWrapping="Wrap" Margin="2,4,0,0">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource MutedText}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding ProgramFound}" Value="False">
+                                            <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+
+                        <TextBlock Text="Its docs (a web page, or a file or folder on this computer)" Style="{StaticResource Label}" />
+                        <DockPanel>
+                            <Button DockPanel.Dock="Right" Content="Open" Margin="8,0,0,0" Command="{Binding OpenDocsCommand}" IsEnabled="{Binding HasDocs}" />
+                            <TextBox Text="{Binding Docs, UpdateSourceTrigger=LostFocus}" AutomationProperties.Name="Its docs" />
+                        </DockPanel>
+
+                        <TextBlock Text="Where it saves what it makes (agents pick it up there)" Style="{StaticResource Label}" />
+                        <DockPanel>
+                            <Button DockPanel.Dock="Right" Content="Open" Margin="8,0,0,0" Command="{Binding OpenOutputFolderCommand}" IsEnabled="{Binding HasOutputFolder}" />
+                            <Button DockPanel.Dock="Right" Content="Browse…" Margin="8,0,0,0" Command="{Binding BrowseOutputFolderCommand}" />
+                            <TextBox Text="{Binding OutputFolder, UpdateSourceTrigger=LostFocus}" AutomationProperties.Name="Where it saves what it makes" />
+                        </DockPanel>
+                        <TextBlock Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap" Margin="2,4,0,0"
+                                   Text="Agents get these in list_tools and run it themselves, on this computer; ProJict doesn't start it for them." />
                     </StackPanel>
 
-                    <!-- API: the key -->
-                    <StackPanel Visibility="{Binding IsApi, Converter={StaticResource BoolToVis}}">
-                        <TextBlock Text="API key" Style="{StaticResource Label}" />
+                    <!-- Browser: signed in once in ProJict's own browser, and how -->
+                    <StackPanel x:Name="SignInSection" Visibility="{Binding IsBrowser, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Text="ProJict's own browser, for agents (you sign in there once)" Style="{StaticResource Label}" />
+                        <StackPanel Orientation="Horizontal">
+                            <Button x:Name="SignInButton" Content="Sign in…" Command="{Binding OpenSignInCommand}" MinWidth="100"
+                                    ToolTip="Opens its website in a browser of its own, where you sign in yourself" />
+                            <Button Content="Sign out" Command="{Binding SignOutCommand}" Margin="8,0,0,0"
+                                    Visibility="{Binding IsSignedIn, Converter={StaticResource BoolToVis}}" ToolTip="Forgets the sign-in (deletes that browser's profile)" />
+                        </StackPanel>
+                        <TextBlock x:Name="SignInLine" Text="{Binding SignInText}" Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap" Margin="2,4,0,0" />
+                        <TextBlock Text="How you're signed in there (agents are told, e.g. “Google account, Pro plan”)" Style="{StaticResource Label}" />
+                        <TextBox Text="{Binding SignIn, UpdateSourceTrigger=LostFocus}" AutomationProperties.Name="How you're signed in" />
+                    </StackPanel>
+
+                    <!-- API: the key (a browser tool's too, when it also has an API) -->
+                    <StackPanel Visibility="{Binding TakesKey, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Text="{Binding KeyLabel}" Style="{StaticResource Label}" />
                         <DockPanel>
                             <Button DockPanel.Dock="Right" Content="Remove key" Margin="8,0,0,0" Command="{Binding RemoveKeyCommand}"
                                     Visibility="{Binding HasKey, Converter={StaticResource BoolToVis}}" />
@@ -87,11 +139,6 @@
                         <TextBlock Text="{Binding KeyText}" Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap" Margin="2,4,0,0" />
                     </StackPanel>
 
-                    <!-- Browser: how you're signed in -->
-                    <StackPanel Visibility="{Binding IsBrowser, Converter={StaticResource BoolToVis}}">
-                        <TextBlock Text="How you're signed in there (agents are told; you sign in yourself)" Style="{StaticResource Label}" />
-                        <TextBox Text="{Binding SignIn, UpdateSourceTrigger=LostFocus}" AutomationProperties.Name="How you're signed in" />
-                    </StackPanel>
 
                     <!-- ComfyUI: its servers and its workflow library -->
                     <StackPanel x:Name="ComfySection" Visibility="{Binding IsComfy, Converter={StaticResource BoolToVis}}">
@@ -164,7 +211,7 @@
                         </ScrollViewer>
                     </Border>
 
-                    <StackPanel Visibility="{Binding IsApi, Converter={StaticResource BoolToVis}}">
+                    <StackPanel Visibility="{Binding TakesKey, Converter={StaticResource BoolToVis}}">
                         <TextBlock Text="Agents that may always have the key" Style="{StaticResource Label}" />
                         <TextBlock Text="{Binding AllowedHint}" Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap" Margin="2,0,0,4" />
                         <ItemsControl ItemsSource="{Binding Allowed}" Focusable="False">

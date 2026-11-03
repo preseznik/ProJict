@@ -406,6 +406,22 @@
             </DockPanel>
         </Border>
 
+        <!-- An agent is using a tool's browser (Suno, Tripo3D): Watch shows it (you can click in it too), Stop ends it -->
+        <Border x:Name="BrowserBar" Padding="14,8" Background="{DynamicResource SystemFillColorAttentionBackgroundBrush}"
+                BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}" BorderThickness="0,1,0,0"
+                Visibility="{Binding HasBrowserInUse, Converter={StaticResource BoolToVis}}">
+            <DockPanel>
+                <TextBlock Style="{StaticResource Icon}" Text="&#xE774;" Margin="0,0,10,0" />
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <Button Style="{StaticResource SubtleButton}" Content="Watch" Command="{Binding WatchBrowserCommand}" Margin="6,0"
+                            ToolTip="Shows the page it's on; you can click and type in it too" />
+                    <Button Style="{StaticResource SubtleButton}" Content="Stop" Command="{Binding StopBrowserCommand}"
+                            ToolTip="Ends its use of the browser; it's told" />
+                </StackPanel>
+                <TextBlock x:Name="BrowserBarText" Text="{Binding BrowserInUseText}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+            </DockPanel>
+        </Border>
+
         <!-- A code to type on your other computer, to confirm it's you -->
         <Border Padding="14,8" Background="{DynamicResource SystemFillColorAttentionBackgroundBrush}"
                 BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}" BorderThickness="0,1,0,0"

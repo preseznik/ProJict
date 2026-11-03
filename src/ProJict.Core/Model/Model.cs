@@ -362,8 +362,14 @@ public sealed class Project
     public List<CleanupRequest>? Cleanups { get; set; }
     /// <summary>The clean-up waiting for a plan or your decision: agents do no other work here meanwhile.</summary>
     [JsonIgnore] public CleanupRequest? OpenCleanup => Cleanups?.LastOrDefault(c => c.IsOpen);
-    /// <summary>The project's game studio, if it has one: its roles and the agents hired to them.</summary>
+    /// <summary>The project's studio, if it has one: its roles and the agents hired to them (its first, when it has two).</summary>
     public Studio? Studio { get; set; }
+    /// <summary>Its second studio, of the other kind (a game studio and a film studio); older ProJicts don't know it.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Studio? SecondStudio { get; set; }
+    /// <summary>The office isn't one of the project's rooms in the Agents view, only its studios: agents nobody hired wait in their lobbies.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool OfficeClosed { get; set; }
     /// <summary>Ship requests, oldest first (the last few are kept); null while there were none. Not part of undo.</summary>
     public List<ShipRequest>? Ships { get; set; }
     /// <summary>Videos' publish plans, oldest first (the last few are kept); null while there were none. Not part of undo.</summary>
@@ -429,6 +435,8 @@ public sealed class Project
             TestBuild = snapshot.TestBuild;
             Cleanups = snapshot.Cleanups;
             Studio = snapshot.Studio;
+            SecondStudio = snapshot.SecondStudio;
+            OfficeClosed = snapshot.OfficeClosed;
             GitHubRelease = snapshot.GitHubRelease;
         }
     }

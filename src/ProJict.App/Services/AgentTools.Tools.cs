@@ -18,7 +18,8 @@ public sealed partial class AgentTools
     {
         Add("list_tools", "List outside tools",
             "The outside tools the user set up for agents (Settings › Tools), such as ElevenLabs for voices and sound or Suno for music: what each is for, " +
-            "whether you reach it through its API (get the key with use_tool_key) or on its website in your browser, how the user is signed in there, " +
+            "whether you reach it through its API (get the key with use_tool_key), on its website in your browser, or as a program on this computer " +
+            "(ffmpeg: where it is, its docs and where it saves what it makes), how the user is signed in there, " +
             "the budget they set, and which are set up for a project. Use them for the work they're for, within the budget.",
             Schema(("project", "string", "Mark the tools set up for this project (name or key); defaults to the project matching your working directory.", false)),
             ListTools, readOnly: true);
@@ -35,10 +36,11 @@ public sealed partial class AgentTools
     {
         ["tool"] = tool.Name,
         ["purpose"] = tool.Purpose.Length > 0 ? tool.Purpose : null,
-        ["access"] = tool.Access switch { ToolAccess.Api => "api", ToolAccess.ComfyUI => "comfyui", _ => "browser" },
+        ["access"] = tool.Access switch { ToolAccess.Api => "api", ToolAccess.ComfyUI => "comfyui", ToolAccess.Program => "program", _ => "browser" },
         ["website"] = tool.Website,
-        ["keySet"] = tool.Access == ToolAccess.Api ? tool.HasKey : null,
+        ["keySet"] = tool.Access == ToolAccess.Api ? tool.HasKey : tool.Access == ToolAccess.Browser && tool.HasKey ? true : null,
         ["signedInAs"] = tool.Access == ToolAccess.Browser ? tool.SignIn : null,
+        ["signedInInProJictsBrowser"] = tool.Access == ToolAccess.Browser && tool.SignedInAt is { } at ? at.ToString("yyyy-MM-dd HH:mm") : null,
         ["budget"] = tool.Budget,
         ["forThisProject"] = project != null && tool.Projects.Contains(project.Id) ? true : null,
         ["projects"] = tool.Projects.Count > 0
@@ -46,13 +48,35 @@ public sealed partial class AgentTools
             : null,
         ["howToUse"] = tool.Access switch
         {
-            ToolAccess.Browser => $"On its website{(tool.Website != null ? $" ({tool.Website})" : "")}, with your own browser tools; the user signs in there themself.",
+            ToolAccess.Browser => $"In ProJict's own browser: browser_open tool={tool.Name}, then browser_read, browser_click, browser_type and browser_wait. " +
+                (tool.SignedInAt != null ? "The user signed in there; " : "The user hasn't signed in there yet: if the site wants a sign-in, ask them; ") +
+                "leave paying, passwords and signing in to them." +
+                (tool.HasKey ? " It also has an API: get its key with use_tool_key (the website and the API may use separate credits)." : ""),
             ToolAccess.ComfyUI => tool.RunsOff ? "Read its workflows with get_workflow; the user doesn't let agents run them."
                 : "Run one of its workflows with run_workflow (ProJict queues it and attaches what it makes to an item), or get one with get_workflow and call ComfyUI yourself.",
+            ToolAccess.Program => ProgramCheck.Of(tool.ProgramPath).Found
+                ? "A program on the user's computer: run it yourself (from your shell, if you're on this computer), following its docs. " +
+                  "Attach or link what it makes to the item you work on."
+                : "A program on the user's computer, but its place isn't set or it isn't there: ask the user to set it in Settings › Tools.",
             _ => tool.HasKey ? "Through its API: get the key with use_tool_key." : "Through its API, once the user sets its key in Settings › Tools (ask them).",
         },
         ["comfyui"] = tool.Access == ToolAccess.ComfyUI ? ComfyJson(tool) : null,
+        ["program"] = tool.Access == ToolAccess.Program ? ProgramJson(tool) : null,
     };
+
+    /// <summary>A program on this computer: where it is (and whether it's there), its docs, where it saves what it makes.</summary>
+    private static JsonObject ProgramJson(ExternalTool tool)
+    {
+        var (found, text) = ProgramCheck.Of(tool.ProgramPath);
+        return new JsonObject
+        {
+            ["path"] = ProgramCheck.Clean(tool.ProgramPath),
+            ["found"] = found,
+            ["check"] = text,
+            ["docs"] = tool.Docs,
+            ["outputFolder"] = tool.OutputFolder,
+        };
+    }
 
     private string ListTools(McpSession session, Args args, List<Attachment> files)
     {
@@ -78,7 +102,10 @@ public sealed partial class AgentTools
             ToolProblem.NotFound);
         if (tool.Access == ToolAccess.ComfyUI)
             throw new McpToolException($"{tool.Name} is a ComfyUI server of the user's: it needs no key. Use run_workflow (or get_workflow).");
-        if (tool.Access == ToolAccess.Browser)
+        if (tool.Access == ToolAccess.Program)
+            throw new McpToolException($"{tool.Name} is a program on the user's computer: it needs no key. " +
+                                       (ProgramCheck.Clean(tool.ProgramPath) is { } path ? $"Run it yourself: {path}." : "Its place isn't set yet: ask the user to set it in Settings › Tools."));
+        if (tool.Access == ToolAccess.Browser && !tool.HasKey)
             throw new McpToolException($"{tool.Name} is used in the browser, without a key: {(tool.Website != null ? $"open {tool.Website} " : "open its website ")}" +
                                        "with your own browser tools; the user signs in there themself.");
         if (!tool.HasKey) throw new McpToolException($"The user hasn't set an API key for {tool.Name} yet: ask them to, in Settings › Tools.", ToolProblem.NotFound);

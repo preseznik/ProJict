@@ -527,7 +527,7 @@
                                   Visibility="{Binding InStudio, Converter={StaticResource BoolToVis}}" />
                         <MenuItem Header="Swap roles with" ItemsSource="{Binding SwapChoices}" DisplayMemberPath="Text" Click="StudioChoice_Click"
                                   Visibility="{Binding HasSwapChoices, Converter={StaticResource BoolToVis}}" />
-                        <MenuItem Header="Fire (back to the lobby)" Command="{Binding FireCommand}" Visibility="{Binding CanFire, Converter={StaticResource BoolToVis}}" />
+                        <MenuItem Header="{Binding FireText}" Command="{Binding FireCommand}" Visibility="{Binding CanFire, Converter={StaticResource BoolToVis}}" />
                     </ContextMenu>
                 </Canvas.ContextMenu>
                 <Canvas>

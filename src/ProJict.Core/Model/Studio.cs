@@ -38,9 +38,10 @@ public sealed class StudioHire
 }
 
 /// <summary>
-/// A project's game studio: the Agents view shows it as the project's room, with a station per role. Agents working in
-/// the project come in unassigned and wait in the lobby until you hire them to a role; the role and what it expects
-/// are theirs from then on (by their name), until you fire them or put someone else in it.
+/// A project's game or film studio: the Agents view shows it as one of the project's rooms, with a station per role.
+/// Agents working in the project stay in the office (or wait in the lobby, while the office is closed) until you hire them
+/// to a role; the role and what it expects are theirs from then on (by their name), until you fire them or put someone
+/// else in it. A project has at most one studio of each kind.
 /// </summary>
 public sealed class Studio
 {
@@ -58,6 +59,9 @@ public sealed class Studio
     /// <summary>Only pages in this folder (and below), e.g. "GRID2VR/Design"; null: every page about the project.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? LeadReviewFolder { get; set; }
+    /// <summary>Closed for now: not one of the project's rooms, but its roles and hires are kept for when it opens again.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Closed { get; set; }
     /// <summary>Hires that ended lately (fired, or someone else took the role), so the agent hears it.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<StudioHire>? Ended { get; set; }

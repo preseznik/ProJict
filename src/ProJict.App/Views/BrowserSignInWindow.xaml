@@ -1,0 +1,22 @@
+<Window x:Class="ProJict.App.Views.BrowserSignInWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+        Width="1100" Height="820" MinWidth="640" MinHeight="480" WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+    <!-- A tool's website in ProJict's own browser, with the tool's own profile: you sign in there yourself, once. -->
+    <DockPanel>
+        <Border DockPanel.Dock="Top" Padding="16,10" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}">
+            <DockPanel>
+                <Button x:Name="DoneButton" DockPanel.Dock="Right" Content="Done: I'm signed in" Style="{StaticResource AccentButtonStyle}" MinWidth="150"
+                        Margin="12,0,0,0" VerticalAlignment="Center" Click="Done_Click" />
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock x:Name="Headline" FontWeight="SemiBold" />
+                    <TextBlock x:Name="Hint" Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,0" />
+                </StackPanel>
+            </DockPanel>
+        </Border>
+        <TextBlock x:Name="Problem" DockPanel.Dock="Top" Visibility="Collapsed" Margin="16,10" TextWrapping="Wrap"
+                   Foreground="{DynamicResource SystemFillColorCriticalBrush}" />
+        <wv2:WebView2 x:Name="Web" />
+    </DockPanel>
+</Window>

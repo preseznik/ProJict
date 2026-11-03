@@ -21,7 +21,7 @@ public sealed partial class ToolEditorViewModel
             if (!value || tool.Access == ToolAccess.ComfyUI) return;
             tool.Access = ToolAccess.ComfyUI;
             if (tool.Endpoints is not { Count: > 0 }) tool.Endpoints = [new ComfyEndpoint { Name = "This computer", Address = "http://127.0.0.1:8188" }];
-            Changed(nameof(IsApi), nameof(IsBrowser), nameof(IsComfy));
+            Changed(nameof(IsApi), nameof(IsBrowser), nameof(IsComfy), nameof(IsProgram), nameof(TakesKey), nameof(KeyLabel));
             RefreshComfy();
         }
     }

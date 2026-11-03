@@ -406,14 +406,47 @@
                         </StackPanel>
                     </ToggleButton>
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <TextBlock Text="{Binding OfficeTitle}" FontWeight="SemiBold" VerticalAlignment="Center" />
-                        <!-- One of your projects without a studio: set one up, and it's the project's room from then on. -->
-                        <StackPanel x:Name="SetUpStudio" Orientation="Horizontal" Margin="12,0,0,0" Visibility="{Binding CanSetUpStudio, Converter={StaticResource BoolToVis}}">
-                            <TextBlock Text="Set up a studio:" Style="{StaticResource MutedText}" VerticalAlignment="Center" Margin="0,0,4,0" />
-                            <Button Style="{StaticResource SubtleButton}" Content="Game" Command="{Binding SetUpStudioCommand}" CommandParameter="Game" Padding="8,3"
-                                    ToolTip="Make this project's room a game studio: a station per role (designers, programmer, artist, sound, QA…), and agents wait in the lobby until you hire them" />
-                            <Button Style="{StaticResource SubtleButton}" Content="Film" Command="{Binding SetUpStudioCommand}" CommandParameter="Film" Padding="8,3"
-                                    ToolTip="Make this project's room a film studio: a station per role (director, writer, capture, editor, sound, thumbnails, publisher, producer), and agents wait in the lobby until you hire them" />
+                        <TextBlock Text="{Binding OfficeTitle}" FontWeight="SemiBold" VerticalAlignment="Center"
+                                   Visibility="{Binding ShowRoomTabs, Converter={StaticResource InvBoolToVis}}" />
+                        <!-- The project's rooms (its office and studios), when it has more than one open: the one shown can be closed. -->
+                        <ItemsControl x:Name="RoomTabs" ItemsSource="{Binding RoomTabs}" Focusable="False" VerticalAlignment="Center"
+                                      Visibility="{Binding ShowRoomTabs, Converter={StaticResource BoolToVis}}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:RoomTab}">
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,4,0">
+                                        <ToggleButton Style="{StaticResource SubtleToggle}" IsChecked="{Binding IsSelected, Mode=OneWay}" Command="{Binding Select}"
+                                                      Content="{Binding Name}" Padding="9,3" ToolTip="{Binding ToolTip}" AutomationProperties.Name="{Binding Name}" />
+                                        <!-- The room shown closes from its own tab. -->
+                                        <Button x:Name="CloseRoom" Style="{StaticResource SubtleButton}" Command="{Binding Close}" Padding="5,4" Margin="1,0,0,0"
+                                                ToolTip="{Binding CloseToolTip}" AutomationProperties.Name="{Binding CloseToolTip}"
+                                                Visibility="{Binding CanClose, Converter={StaticResource BoolToVis}}">
+                                            <TextBlock Style="{StaticResource Icon}" Text="&#xE711;" FontSize="10" />
+                                        </Button>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <!-- Rooms the project could open: a studio of each kind (set up, or again with its roles and hires), and its office. -->
+                        <StackPanel x:Name="SetUpStudio" Orientation="Horizontal" Margin="12,0,0,0" Visibility="{Binding HasRoomsToOpen, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="{Binding OpenRoomsLabel}" Style="{StaticResource MutedText}" VerticalAlignment="Center" Margin="0,0,4,0" />
+                            <ItemsControl x:Name="RoomsToOpen" ItemsSource="{Binding RoomsToOpen}" Focusable="False" VerticalAlignment="Center">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:RoomChoice}">
+                                        <Button Style="{StaticResource SubtleButton}" Content="{Binding Name}" Command="{Binding Open}" CommandParameter="{Binding Room}"
+                                                Padding="8,3" ToolTip="{Binding ToolTip}" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
                         </StackPanel>
                     </StackPanel>
                 </DockPanel>
