@@ -74,6 +74,7 @@
                     </Viewbox>
                 </Border>
                 <!-- In the studio: the station's things, by role: a board on the wall above the monitor, something on the desk -->
+                <Canvas x:Name="ClassicThings">
                 <Canvas x:Name="LeadThings" Visibility="Collapsed">
                     <Rectangle Canvas.Left="12" Canvas.Top="-148" Width="32" Height="30" RadiusX="3" RadiusY="3" Fill="#FEF3C7" Stroke="#D97706" StrokeThickness="2" />
                     <Path Fill="#F59E0B" Data="M 28,-143 L 31,-136 L 38.5,-135.5 L 33,-130.5 L 34.5,-123 L 28,-127 L 21.5,-123 L 23,-130.5 L 17.5,-135.5 L 25,-136 Z" />
@@ -237,6 +238,22 @@
                     <Rectangle Canvas.Left="55" Canvas.Top="-72" Width="9" Height="1.2" Fill="#6B7280" />
                     <Rectangle Canvas.Left="55" Canvas.Top="-68" Width="7" Height="1.2" Fill="#6B7280" />
                 </Canvas>
+                </Canvas>
+                <!--
+                    The drawn look: the station's thing stands on the desk, left of the monitor (a board on the wall would float
+                    over the desks in front). Never mirrored, with the room's night tint over it while it's dark.
+                -->
+                <Grid x:Name="DrawnThing" Canvas.Left="-22" Canvas.Top="-95" Width="28" Height="28" Visibility="Collapsed" RenderTransformOrigin="0.5,0.5">
+                    <Grid.RenderTransform>
+                        <ScaleTransform ScaleX="{Binding TextFlip}" />
+                    </Grid.RenderTransform>
+                    <Image Source="{Binding Prop}" Stretch="Uniform" VerticalAlignment="Bottom" />
+                    <Rectangle Fill="#8C0B122E" Visibility="{Binding DataContext.IsDarkRoom, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVis}}">
+                        <Rectangle.OpacityMask>
+                            <ImageBrush ImageSource="{Binding Prop}" Stretch="Uniform" AlignmentY="Bottom" />
+                        </Rectangle.OpacityMask>
+                    </Rectangle>
+                </Grid>
                 <!-- Monitor -->
                 <Rectangle Canvas.Left="24" Canvas.Top="-72" Width="6" Height="11" Fill="{StaticResource Metal}" />
                 <Rectangle Canvas.Left="16" Canvas.Top="-64" Width="22" Height="3" RadiusX="1" RadiusY="1" Fill="{StaticResource Metal}" />
@@ -292,6 +309,8 @@
                 <DataTrigger Binding="{Binding DataContext.IsDrawnLook, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="True">
                     <Setter TargetName="ClassicFurniture" Property="Visibility" Value="Collapsed" />
                     <Setter TargetName="DrawnFurniture" Property="Visibility" Value="Visible" />
+                    <Setter TargetName="ClassicThings" Property="Visibility" Value="Collapsed" />
+                    <Setter TargetName="DrawnThing" Property="Visibility" Value="Visible" />
                 </DataTrigger>
                 <DataTrigger Binding="{Binding Screen}" Value="Building">
                     <Setter TargetName="Code" Property="Visibility" Value="Visible" />
@@ -918,7 +937,7 @@
                     </Canvas>
                     </Canvas>
                     <!-- The studio's milestone board: how much of the project is done, and of each category; a click shows it on the board -->
-                    <Border x:Name="MilestoneBoard" Canvas.Left="484" Canvas.Top="102" Width="92" CornerRadius="2" Background="White" BorderBrush="#9CA3AF" BorderThickness="1.5"
+                    <Border x:Name="MilestoneBoard" Canvas.Left="{Binding MilestoneX}" Canvas.Top="{Binding MilestoneY}" Width="92" CornerRadius="2" Background="White" BorderBrush="#9CA3AF" BorderThickness="1.5"
                             Padding="5,4,5,3" Visibility="{Binding IsStudio, Converter={StaticResource BoolToVis}}">
                         <StackPanel>
                             <TextBlock Text="MILESTONES" FontSize="7" FontWeight="Bold" Foreground="#6B7280" />
@@ -987,6 +1006,7 @@
                                 <TextBlock Text="{Binding BannerText}" FontSize="13" FontWeight="Bold" Foreground="White" />
                             </Viewbox>
                         </Border>
+                        <Canvas Visibility="{Binding ShowsClassicRoom, Converter={StaticResource BoolToVis}}">
                         <Rectangle Canvas.Left="230" Canvas.Top="212" Width="42" Height="88" Fill="#8E6A45" />
                         <Rectangle Canvas.Left="234" Canvas.Top="216" Width="34" Height="84" Fill="#B88A5A" />
                         <Rectangle Canvas.Left="238" Canvas.Top="222" Width="26" Height="30" Fill="#A0784C" Opacity="0.6" />
@@ -999,10 +1019,41 @@
                         <Rectangle Canvas.Left="334" Canvas.Top="270" Width="140" Height="5" RadiusX="2" RadiusY="2" Fill="#A0784C" />
                         <Rectangle Canvas.Left="340" Canvas.Top="289" Width="4" Height="11" Fill="{StaticResource Metal}" />
                         <Rectangle Canvas.Left="464" Canvas.Top="289" Width="4" Height="11" Fill="{StaticResource Metal}" />
+                        </Canvas>
+                        <Canvas x:Name="DrawnLobby" Visibility="{Binding IsDrawnLook, Converter={StaticResource BoolToVis}}">
+                            <Grid Canvas.Left="{Binding BenchX}" Canvas.Top="{Binding BenchY}" Width="{Binding BenchWidth}" Height="{Binding BenchHeight}">
+                                <Image Source="/ProJict;component/Assets/Office/Props/bench.png" Stretch="Fill" />
+                                <Rectangle Fill="#8C0B122E" Visibility="{Binding IsDarkRoom, Converter={StaticResource BoolToVis}}">
+                                    <Rectangle.OpacityMask>
+                                        <ImageBrush ImageSource="/ProJict;component/Assets/Office/Props/bench.png" />
+                                    </Rectangle.OpacityMask>
+                                </Rectangle>
+                            </Grid>
+                            <Border Canvas.Left="{Binding LobbySignX}" Canvas.Top="{Binding LobbySignY}" Width="38" Height="12" CornerRadius="2" Background="#1F2937">
+                                <TextBlock Text="LOBBY" FontSize="7.5" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                        </Canvas>
                     </Canvas>
                     <!-- How warm it is: a tint over the room, and the thermostat (only for fun) -->
                     <Rectangle Width="800" Height="520" Fill="{Binding RoomTint}" IsHitTestVisible="False" />
-                    <Border x:Name="Thermostat" Canvas.Left="228" Canvas.Top="204" Width="24" Height="32" CornerRadius="4" Background="#F8FAFC" BorderBrush="#94A3B8"
+                    <Canvas Canvas.Left="{Binding ThermostatX}" Canvas.Top="{Binding ThermostatY}">
+                    <Grid x:Name="DrawnThermostat" Width="30" Height="31" Cursor="Hand" Background="Transparent" ToolTip="{Binding ThermostatToolTip}" AutomationProperties.Name="Thermostat"
+                          Visibility="{Binding IsDrawnLook, Converter={StaticResource BoolToVis}}">
+                        <Grid.InputBindings>
+                            <MouseBinding MouseAction="LeftClick" Command="{Binding TurnThermostatCommand}" />
+                        </Grid.InputBindings>
+                        <Image Source="/ProJict;component/Assets/Office/Props/thermostat.png" Stretch="Fill" />
+                        <Rectangle Fill="#8C0B122E" Visibility="{Binding IsDarkRoom, Converter={StaticResource BoolToVis}}">
+                            <Rectangle.OpacityMask>
+                                <ImageBrush ImageSource="/ProJict;component/Assets/Office/Props/thermostat.png" />
+                            </Rectangle.OpacityMask>
+                        </Rectangle>
+                        <!-- Its display shows the temperature (glowing at night too), and its dial how it's set -->
+                        <TextBlock Margin="0,3.6,0,0" HorizontalAlignment="Center" VerticalAlignment="Top" Text="{Binding ThermostatText}" FontSize="5.4" FontWeight="Bold" Foreground="#1E3A2B" />
+                        <Ellipse Width="5.5" Height="5.5" Margin="0,0,0,7.2" HorizontalAlignment="Center" VerticalAlignment="Bottom" Fill="{Binding ThermostatDial}" Opacity="0.9" />
+                    </Grid>
+                    <Border x:Name="Thermostat" Width="24" Height="32" CornerRadius="4" Background="#F8FAFC" BorderBrush="#94A3B8"
+                            Visibility="{Binding ShowsClassicRoom, Converter={StaticResource BoolToVis}}"
                             BorderThickness="1.2" Cursor="Hand" ToolTip="{Binding ThermostatToolTip}" AutomationProperties.Name="Thermostat">
                         <Border.InputBindings>
                             <MouseBinding MouseAction="LeftClick" Command="{Binding TurnThermostatCommand}" />
@@ -1012,6 +1063,7 @@
                             <TextBlock Text="{Binding ThermostatText}" FontSize="7.5" FontWeight="SemiBold" HorizontalAlignment="Center" Foreground="#334155" />
                         </StackPanel>
                     </Border>
+                    </Canvas>
                     <!-- Desks and agents, back to front -->
                     <ItemsControl ItemsSource="{Binding Scene}" Focusable="False">
                         <ItemsControl.ItemsPanel>
