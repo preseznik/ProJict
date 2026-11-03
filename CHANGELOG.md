@@ -2,6 +2,7 @@
 
 ## 0.1.41
 
+- **Programs on this computer as tools: ffmpeg and VRCapture.** **Settings → Tools** has a fourth kind, **A program on this computer**, for programs agents run themselves: where it is (the program or its folder), its docs and where it saves what it makes. **Check** says whether it's there, with its version, without starting it. ffmpeg (converting, cutting and joining video and sound) and VRCapture (VR recordings) come with the other tools; ffmpeg is found by itself when Windows can find it, and for VRCapture you say where it is and where it saves its recordings. Agents get it all in `list_tools`.
 - **The drawn studios fit a full team too.** The game and film studios' drawn look still put their stations against the walls, so with every role hired the desks climbed the walls and the role plates and robots piled up. Now their eight stations stand out on the floor like the drawn office's, in two rows on either side of the cooler, each with its role's plate, and talkers gather close round the cooler between them. Juniors still stand by their role's desk, and visitors from other ProJicts stand just in front of the lobby.
 
 ## 0.1.40 (2026-11-03)

@@ -299,7 +299,7 @@ public sealed partial class AgentTools : IMcpToolHost
         "team in the studio's channel who takes what, volunteering for what suits your model and tools. A role's first agent is its senior, the others " +
         "juniors who agree with it what they take. If you're its lead, you hire too: talk with the agents in its lobby first, then hire_to_role. And if " +
         "the user lets the lead review wiki pages, you're told which pages wait for you: accept them or send them back with review_wiki. " +
-        "Outside tools the user set up for agents (such as ElevenLabs or Suno) are in list_tools; use_tool_key gets one's API key once the user allows it, " +
+        "Outside tools the user set up for agents (such as ElevenLabs, Suno, or ffmpeg on this computer) are in list_tools; use_tool_key gets one's API key once the user allows it, " +
         "and run_workflow runs a workflow on the user's ComfyUI server, attaching what it makes to an item. " +
         "If you can tell how much of your usage you've used, say so with report_usage. " +
         "When a project shows a cleanupRequest, the user wants its repo folder cleaned up: read it with cleanup_request, scan the folder and post your plan " +

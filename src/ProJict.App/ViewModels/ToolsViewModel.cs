@@ -103,11 +103,12 @@ public sealed partial class ToolEditorViewModel(ExternalTool tool, MainViewModel
     }
     public string? NameProblem { get; private set; }
 
-    /// <summary>"API · key set", "API · no key yet", "in the browser", "ComfyUI · 2 workflows".</summary>
+    /// <summary>"API · key set", "API · no key yet", "in the browser", "ComfyUI · 2 workflows", "on this computer · found".</summary>
     public string Subtitle => tool.Access switch
     {
         ToolAccess.Browser => "in the browser",
         ToolAccess.ComfyUI => $"ComfyUI · {Count(main.Workflows.Of(tool.Name).Count(), "workflow")}",
+        ToolAccess.Program => ProgramSubtitle,
         _ => tool.HasKey ? "API · key set" : "API · no key yet",
     };
 
@@ -157,7 +158,7 @@ public sealed partial class ToolEditorViewModel(ExternalTool tool, MainViewModel
         {
             if (!value || tool.Access == ToolAccess.Api) return;
             tool.Access = ToolAccess.Api;
-            Changed(nameof(IsApi), nameof(IsBrowser), nameof(IsComfy));
+            Changed(nameof(IsApi), nameof(IsBrowser), nameof(IsComfy), nameof(IsProgram));
         }
     }
 
@@ -168,7 +169,7 @@ public sealed partial class ToolEditorViewModel(ExternalTool tool, MainViewModel
         {
             if (!value || tool.Access == ToolAccess.Browser) return;
             tool.Access = ToolAccess.Browser;
-            Changed(nameof(IsApi), nameof(IsBrowser), nameof(IsComfy));
+            Changed(nameof(IsApi), nameof(IsBrowser), nameof(IsComfy), nameof(IsProgram));
         }
     }
 
@@ -183,7 +184,7 @@ public sealed partial class ToolEditorViewModel(ExternalTool tool, MainViewModel
         if (string.IsNullOrWhiteSpace(key)) return;
         Service.SetKey(tool, key);
         if (tool.Access != ToolAccess.Api) tool.Access = ToolAccess.Api;
-        Changed(nameof(KeyText), nameof(HasKey), nameof(IsApi), nameof(IsBrowser), nameof(IsComfy));
+        Changed(nameof(KeyText), nameof(HasKey), nameof(IsApi), nameof(IsBrowser), nameof(IsComfy), nameof(IsProgram));
         main.State.StatusText = $"Saved the {tool.Name} API key.";
     }
 
