@@ -31,6 +31,8 @@ public sealed partial class AppState : ObservableObject
         Workspace = store.Load();
         _saveTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _saveTimer.Tick += (_, _) => SaveNow();
+        // Game studios from before the UI designer and Cinematics roles get them, nobody hired yet.
+        foreach (var project in Workspace.Projects.Where(StudioFlow.AddNewRoles).ToList()) MarkDirty(project, touch: false);
         Chat = new ChatRoom(store.LoadChannels(), () => UserName);
         store.CacheRoot = PrivateFilesRoot;
         // A private conversation's files, and a channel's big ones, go to the Chat cache, out of the data folder (the

@@ -24,7 +24,8 @@ public sealed partial class OfficeViewModel : ObservableObject
     public const double Height = 520;
     /// <summary>Where the back wall meets the floor (y), and the room's back corners (x).</summary>
     private const double BackY = 300, BackLeft = 220, BackRight = 580;
-    private static readonly double[] DeskDepths = [0.18, 0.40, 0.62, 0.84];
+    /// <summary>How far to the front each side's five desks stand (a studio's ten places: <see cref="StudioFlow.PlaceOf"/>).</summary>
+    private static readonly double[] DeskDepths = [0.10, 0.30, 0.50, 0.70, 0.90];
     /// <summary>Where the water cooler stands, at the front of the room in the middle (its base).</summary>
     public const double CoolerX = 400, CoolerY = 460;
     /// <summary>
@@ -56,6 +57,8 @@ public sealed partial class OfficeViewModel : ObservableObject
     public bool IsStudio => StudioName != null;
     /// <summary>A film studio: a green screen on the back wall.</summary>
     [ObservableProperty] private bool _isFilm;
+    /// <summary>A studio whose project has its office closed: agents nobody hired wait in its lobby (by the bench, under the LOBBY sign).</summary>
+    [ObservableProperty] private bool _showsLobby;
     public string BannerText => StudioName is not { } name ? "" : Board is { Total: > 0 } board ? $"{name} studio · {board.Percent}% done" : $"{name} studio";
 
     /// <summary>The studio's milestone board: how much of the project is done, and of its categories.</summary>
@@ -208,8 +211,15 @@ public sealed partial class OfficeViewModel : ObservableObject
         }
         StudioName = studio?.ProjectName;
         IsFilm = studio?.Studio.Kind == StudioKind.Film;
+        ShowsLobby = studio is { HasOffice: false };
         ShowBoard(studio?.Board);
-        for (var i = 0; i < Desks.Count; i++) Desks[i].SetRole(studio?.Studio.Roles.FirstOrDefault(r => StudioFlow.PlaceOf(r.Station) == i));
+        for (var i = 0; i < Desks.Count; i++)
+        {
+            // A studio shows only its roles' stations (a film studio has eight of the ten places).
+            var role = studio?.Studio.Roles.FirstOrDefault(r => StudioFlow.PlaceOf(r.Station) == i);
+            Desks[i].SetRole(role);
+            Desks[i].IsShown = studio == null || role != null;
+        }
         if (studio != null)
         {
             // In the studio a desk is a role's station: its senior works there (a junior, while the senior isn't here),
@@ -442,6 +452,9 @@ public sealed partial class OfficeDeskViewModel : ObservableObject
     [ObservableProperty] private DeskScreen _screen = DeskScreen.Empty;
 
     public void Show(DeskScreen? screen) => Screen = screen ?? DeskScreen.Empty;
+
+    /// <summary>Hidden in a studio that has no role at this place.</summary>
+    [ObservableProperty] private bool _isShown = true;
 
     /// <summary>In the studio: the role that works here, drawn with its station's things and a name plate (null in the office).</summary>
     [ObservableProperty] private StudioStation? _station;

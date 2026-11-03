@@ -27,7 +27,8 @@ public sealed partial class ProjectViewModel
         ? "Each studio is one of the project's rooms in the Agents view, beside its office (which you can close there). Each role and what it expects: " +
           "an agent is told this when you hire it (right-click its robot in the Agents view), and current_project shows the latest."
         : "A room of the project's in the Agents view, with a station per role. A game studio has lead and game designers, a level designer, programmer, " +
-          "artist, sound engineer, QA and producer; a film studio a director, writer, capture, editor, sound, thumbnail & graphics, publisher and producer. " +
+          "artist, sound engineer, QA, producer, UI designer and cinematics; a film studio a director, writer, capture, editor, sound, thumbnail & graphics, " +
+          "publisher and producer. " +
           "A project can have both. Agents working here stay in the office until you hire them to a role, and are told what it expects.";
 
     /// <summary>Set up a studio: "Game" or "Film".</summary>
