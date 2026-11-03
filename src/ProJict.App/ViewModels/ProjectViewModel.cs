@@ -26,9 +26,8 @@ public sealed partial class ProjectViewModel : ObservableObject
     private const string NoTag = "No tag";
 
     private readonly AppState _state;
-    private readonly List<string> _undo = [];
-    private readonly List<string> _redo = [];
-    private bool _textEditOpen;
+    /// <summary>Undo and redo, by snapshots of the project (in Core, so another front end can use it too).</summary>
+    private readonly UndoHistory _history = new(MaxUndo);
     private Guid? _focusedItemId;
 
     public ProjectViewModel(AppState state, MainViewModel main, Project project)
@@ -627,13 +626,13 @@ public sealed partial class ProjectViewModel : ObservableObject
     {
         FocusedRow = row;
         _focusedItemId = row.Item.Id;
-        _textEditOpen = false;
+        _history.EndTyping();
     }
 
     public void OnRowLostFocus(ItemRowViewModel row)
     {
         if (_focusedItemId == row.Item.Id) _focusedItemId = null;
-        _textEditOpen = false;
+        _history.EndTyping();
         var item = row.Item;
 
         // "BUG: crash" typed into the text becomes a tag.
@@ -667,17 +666,12 @@ public sealed partial class ProjectViewModel : ObservableObject
         }
     }
 
-    public void OnHeaderGotFocus() => _textEditOpen = false;
+    public void OnHeaderGotFocus() => _history.EndTyping();
 
     /// <summary>Called before a text field changes; the first change after focusing records one undo step.</summary>
     public void BeforeTextChange()
     {
-        if (!CanEdit) return;
-        if (_textEditOpen) return;
-        Push(_undo, Json.Serialize(Project));
-        _redo.Clear();
-        _textEditOpen = true;
-        NotifyUndo();
+        if (CanEdit && _history.BeforeTyping(() => Json.Serialize(Project))) NotifyUndo();
     }
 
     private void RefreshTagFilters()
@@ -690,49 +684,29 @@ public sealed partial class ProjectViewModel : ObservableObject
 
     public void Checkpoint()
     {
-        Push(_undo, Json.Serialize(Project));
-        _redo.Clear();
-        _textEditOpen = false;
+        _history.Checkpoint(Json.Serialize(Project));
         NotifyUndo();
     }
 
-    private static void Push(List<string> stack, string snapshot)
-    {
-        stack.Add(snapshot);
-        if (stack.Count > MaxUndo) stack.RemoveAt(0);
-    }
-
-    private static string Pop(List<string> stack)
-    {
-        var s = stack[^1];
-        stack.RemoveAt(stack.Count - 1);
-        return s;
-    }
-
-    private bool CanUndo() => _undo.Count > 0;
-    private bool CanRedo() => _redo.Count > 0;
+    private bool CanUndo() => _history.CanUndo;
+    private bool CanRedo() => _history.CanRedo;
 
     [RelayCommand(CanExecute = nameof(CanUndo))]
     public void Undo()
     {
-        if (_undo.Count == 0) return;
-        Push(_redo, Json.Serialize(Project));
-        Restore(Pop(_undo));
+        if (_history.CanUndo) Restore(_history.Undo(Json.Serialize(Project))!);
     }
 
     [RelayCommand(CanExecute = nameof(CanRedo))]
     public void Redo()
     {
-        if (_redo.Count == 0) return;
-        Push(_undo, Json.Serialize(Project));
-        Restore(Pop(_redo));
+        if (_history.CanRedo) Restore(_history.Redo(Json.Serialize(Project))!);
     }
 
     private void Restore(string json)
     {
         var focus = _focusedItemId;
         Project.RestoreFrom(Json.Deserialize<Project>(json)!);
-        _textEditOpen = false;
         Categories.Clear();
         RebuildAll();
         ReloadSideLists();
@@ -1430,9 +1404,7 @@ public sealed partial class ProjectViewModel : ObservableObject
         var focus = _focusedItemId;
         var caret = focus is { } focused ? CaretOf?.Invoke(focused) : null;
         if (!change()) return false;
-        Push(_undo, snapshot);
-        _redo.Clear();
-        _textEditOpen = false;
+        _history.Checkpoint(snapshot);
         NotifyUndo();
         Touch();
         RebuildAll();
@@ -1493,9 +1465,7 @@ public sealed partial class ProjectViewModel : ObservableObject
         var focus = _focusedItemId;
         var caret = focus is { } focused ? CaretOf?.Invoke(focused) : null;
         Project.RestoreFrom(snapshot, keepIssueLinks: false);
-        _undo.Clear();
-        _redo.Clear();
-        _textEditOpen = false;
+        _history.Clear();
         NotifyUndo();
         RebuildAll();
         ReloadSideLists();
@@ -1509,10 +1479,7 @@ public sealed partial class ProjectViewModel : ObservableObject
     {
         var focus = _focusedItemId;
         var caret = focus is { } focused ? CaretOf?.Invoke(focused) : null;
-        Push(_undo, Json.Serialize(Project));
-        _redo.Clear();
-        _textEditOpen = false;
-        NotifyUndo();
+        Checkpoint();
         Project.RestoreFrom(accepted);
         RebuildAll();
         ReloadSideLists();
