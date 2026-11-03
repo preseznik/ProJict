@@ -318,6 +318,11 @@ public sealed class TestBuild
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool Agent { get; set; }
 
+    /// <summary>Tells this test build from the next one (its path and when it was set), for the copies other ProJicts get of it.</summary>
+    [JsonIgnore]
+    public string Key => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+        System.Text.Encoding.UTF8.GetBytes($"{Path}|{SetAt.ToUniversalTime().Ticks}")))[..12].ToLowerInvariant();
+
     /// <summary>Where it is on this computer: as given, or in the repo folder when relative.</summary>
     public string FullPath(string? repoPath) =>
         System.IO.Path.IsPathRooted(Path) || string.IsNullOrWhiteSpace(repoPath) ? Path : System.IO.Path.GetFullPath(System.IO.Path.Combine(repoPath, Path));

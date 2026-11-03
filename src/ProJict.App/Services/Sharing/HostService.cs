@@ -505,6 +505,9 @@ public sealed partial class HostService
             case "getFile":
                 SendFile(session, message);
                 return null;
+            case "getTestBuild":
+                SendTestBuild(session, message);
+                return null;
             case "chatOp":
                 return ChatOp(session, message);
             case "wikiOp":

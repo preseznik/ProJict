@@ -148,6 +148,11 @@ public sealed partial class MainViewModel : ObservableObject
         Guest.ChatChanged += connection => Chat.OnRemoteChanged(connection);
         Host.BackChatChanged += back => Chat.OnRemoteChanged(back);
         Guest.PresenceChanged += _ => Chat.RefreshPresence();
+        // A shared project's test build on its way, here or not.
+        Guest.TestBuildChanged += id =>
+        {
+            if (state.Projects.FirstOrDefault(p => p.Id == id) is { } project) GetProjectViewModel(project).RefreshTestBuild();
+        };
         Agents.Me = state.UserName;
         Agents.PresenceChanged += () =>
         {

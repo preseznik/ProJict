@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.42
+
+- **A shared project's test build, on your other computer.** A project's test build is a file on the computer that built it, so a ProJict connected to it saw the path but couldn't run it. Now its test build under the project's name (and **Details → Test build**) has **Get it** there: the host's ProJict sends the file over, the way big Chat files go, with how far it got on the button, and then **Run** starts it. A folder comes as a zip of it. It's kept in `%LocalAppData%\ProJict\Test builds`, and a newer test build replaces the older one. The host sends only the test build of a project it shares with you, and says so when it isn't there any more. Both ProJicts need 0.1.42.
+
 ## 0.1.41 (2026-11-03)
 
 - **Ignore someone in Chat.** Right-click a member of a channel › **Ignore** to hide their messages from you in channels, to declutter. Messages that @mention you still show, and your private conversation with them shows everything. What's hidden doesn't count as new or notify you, and the channel under the office in the Agents view hides it too. It's only for you: they aren't told. Right-click again › **Stop ignoring**.

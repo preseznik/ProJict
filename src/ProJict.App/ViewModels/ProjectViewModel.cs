@@ -256,22 +256,38 @@ public sealed partial class ProjectViewModel : ObservableObject
 
     // ───────────── Test build ─────────────
 
-    /// <summary>The current test build, on the page under the header with Run (your own projects: the paths are this computer's).</summary>
-    public bool HasTestBuild => Project.TestBuild != null && Project.Remote == null;
-    private string? TestBuildFullPath => Project.TestBuild?.FullPath(Project.RepoPath);
+    /// <summary>
+    /// The current test build, on the page under the header with Run. A shared project's is on its host's computer:
+    /// Get it brings it here first (it comes like a big Chat file), then Run starts it.
+    /// </summary>
+    public bool HasTestBuild => Project.TestBuild != null;
+    /// <summary>Where it is on this computer: as set, or for a shared project where it came to.</summary>
+    private string? TestBuildFullPath => Project.Remote != null ? Services.Sharing.GuestService.LocalTestBuild(Project) : Project.TestBuild?.FullPath(Project.RepoPath);
     public bool TestBuildExists => TestBuildFullPath is { } p && (File.Exists(p) || Directory.Exists(p));
-    public string TestBuildName => TestBuildFullPath is { } p ? System.IO.Path.GetFileName(p.TrimEnd('\\', '/')) : "";
-    public string? TestBuildToolTip => TestBuildFullPath;
+    public string TestBuildName => Project.TestBuild is { } build ? System.IO.Path.GetFileName((TestBuildFullPath ?? build.Path).TrimEnd('\\', '/')) : "";
+    public string? TestBuildToolTip => TestBuildFullPath ?? (Project.Remote is { } remote ? $"On {remote.HostName}'s computer: Get it brings it here" : null);
+    private Services.Sharing.GuestService.TestBuildFetch? TestBuildFetch => Project.Remote != null ? Main.Guest.TestBuildFetchOf(Project) : null;
+    /// <summary>A shared project's test build that isn't here yet: Get it, instead of Run.</summary>
+    public bool ShowGetTestBuild => Project.Remote != null && Project.TestBuild != null && !TestBuildExists;
+    public bool CanGetTestBuild => ShowGetTestBuild && TestBuildFetch is not { Problem: null } && Project.Remote is { Connected: true };
+    public string GetTestBuildText => TestBuildFetch is { Problem: null } fetch ? fetch.Coming ? $"Getting it… {fetch.Progress:0%}" : "Asking…" : "Get it";
+    public string GetTestBuildToolTip => Project.Remote is { } remote
+        ? $"Ask {remote.HostName}'s ProJict for it: it comes here like a big Chat file, then Run starts it (a folder comes as a zip)"
+        : "";
     /// <summary>"built 1 Nov 20:25 · set by Wren: 0.1.31 with the office zoom", or that it's gone.</summary>
     public string TestBuildDetails
     {
         get
         {
-            if (Project.TestBuild is not { } build || TestBuildFullPath is not { } path) return "";
+            if (Project.TestBuild is not { } build) return "";
+            var note = build.Note is { } n ? $": {n}" : "";
+            if (Project.Remote is { } remote && !TestBuildExists)
+                return TestBuildFetch is { Problem: { } problem } ? problem : $"on {remote.HostName}'s computer · set by {build.SetBy}{note}";
+            if (TestBuildFullPath is not { } path) return "";
             if (!TestBuildExists) return "not there any more · set by " + build.SetBy;
             var built = File.Exists(path) ? File.GetLastWriteTime(path) : Directory.GetLastWriteTime(path);
             var when = built.ToString(built.Date == DateTime.Today ? "'today' HH:mm" : "d MMM HH:mm", System.Globalization.CultureInfo.CurrentCulture);
-            return $"built {when} · set by {build.SetBy}" + (build.Note is { } note ? $": {note}" : "");
+            return Project.Remote is { } host ? $"came {when} from {host.HostName}'s ProJict · set by {build.SetBy}{note}" : $"built {when} · set by {build.SetBy}{note}";
         }
     }
     public string RunTestBuildText => TestBuildFullPath is { } p && Directory.Exists(p) ? "Open" : "Run";
@@ -305,8 +321,18 @@ public sealed partial class ProjectViewModel : ObservableObject
     public void RefreshTestBuild()
     {
         foreach (var p in new[] { nameof(HasTestBuild), nameof(TestBuildExists), nameof(TestBuildName), nameof(TestBuildToolTip), nameof(TestBuildDetails),
-                     nameof(RunTestBuildText), nameof(TestBuildPath), nameof(TestBuildNote) })
+                     nameof(RunTestBuildText), nameof(TestBuildPath), nameof(TestBuildNote), nameof(ShowGetTestBuild), nameof(CanGetTestBuild), nameof(GetTestBuildText),
+                     nameof(GetTestBuildToolTip) })
             OnPropertyChanged(p);
+    }
+
+    /// <summary>Get it: asks the host for the shared project's test build.</summary>
+    [RelayCommand]
+    private void GetTestBuild()
+    {
+        if (Main.Guest.GetTestBuild(Project) is { } problem) _state.StatusText = problem;
+        else _state.StatusText = $"Asked {Project.Remote?.HostName}'s ProJict for {TestBuildName}.";
+        RefreshTestBuild();
     }
 
     [RelayCommand]
@@ -1427,6 +1453,8 @@ public sealed partial class ProjectViewModel : ObservableObject
     {
         foreach (var p in new[] { nameof(CanEdit), nameof(CanAddItems), nameof(CanComment), nameof(IsReadOnlyBoard), nameof(IsRemote), nameof(IsOwnProject), nameof(RemoteText), nameof(IsTitleReadOnly) })
             OnPropertyChanged(p);
+        // A shared project's test build can be asked for only while connected.
+        RefreshTestBuild();
         // Rows and categories bind Owner.CanEdit: redraw them.
         foreach (var category in Categories) category.Refresh();
     }

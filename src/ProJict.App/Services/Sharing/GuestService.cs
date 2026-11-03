@@ -405,6 +405,15 @@ public sealed partial class GuestService
             case "removed":
                 if (Guid.TryParse((string?)message["projectId"], out var removed)) Remove(connection, removed);
                 break;
+            case "testBuildComing":
+                TestBuildComing(connection, message);
+                break;
+            case "testBuild":
+                StoreTestBuild(connection, message);
+                break;
+            case "testBuildError":
+                TestBuildFailed(connection, message);
+                break;
             case "file":
                 StoreFile(connection, message);
                 break;

@@ -499,24 +499,37 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
                 </StackPanel>
-                <!-- The current test build, set by you or an agent: run it from here. -->
+                <!--
+                    The current test build, set by you or an agent: run it from here. Its buttons stay on the right; the line
+                    about it gives way when there's little room.
+                -->
                 <Border Margin="2,8,0,0" Padding="10,4,6,4" CornerRadius="6" HorizontalAlignment="Left" Background="{DynamicResource SubtleFillColorSecondaryBrush}"
                         Visibility="{Binding HasTestBuild, Converter={StaticResource BoolToVis}}">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Style="{StaticResource Icon}" Text="&#xE7FC;" FontSize="13" VerticalAlignment="Center" Margin="0,0,8,0" />
-                        <TextBlock Text="Test build" FontWeight="SemiBold" VerticalAlignment="Center" />
-                        <TextBlock Text="{Binding TestBuildName}" ToolTip="{Binding TestBuildToolTip}" VerticalAlignment="Center" Margin="8,0,0,0" MaxWidth="280" TextTrimming="CharacterEllipsis" />
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                            <!-- A shared project's is on its host's computer: Get it brings it here first. -->
+                            <Button x:Name="GetTestBuildButton" Style="{StaticResource AccentButtonStyle}" Command="{Binding GetTestBuildCommand}" IsEnabled="{Binding CanGetTestBuild}"
+                                    Margin="10,0,0,0" Padding="10,2" AutomationProperties.Name="Get the test build" ToolTip="{Binding GetTestBuildToolTip}"
+                                    Visibility="{Binding ShowGetTestBuild, Converter={StaticResource BoolToVis}}">
+                                <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource Icon}" Text="&#xE896;" FontSize="11" VerticalAlignment="Center" /><TextBlock Text="{Binding GetTestBuildText}" Margin="6,0,0,0" /></StackPanel>
+                            </Button>
+                            <Button Style="{StaticResource AccentButtonStyle}" Command="{Binding RunTestBuildCommand}" IsEnabled="{Binding TestBuildExists}" Margin="10,0,0,0" Padding="10,2"
+                                    AutomationProperties.Name="Run the test build" ToolTip="{Binding TestBuildToolTip}"
+                                    Visibility="{Binding ShowGetTestBuild, Converter={StaticResource InvBoolToVis}}">
+                                <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource Icon}" Text="&#xE768;" FontSize="11" VerticalAlignment="Center" /><TextBlock Text="{Binding RunTestBuildText}" Margin="6,0,0,0" /></StackPanel>
+                            </Button>
+                            <Button Style="{StaticResource SubtleButton}" Command="{Binding ShowTestBuildCommand}" IsEnabled="{Binding TestBuildExists}" Margin="4,0,0,0"
+                                    AutomationProperties.Name="Show the test build in its folder" ToolTip="Show it in its folder">
+                                <TextBlock Style="{StaticResource Icon}" Text="&#xE838;" FontSize="12" />
+                            </Button>
+                        </StackPanel>
+                        <TextBlock DockPanel.Dock="Left" Style="{StaticResource Icon}" Text="&#xE7FC;" FontSize="13" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <TextBlock DockPanel.Dock="Left" Text="Test build" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        <TextBlock DockPanel.Dock="Left" Text="{Binding TestBuildName}" ToolTip="{Binding TestBuildToolTip}" VerticalAlignment="Center" Margin="8,0,0,0" MaxWidth="280"
+                                   TextTrimming="CharacterEllipsis" />
                         <TextBlock Text="{Binding TestBuildDetails}" Style="{StaticResource MutedText}" FontSize="12" VerticalAlignment="Center" Margin="8,0,0,0"
                                    MaxWidth="380" TextTrimming="CharacterEllipsis" ToolTip="{Binding TestBuildDetails}" />
-                        <Button Style="{StaticResource AccentButtonStyle}" Command="{Binding RunTestBuildCommand}" IsEnabled="{Binding TestBuildExists}" Margin="10,0,0,0" Padding="10,2"
-                                AutomationProperties.Name="Run the test build" ToolTip="{Binding TestBuildToolTip}">
-                            <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource Icon}" Text="&#xE768;" FontSize="11" VerticalAlignment="Center" /><TextBlock Text="{Binding RunTestBuildText}" Margin="6,0,0,0" /></StackPanel>
-                        </Button>
-                        <Button Style="{StaticResource SubtleButton}" Command="{Binding ShowTestBuildCommand}" IsEnabled="{Binding TestBuildExists}" Margin="4,0,0,0"
-                                AutomationProperties.Name="Show the test build in its folder" ToolTip="Show it in its folder">
-                            <TextBlock Style="{StaticResource Icon}" Text="&#xE838;" FontSize="12" />
-                        </Button>
-                    </StackPanel>
+                    </DockPanel>
                 </Border>
                 <TextBlock Margin="2,6,0,0" Style="{StaticResource MutedText}" TextWrapping="Wrap"
                            Text="Ideas and loose notes. Promote an item to a project from its right-click menu."
@@ -1209,7 +1222,12 @@
                         <TextBlock Grid.Row="8" Text="Test build" />
                         <StackPanel Grid.Row="8" Grid.Column="1" Margin="0,4">
                             <DockPanel>
-                                <Button DockPanel.Dock="Right" Content="Browse…" Command="{Binding BrowseTestBuildCommand}" Margin="8,0,0,0" />
+                                <Button DockPanel.Dock="Right" Content="Browse…" Command="{Binding BrowseTestBuildCommand}" Margin="8,0,0,0"
+                                        Visibility="{Binding IsRemote, Converter={StaticResource InvBoolToVis}}" />
+                                <!-- A shared project's test build is on its host's computer: ask for it here. -->
+                                <Button x:Name="GetTestBuildDetailsButton" DockPanel.Dock="Right" Command="{Binding GetTestBuildCommand}" IsEnabled="{Binding CanGetTestBuild}" Margin="8,0,0,0"
+                                        Content="{Binding GetTestBuildText}" ToolTip="{Binding GetTestBuildToolTip}" AutomationProperties.Name="Get the test build"
+                                        Visibility="{Binding ShowGetTestBuild, Converter={StaticResource BoolToVis}}" />
                                 <TextBox Text="{Binding TestBuildPath, UpdateSourceTrigger=LostFocus}" AutomationProperties.Name="Test build path" />
                             </DockPanel>
                             <TextBox Text="{Binding TestBuildNote, UpdateSourceTrigger=LostFocus}" Margin="0,6,0,0" AutomationProperties.Name="What to try"
