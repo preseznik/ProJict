@@ -216,6 +216,24 @@ public partial class ProjectView : UserControl
             Command = row.SetPriorityCommand, CommandParameter = p,
         }).Append(new MenuItem { Header = "None", IsChecked = !row.HasPriority, InputGestureText = "Alt+0", Command = row.SetPriorityCommand, CommandParameter = Core.Model.Priority.None });
 
+    /// <summary>The types to pick from (ticked: the item's), then Other… for a new one and No type.</summary>
+    private static IEnumerable<Control> TagItems(ItemRowViewModel row)
+    {
+        foreach (var tag in row.Owner.TagList)
+            yield return new MenuItem { Header = tag, Command = row.SetTagCommand, CommandParameter = tag, IsChecked = string.Equals(row.Tag, tag, StringComparison.OrdinalIgnoreCase) };
+        yield return new Separator();
+        yield return new MenuItem { Header = "Other…", Command = row.AddNewTagCommand, ToolTip = "A type of your own, added to the list for every project" };
+        if (row.HasTag) yield return new MenuItem { Header = "No type", Command = row.SetTagCommand, CommandParameter = null };
+    }
+
+    private void TagChip_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: ItemRowViewModel row } chip) return;
+        var menu = new ContextMenu { PlacementTarget = chip, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom };
+        foreach (var item in TagItems(row)) menu.Items.Add(item);
+        menu.IsOpen = true;
+    }
+
     private void PriorityChip_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not FrameworkElement { DataContext: ItemRowViewModel row } chip) return;
@@ -456,11 +474,8 @@ public partial class ProjectView : UserControl
         foreach (var item in PriorityItems(row)) priority.Items.Add(item);
         menu.Items.Add(priority);
 
-        var tags = new MenuItem { Header = "Tag" };
-        foreach (var tag in ProjectViewModel.TagChoices)
-            tags.Items.Add(new MenuItem { Header = tag, Command = row.SetTagCommand, CommandParameter = tag, IsChecked = row.Tag == tag });
-        tags.Items.Add(new Separator());
-        tags.Items.Add(Item("No tag", row.SetTagCommand, null));
+        var tags = new MenuItem { Header = "Type" };
+        foreach (var item in TagItems(row)) tags.Items.Add(item);
         menu.Items.Add(tags);
 
         var move = new MenuItem { Header = "Move to category" };

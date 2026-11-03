@@ -57,7 +57,8 @@ public sealed partial class ProjectViewModel : ObservableObject
     public ObservableCollection<Release> Releases { get; } = [];
     public ObservableCollection<ArchivedFile> Archive { get; } = [];
 
-    public static IReadOnlyList<string> TagChoices { get; } = ["BUG", "ADD", "ISSUE", "CHANGE", "FIX", "IDEA"];
+    /// <summary>The types to pick from: ProJict's own, the ones you added, then any other this project's items have.</summary>
+    public IReadOnlyList<string> TagList => Core.Features.TagChoices.For(_state.Settings.CustomTags, Project.Walk().Select(l => l.Item.Tag));
     public static IReadOnlyList<ProjectStatus> Statuses { get; } = Enum.GetValues<ProjectStatus>();
     /// <summary>A copy, so raising Groups gives the header's group box a fresh list.</summary>
     public IReadOnlyList<string> Groups => [.. _state.Settings.Groups];
@@ -542,7 +543,7 @@ public sealed partial class ProjectViewModel : ObservableObject
             Categories.Clear();
             foreach (var vm in list) Categories.Add(vm);
         }
-        TagFilters = [AllTags, NoTag, .. TagChoices.Union(Project.Walk().Select(l => l.Item.Tag).OfType<string>(), StringComparer.OrdinalIgnoreCase)];
+        TagFilters = [AllTags, NoTag, .. TagList];
         OnPropertyChanged(nameof(TagFilters));
         ApplyFilter();
         OnCategoryExpandedChanged();
@@ -676,7 +677,7 @@ public sealed partial class ProjectViewModel : ObservableObject
 
     private void RefreshTagFilters()
     {
-        TagFilters = [AllTags, NoTag, .. TagChoices.Union(Project.Walk().Select(l => l.Item.Tag).OfType<string>(), StringComparer.OrdinalIgnoreCase)];
+        TagFilters = [AllTags, NoTag, .. TagList];
         OnPropertyChanged(nameof(TagFilters));
     }
 
@@ -881,6 +882,15 @@ public sealed partial class ProjectViewModel : ObservableObject
         var focus = focusPrevious ? (i > 0 ? rows[i - 1] : NextRowAfter(row)) : NextRowAfter(row);
         if (focus?.Item == row.Item) focus = null;
         Mutate(() => SiblingsOf(row).Remove(row.Item), [row.Category], focus?.Item.Id);
+    }
+
+    /// <summary>The tag picker's Other…: a type of your own, kept in the list for every project, given to the item.</summary>
+    public void AddNewTag(ItemRowViewModel row)
+    {
+        var typed = InputDialog.Ask(Application.Current.MainWindow!, "New type", "A type for items, like BUG or ADD (it's added to the list):", "");
+        if (Core.Features.TagChoices.Clean(typed) is not { } tag) return;
+        if (Core.Features.TagChoices.Remember(_state.Settings.CustomTags ??= [], tag)) _state.MarkSettingsDirty();
+        SetTag(row, tag);
     }
 
     public void SetTag(ItemRowViewModel row, string? tag)

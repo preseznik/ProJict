@@ -36,7 +36,7 @@ Get **`ProJict-Setup-x.y.z.exe`** from [Releases](https://github.com/preseznik/p
 
 Right-click an item, or click the **⋯** that appears on its right when you point at it, for everything else you can do with it: priority, tag, discussion, attachments, moving it and more. **Copy #4e84570c** there copies the item's short id, which links the item when pasted into Chat and is how agents name it.
 
-Start an item with `BUG:`, `ADD:`, `ISSUE:` or `CHANGE:` to tag it. Right-click an item's checkbox to mark it as to do, in progress or done. Drag items by their handle to reorder them or move them to another category.
+Start an item with `BUG:`, `ADD:`, `ISSUE:` or `CHANGE:` to tag it, or click its type chip to pick another: BUG, ADD, ISSUE, CHANGE, FIX and IDEA, the types you added, and any other the project's items have. **Other…** there adds a type of your own (tech debt becomes TECH-DEBT), kept in the list for every project. An item without a type shows an empty **type** chip while you point at it, like the priority's. Right-click an item's checkbox to mark it as to do, in progress or done. Drag items by their handle to reorder them or move them to another category.
 
 Next to the filter box, **All tags** shows only items with one tag and **All states** shows only items that are to do, in progress or done. **Working on** shows only the items someone is on: checked out by an AI agent or marked in progress. **Hide empty** hides the categories with nothing left to do (only done items, or none) until you click **Show all**.
 
