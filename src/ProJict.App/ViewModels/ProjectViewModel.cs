@@ -805,50 +805,23 @@ public sealed partial class ProjectViewModel : ObservableObject
     {
         if (SortedByPriority()) return;
         var list = SiblingsOf(row);
-        var index = list.IndexOf(row.Item);
-        TodoItem? previous = null;
-        for (var i = index - 1; i >= 0; i--)
-        {
-            // Top-level TODO and DONE items share one list; only indent under a neighbour from the same section.
-            if (row.Parent != null || list[i].IsDone == row.Item.IsDone)
-            {
-                previous = list[i];
-                break;
-            }
-        }
-        if (previous == null) return;
-        Mutate(() =>
-        {
-            list.Remove(row.Item);
-            previous.Children.Add(row.Item);
-        }, [row.Category], row.Item.Id, caret);
+        if (BoardEdits.IndentTarget(list, row.Item, topLevel: row.Parent == null) is not { } under) return;
+        Mutate(() => BoardEdits.Indent(list, row.Item, under), [row.Category], row.Item.Id, caret);
     }
 
     public void Outdent(ItemRowViewModel row, int caret)
     {
-        if (row.Parent == null || Project.Find(row.Parent.Id) is not { } parentLoc) return;
-        Mutate(() =>
-        {
-            row.Parent.Children.Remove(row.Item);
-            parentLoc.Siblings.Insert(parentLoc.Siblings.IndexOf(row.Parent) + 1, row.Item);
-        }, [row.Category], row.Item.Id, caret);
+        if (row.Parent == null || Project.Find(row.Parent.Id) == null) return;
+        Mutate(() => BoardEdits.Outdent(Project, row.Item, row.Parent), [row.Category], row.Item.Id, caret);
     }
 
     public void Move(ItemRowViewModel row, int delta, int caret)
     {
         if (SortedByPriority()) return;
         var list = SiblingsOf(row);
-        var index = list.IndexOf(row.Item);
-        var target = index + delta;
-        while (target >= 0 && target < list.Count && row.Parent == null && list[target].IsDone != row.Item.IsDone) target += delta;
-
-        if (target >= 0 && target < list.Count)
+        if (BoardEdits.MoveTarget(list, row.Item, delta, topLevel: row.Parent == null) is { } target)
         {
-            Mutate(() =>
-            {
-                list.RemoveAt(index);
-                list.Insert(target, row.Item);
-            }, [row.Category], row.Item.Id, caret);
+            Mutate(() => BoardEdits.MoveTo(list, row.Item, target), [row.Category], row.Item.Id, caret);
             return;
         }
 
@@ -860,9 +833,7 @@ public sealed partial class ProjectViewModel : ObservableObject
         var other = Categories[neighbour];
         Mutate(() =>
         {
-            list.Remove(row.Item);
-            if (delta < 0) other.Model.Items.Add(row.Item);
-            else other.Model.Items.Insert(0, row.Item);
+            BoardEdits.MoveInto(list, row.Item, other.Model, delta);
             other.IsExpanded = true;
         }, [row.Category, other], row.Item.Id, caret);
     }
@@ -935,23 +906,16 @@ public sealed partial class ProjectViewModel : ObservableObject
     /// <summary>Drag &amp; drop: place <paramref name="source"/> before or after <paramref name="target"/> as its sibling.</summary>
     public void MoveItem(ItemRowViewModel source, ItemRowViewModel target, bool after)
     {
-        if (source.Item == target.Item || source.Item.Descendants().Contains(target.Item) || SortedByPriority()) return;
-        Mutate(() =>
-        {
-            SiblingsOf(source).Remove(source.Item);
-            var list = SiblingsOf(target);
-            list.Insert(list.IndexOf(target.Item) + (after ? 1 : 0), source.Item);
-        }, [source.Category, target.Category]);
+        if (!BoardEdits.CanPlaceBeside(source.Item, target.Item) || SortedByPriority()) return;
+        Mutate(() => BoardEdits.PlaceBeside(SiblingsOf(source), source.Item, SiblingsOf(target), target.Item, after), [source.Category, target.Category]);
     }
 
     public void MoveCategory(CategoryViewModel category, int delta)
     {
-        var index = Project.Categories.IndexOf(category.Model);
-        var target = index + delta;
+        var target = Project.Categories.IndexOf(category.Model) + delta;
         if (target < 0 || target >= Project.Categories.Count || Refused(EditKind.Edit)) return;
         Checkpoint();
-        Project.Categories.RemoveAt(index);
-        Project.Categories.Insert(target, category.Model);
+        BoardEdits.MoveCategory(Project, category.Model, target);
         Touch();
         RebuildAll();
     }
@@ -963,8 +927,7 @@ public sealed partial class ProjectViewModel : ObservableObject
         var target = top ? 0 : Project.Categories.Count - 1;
         if (index < 0 || index == target || Refused(EditKind.Edit)) return;
         Checkpoint();
-        Project.Categories.RemoveAt(index);
-        Project.Categories.Insert(target, category.Model);
+        BoardEdits.MoveCategory(Project, category.Model, target);
         Touch();
         RebuildAll();
     }
@@ -973,8 +936,7 @@ public sealed partial class ProjectViewModel : ObservableObject
     {
         if (category == target || Refused(EditKind.Edit)) return;
         Checkpoint();
-        Project.Categories.Remove(category.Model);
-        Project.Categories.Insert(Project.Categories.IndexOf(target.Model), category.Model);
+        BoardEdits.MoveCategoryBefore(Project, category.Model, target.Model);
         Touch();
         RebuildAll();
     }
