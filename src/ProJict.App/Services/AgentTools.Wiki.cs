@@ -233,7 +233,7 @@ public sealed partial class AgentTools
         if (args.Int("version") is { } read && read != page.Version)
             throw new McpToolException($"The page changed since version {read} (it's version {page.Version} now): read_wiki it again and review that.", ToolProblem.Conflict);
         _main.Agents.WorkingIn(session, project!);
-        var role = LeadReview.LeadRole(project!.Studio!)!.Name;
+        var role = LeadReview.LeadRole(StudioFlow.OpenStudiosOf(project!).First(s => LeadReview.IsLead(s, session.AgentName)))!.Name;
         var authors = LeadReview.Authors(page);
         var by = new WikiAuthor(session.AgentName, true);
         try
@@ -298,7 +298,7 @@ public sealed partial class AgentTools
 
     private IEnumerable<(string Key, string Line)> WikiReviewLines(McpSession session, Project project)
     {
-        if (project.Studio is not { LeadReviewsWiki: true } studio || !LeadReview.IsLead(studio, session.AgentName)) yield break;
+        if (StudioFlow.OpenStudiosOf(project).FirstOrDefault(s => s.LeadReviewsWiki && LeadReview.IsLead(s, session.AgentName)) is not { } studio) yield break;
         var role = LeadReview.LeadRole(studio)!.Name;
         foreach (var page in _state.Wiki.LinkedTo(project.Id))
         {

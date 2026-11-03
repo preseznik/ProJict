@@ -33,8 +33,10 @@ public static class LeadReview
     /// </summary>
     public static string? Problem(Project? project, WikiPage page, string agent)
     {
-        if (project?.Studio is not { } studio || project.Remote != null)
+        // The studio the agent leads, else the project's first open one, for what it's told.
+        if (project == null || project.Remote != null || StudioFlow.OpenStudiosOf(project).ToList() is not [var first, ..] studios)
             return "The page isn't about a project with a studio, so it waits for the user's review.";
+        var studio = studios.FirstOrDefault(s => IsLead(s, agent)) ?? first;
         var role = LeadRole(studio);
         if (!studio.LeadReviewsWiki)
             return $"In {project.Name}'s {StudioFlow.KindName(studio.Kind)} the user reviews wiki pages themself (they can let the {role?.Name ?? "lead"} do it, in the project's Details).";
@@ -59,9 +61,10 @@ public static class LeadReview
 
     /// <summary>The lead who reviews the page for you, and their role, while it waits; null when it waits for you alone.</summary>
     public static (string Lead, string Role)? ReviewerOf(Project? project, WikiPage page) =>
-        project?.Studio is { } studio && LeadOf(studio) is { } lead && LeadRole(studio) is { } role && Problem(project, page, lead) == null
-            ? (lead, role.Name)
-            : null;
+        project == null ? null
+        : StudioFlow.OpenStudiosOf(project)
+            .Select(s => LeadOf(s) is { } lead && LeadRole(s) is { } role && Problem(project, page, lead) == null ? (lead, role.Name) : ((string, string)?)null)
+            .FirstOrDefault(r => r != null);
 
     private static bool Same(string a, string b) => string.Equals(a.Trim(), b.Trim(), StringComparison.OrdinalIgnoreCase);
 }

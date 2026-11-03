@@ -17,7 +17,7 @@ namespace ProJict.App.ViewModels;
 /// month, each period with its stats. Optionally for one project. Its Settings panel limits the cards to agents that
 /// did something lately (idle sessions stay connected until they're closed) and how far back the earlier work goes.
 /// </summary>
-public sealed partial class AgentActivityViewModel : ObservableObject, IStudioHiring
+public sealed partial class AgentActivityViewModel : ObservableObject
 {
     public const string AllProjects = "All projects";
     /// <summary>An agent counts as busy this long after its last call, or after setting its status.</summary>
@@ -568,7 +568,7 @@ public sealed partial class AgentActivityViewModel : ObservableObject, IStudioHi
         _historyEvents = [.. ActivityFeed.Build(_state.Projects.Where(p => p.Remote == null && (project == null || p == project)), _state.Settings, _state.UserName)
             .Where(e => e.Agent)];
         OnPropertyChanged(nameof(Subtitle));
-        foreach (var name in new[] { nameof(CanSetUpStudio), nameof(ShowsStudio), nameof(OfficeTitle) }) OnPropertyChanged(name);
+        foreach (var name in RoomProperties) OnPropertyChanged(name);
         RefreshChannel();
         BuildHistory();
     }
@@ -599,12 +599,32 @@ public sealed partial class AgentActivityViewModel : ObservableObject, IStudioHi
     {
         if (!View.ShowOffice) return;
         var project = FilterProject;
-        // All projects: agents hired in the studio of a project they work in are there, not in the office.
-        var inStudios = project == null ? Live.Where(c => StudioOf(c.Session) != null).ToList() : [];
-        Office.Elsewhere = inStudios.Count == 0 ? null
-            : "In studios: " + string.Join("; ", inStudios.GroupBy(c => StudioOf(c.Session)!.Name).Select(g => $"{string.Join(", ", g.Select(c => c.Name))} ({g.Key})"));
-        Office.Update(inStudios.Count == 0 ? Live : [.. Live.Except(inStudios)], DateTime.Now, s => s.Claimed.Count > 0 && CheckedOut(s, project).Count > 0,
-            IsWatching, LastSaid, Studio, IsAsleep);
+        var shown = ShownStudio;
+        IReadOnlyList<AgentCardViewModel> cards = Live;
+        string? elsewhere = null;
+        if (project == null)
+        {
+            // All projects: agents hired in the studio of a project they work in are there, not in the office.
+            var inStudios = Live.Where(c => StudioOf(c.Session) != null).ToList();
+            cards = [.. Live.Except(inStudios)];
+            elsewhere = inStudios.Count == 0 ? null
+                : "In studios: " + string.Join("; ", inStudios.GroupBy(c => StudioOf(c.Session)!.Name).Select(g => $"{string.Join(", ", g.Select(c => c.Name))} ({g.Key})"));
+        }
+        else if (project.Remote == null && StudioFlow.HasOffice(project) && StudioFlow.OpenStudiosOf(project).Any())
+        {
+            // The office holds the agents not hired in the project's studios; a studio, those hired to it.
+            var hired = Live.Where(c => StudioFlow.HiredIn(project, c.Session.AgentName) != null).ToList();
+            if (shown == null)
+            {
+                cards = [.. Live.Except(hired)];
+                elsewhere = hired.Count == 0 ? null
+                    : "In the studios: " + string.Join("; ", hired.GroupBy(c => StudioFlow.HiredIn(project, c.Session.AgentName)!.Kind)
+                        .Select(g => $"{string.Join(", ", g.Select(c => c.Name))} ({StudioFlow.KindName(g.Key)})"));
+            }
+            else cards = [.. Live.Where(c => StudioFlow.HireOf(shown, c.Session.AgentName) != null)];
+        }
+        Office.Elsewhere = elsewhere;
+        Office.Update(cards, DateTime.Now, s => s.Claimed.Count > 0 && CheckedOut(s, project).Count > 0, IsWatching, LastSaid, Studio, IsAsleep, HireInto(shown));
         Office.SetVisitors(Visitors(), MessagePrivately);
     }
 
@@ -643,38 +663,171 @@ public sealed partial class AgentActivityViewModel : ObservableObject, IStudioHi
         TickAgentList(DateTime.Now);
     }
 
-    /// <summary>The project whose studio the agent is hired in, among those it works in now (if any).</summary>
+    /// <summary>The project whose open studio the agent is hired in, among those it works in now (if any).</summary>
     private Project? StudioOf(McpSession session) =>
         _main.Agents.ProjectsOf(session).Select(id => _state.Projects.FirstOrDefault(p => p.Id == id))
-            .FirstOrDefault(p => p is { Remote: null, Studio: { } studio } && StudioFlow.RoleOf(studio, session.AgentName) != null);
+            .FirstOrDefault(p => p is { Remote: null } && StudioFlow.HiredIn(p, session.AgentName) != null);
 
-    // ───────────── The studio ─────────────
+    // ───────────── The project's rooms: its office and studios ─────────────
 
-    /// <summary>One of your projects is shown and it has no studio yet: set up a game or film studio (it's then the project's room).</summary>
-    public bool CanSetUpStudio => FilterProject is { Remote: null, IsInbox: false, Studio: null };
+    /// <summary>The room you last showed of each project (null: its office), while ProJict runs.</summary>
+    private readonly Dictionary<Guid, StudioKind?> _roomOf = [];
 
-    /// <summary>The project shown has a studio: that's its room (it has no office of its own).</summary>
-    public bool ShowsStudio => FilterProject is { Remote: null, Studio: not null };
+    /// <summary>The project shown, when it's one of yours that can have studios.</summary>
+    private Project? OwnProject => FilterProject is { Remote: null, IsInbox: false } project ? project : null;
 
-    /// <summary>Set up a studio: "Game" or "Film".</summary>
-    [RelayCommand]
-    private void SetUpStudio(string? kind)
+    /// <summary>The studio shown as the room, or null for the office: the room you last showed, else the project's first open studio.</summary>
+    private Studio? ShownStudio
     {
-        if (FilterProject is not { Remote: null, IsInbox: false, Studio: null } project) return;
-        project.Studio = StudioFlow.New(Enum.TryParse<StudioKind>(kind, out var k) ? k : StudioKind.Game);
-        StudioChannel(project);
-        _main.GetProjectViewModel(project).RefreshStudio();
-        _state.MarkDirty(project);
-        _state.StatusText = $"{project.Name}'s {StudioFlow.KindName(project.Studio.Kind)} is its room now: agents working here wait in the lobby until you hire " +
-                            "them (right-click a robot › Hire as…). The roles and what they expect are in the project's Details, which can also remove the studio.";
+        get
+        {
+            if (FilterProject is not { Remote: null } project) return null;
+            var open = StudioFlow.OpenStudiosOf(project).ToList();
+            if (_roomOf.TryGetValue(project.Id, out var kind))
+            {
+                if (kind == null && StudioFlow.HasOffice(project)) return null;
+                if (open.FirstOrDefault(s => s.Kind == kind) is { } shown) return shown;
+            }
+            return open.FirstOrDefault();
+        }
+    }
+
+    /// <summary>One of your projects is shown and has no studio open: set up (or open again) a game or film studio.</summary>
+    public bool CanSetUpStudio => OwnProject is { } project && !StudioFlow.OpenStudiosOf(project).Any();
+
+    /// <summary>The room shown is one of the project's studios.</summary>
+    public bool ShowsStudio => ShownStudio != null;
+
+    private static string RoomName(StudioKind kind) => kind == StudioKind.Film ? "Film studio" : "Game studio";
+
+    /// <summary>The project's open rooms, as tabs above the room: its office, then its studios.</summary>
+    public IReadOnlyList<RoomTab> RoomTabs
+    {
+        get
+        {
+            if (FilterProject is not { Remote: null } project) return [];
+            var shown = ShownStudio;
+            var tabs = new List<RoomTab>();
+            if (StudioFlow.HasOffice(project))
+                tabs.Add(new RoomTab("Office", shown == null, "Agents not hired in the project's studios work here",
+                    new RelayCommand(() => ShowRoom(project, null))));
+            foreach (var studio in StudioFlow.OpenStudiosOf(project).OrderBy(s => s.Kind))
+                tabs.Add(new RoomTab(RoomName(studio.Kind), studio == shown, $"The {StudioFlow.KindName(studio.Kind)}: a station per role",
+                    new RelayCommand(() => ShowRoom(project, studio.Kind))));
+            // The room shown can be closed while there's another.
+            return tabs.Count < 2 ? tabs : [.. tabs.Select(t => t.IsSelected ? t with { Close = CloseRoomCommand, CloseToolTip = CloseRoomToolTip } : t)];
+        }
+    }
+
+    /// <summary>The project has more than one room open: they're tabs, and the one shown can be closed.</summary>
+    public bool ShowRoomTabs => RoomTabs.Count > 1;
+
+    /// <summary>The rooms the project could open: its office (while closed), and a studio of each kind it hasn't open.</summary>
+    public IReadOnlyList<RoomChoice> RoomsToOpen
+    {
+        get
+        {
+            if (OwnProject is not { } project) return [];
+            var rooms = new List<RoomChoice>();
+            if (!StudioFlow.HasOffice(project))
+                rooms.Add(new RoomChoice("Office", "Open the office again: agents not hired in the studios work there", OpenRoomCommand, "Office"));
+            foreach (var kind in new[] { StudioKind.Game, StudioKind.Film })
+            {
+                var studio = StudioFlow.StudioOf(project, kind);
+                if (studio is { Closed: false }) continue;
+                rooms.Add(new RoomChoice(CanSetUpStudio ? kind.ToString() : RoomName(kind),
+                    studio != null
+                        ? $"Open the {StudioFlow.KindName(kind)} again, with its roles and hires"
+                        : kind == StudioKind.Film
+                            ? "A film studio for this project: a station per role (director, writer, capture, editor, sound, thumbnails, publisher, producer); you hire agents to them"
+                            : "A game studio for this project: a station per role (designers, programmer, artist, sound, QA…); you hire agents to them",
+                    OpenRoomCommand, kind.ToString()));
+            }
+            return rooms;
+        }
+    }
+
+    /// <summary>"Set up a studio:" while the project has none open, else "Open:".</summary>
+    public string OpenRoomsLabel => CanSetUpStudio && OwnProject is { } project && !StudioFlow.StudiosOf(project).Any() ? "Set up a studio:" : "Open:";
+
+    public bool HasRoomsToOpen => RoomsToOpen.Count > 0;
+
+    private void ShowRoom(Project project, StudioKind? kind)
+    {
+        _roomOf[project.Id] = kind;
         RefreshStudio();
     }
 
-    public string OfficeTitle => ShowsStudio ? $"{FilterProject!.Name} studio" : "Office";
+    /// <summary>Set up a studio: "Game" or "Film" (or open it again).</summary>
+    [RelayCommand]
+    private void SetUpStudio(string? kind) => OpenRoom(kind);
 
-    private StudioContext? Studio => FilterProject is { Remote: null, Studio: { } studio } project
-        ? new StudioContext(project.Name, studio, this, MilestonesOf(project))
-        : null;
+    /// <summary>Opens one of the project's rooms and shows it: "Office", "Game" or "Film".</summary>
+    [RelayCommand]
+    private void OpenRoom(string? room)
+    {
+        if (OwnProject is not { } project) return;
+        if (room == "Office")
+        {
+            StudioFlow.SetOfficeOpen(project, true);
+            _roomOf[project.Id] = null;
+            _state.StatusText = $"{project.Name}'s office is open again: agents not hired in its studios work there.";
+        }
+        else
+        {
+            var kind = Enum.TryParse<StudioKind>(room, out var k) ? k : StudioKind.Game;
+            var reopened = StudioFlow.StudioOf(project, kind) != null;
+            var studio = StudioFlow.OpenStudio(project, kind);
+            StudioChannel(project, studio);
+            _roomOf[project.Id] = kind;
+            _state.StatusText = reopened
+                ? $"{project.Name}'s {StudioFlow.KindName(kind)} is open again, with its roles and hires."
+                : $"{project.Name} has a {StudioFlow.KindName(kind)}: agents working here " +
+                  (StudioFlow.HasOffice(project) ? "stay in the office" : "wait in its lobby") +
+                  " until you hire them (right-click a robot › Hire as…). The roles and what they expect are in the project's Details.";
+        }
+        _state.MarkDirty(project);
+        _main.GetProjectViewModel(project).RefreshStudio();
+        RefreshStudio();
+    }
+
+    public string CloseRoomToolTip => ShownStudio is { } studio
+        ? $"Close the {StudioFlow.KindName(studio.Kind)}: its roles and hires are kept for when you open it again"
+        : "Close the office: agents not hired in the studios wait in a studio's lobby instead";
+
+    /// <summary>Closes the room shown (while the project has another): a studio keeps its roles and hires.</summary>
+    [RelayCommand]
+    private void CloseRoom()
+    {
+        if (FilterProject is not { Remote: null } project || !ShowRoomTabs) return;
+        if (ShownStudio is { } studio)
+        {
+            StudioFlow.CloseStudio(project, studio);
+            _state.StatusText = $"Closed {project.Name}'s {StudioFlow.KindName(studio.Kind)}: its roles and hires are kept for when you open it again (Open: above the room).";
+        }
+        else
+        {
+            StudioFlow.SetOfficeOpen(project, false);
+            _state.StatusText = $"Closed {project.Name}'s office: agents not hired yet wait in a studio's lobby.";
+        }
+        _roomOf.Remove(project.Id);
+        _state.MarkDirty(project);
+        _main.GetProjectViewModel(project).RefreshStudio();
+        RefreshStudio();
+    }
+
+    public string OfficeTitle => ShownStudio is { } studio
+        ? $"{FilterProject!.Name} {(studio.Kind == StudioKind.Film ? "film studio" : "studio")}"
+        : "Office";
+
+    private StudioContext? Studio => ShownStudio is { } studio ? Context(FilterProject!, studio) : null;
+
+    private StudioContext Context(Project project, Studio studio) =>
+        new(project.Name, studio, new RoomHiring(this, project, studio), MilestonesOf(project), StudioFlow.HasOffice(project));
+
+    /// <summary>The project's other open studios, whose roles a robot's menu offers too.</summary>
+    private IReadOnlyList<StudioContext> HireInto(Studio? shown) =>
+        FilterProject is { Remote: null } project ? [.. StudioFlow.OpenStudiosOf(project).Where(s => s != shown).Select(s => Context(project, s))] : [];
 
     /// <summary>
     /// The studio's milestone board: all of the project's items done, and its categories with items as milestones, the
@@ -689,48 +842,58 @@ public sealed partial class AgentActivityViewModel : ObservableObject, IStudioHi
         return new MilestoneBoard(rows, categories.Sum(x => x.Done), categories.Sum(x => x.Total));
     }
 
-    void IStudioHiring.Hire(string agent, StudioRole role, bool junior) => ChangeStudio(studio =>
+    /// <summary>Hiring, firing and swapping in one of the project's studios, from a robot's menu.</summary>
+    private sealed class RoomHiring(AgentActivityViewModel owner, Project project, Studio studio) : IStudioHiring
+    {
+        public void Hire(string agent, StudioRole role, bool junior = false) => owner.Hire(project, studio, agent, role, junior);
+        public void Fire(string agent) => owner.Fire(project, studio, agent);
+        public void Swap(string agent, string other) => owner.Swap(project, studio, agent, other);
+    }
+
+    private void Hire(Project project, Studio studio, string agent, StudioRole role, bool junior) => ChangeStudio(project, () =>
     {
         var replaced = StudioFlow.Hire(studio, agent, role, _state.UserName, junior);
         // The team talks in the studio's channel: the new hire is invited.
-        if (FilterProject is { } project && StudioChannel(project) is { } channel)
+        if (StudioChannel(project, studio) is { } channel)
         {
             try { _state.Chat.Invite(channel, _state.ChatMe, agent, true); }
             catch (ChatException) { }
         }
         var title = StudioFlow.TitleOf(studio, agent) ?? role.Name;
+        var where = StudioFlow.OpenStudiosOf(project).Count() > 1 ? $" in the {StudioFlow.KindName(studio.Kind)}" : "";
         return replaced != null
-            ? $"Hired {agent} as {title} instead of {replaced}, who's back in the lobby. {agent} is told what the role expects, and invited to the studio's channel."
-            : $"Hired {agent} as {title}{(junior && StudioFlow.HolderOf(studio, role) is { } senior ? $" under {senior}" : "")}. It's told what the role expects, and invited to the studio's channel.";
+            ? $"Hired {agent} as {title}{where} instead of {replaced}, who's back {BackTo(project)}. {agent} is told what the role expects, and invited to the studio's channel."
+            : $"Hired {agent} as {title}{where}{(junior && StudioFlow.HolderOf(studio, role) is { } senior ? $" under {senior}" : "")}. It's told what the role expects, and invited to the studio's channel.";
     });
 
+    /// <summary>Where an agent goes when it leaves its role: the office, or the lobby while the office is closed.</summary>
+    private static string BackTo(Project project) => StudioFlow.HasOffice(project) ? "in the office" : "in the lobby";
+
     /// <summary>The studio's channel (made the first time if the project has none), or null if Chat can't have it.</summary>
-    private ChatChannel? StudioChannel(Project project)
+    private ChatChannel? StudioChannel(Project project, Studio studio)
     {
-        if (project.Studio is not { } studio) return null;
         try { return StudioFlow.ChannelFor(project, studio, _state.Chat, _state.ChatMe); }
         catch (ChatException) { return null; }
     }
 
-    void IStudioHiring.Fire(string agent) => ChangeStudio(studio =>
+    private void Fire(Project project, Studio studio, string agent) => ChangeStudio(project, () =>
     {
         var role = StudioFlow.RoleOf(studio, agent)?.Name;
         StudioFlow.Fire(studio, agent, _state.UserName);
-        return $"{agent} is no longer the {role}: back in the lobby.";
+        return $"{agent} is no longer the {role}: back {BackTo(project)}.";
     });
 
-    void IStudioHiring.Swap(string agent, string other) => ChangeStudio(studio =>
+    private void Swap(Project project, Studio studio, string agent, string other) => ChangeStudio(project, () =>
     {
         StudioFlow.Swap(studio, agent, other, _state.UserName);
         return $"{agent} and {other} swapped roles; both are told.";
     });
 
-    private void ChangeStudio(Func<Studio, string> change)
+    private void ChangeStudio(Project project, Func<string> change)
     {
-        if (FilterProject is not { Studio: { } studio } project) return;
         try
         {
-            _state.StatusText = change(studio);
+            _state.StatusText = change();
         }
         catch (InvalidOperationException ex)
         {
@@ -742,20 +905,25 @@ public sealed partial class AgentActivityViewModel : ObservableObject, IStudioHi
         RefreshStudio();
     }
 
-    /// <summary>A studio was set up or removed elsewhere (Details).</summary>
+    /// <summary>A studio was set up, opened, closed or removed elsewhere (Details).</summary>
     internal void RefreshStudioView() => RefreshStudio();
+
+    private static readonly string[] RoomProperties =
+        [nameof(CanSetUpStudio), nameof(ShowsStudio), nameof(OfficeTitle), nameof(RoomTabs), nameof(ShowRoomTabs), nameof(RoomsToOpen), nameof(HasRoomsToOpen),
+         nameof(OpenRoomsLabel), nameof(CloseRoomToolTip)];
 
     private void RefreshStudio()
     {
-        foreach (var name in new[] { nameof(CanSetUpStudio), nameof(ShowsStudio), nameof(OfficeTitle) }) OnPropertyChanged(name);
+        foreach (var name in RoomProperties) OnPropertyChanged(name);
         foreach (var card in Live) card.Refresh();
         UpdateOffice();
         RefreshChannel();
     }
 
-    /// <summary>The agent's role in the shown project's studio, for its card.</summary>
+    /// <summary>The agent's role in the room shown (in the office, in any of the project's open studios), for its card.</summary>
     internal string? StudioRoleOf(McpSession session) =>
-        FilterProject is { Studio: { } studio } ? StudioFlow.RoleOf(studio, session.AgentName)?.Name : null;
+        FilterProject is not { Remote: null } project ? null
+        : (ShownStudio ?? StudioFlow.HiredIn(project, session.AgentName)) is { } studio ? StudioFlow.RoleOf(studio, session.AgentName)?.Name : null;
 
     /// <summary>The agent's latest message in Chat since it connected (for its speech bubble at the cooler).</summary>
     private string? LastSaid(McpSession session)
@@ -1110,3 +1278,14 @@ public sealed partial class AgentHistoryRow(FeedEvent e, string? dayHeader, Main
 
     [RelayCommand] private void Open() => main.Feed.Open(e);
 }
+
+/// <summary>One of a project's open rooms, as a tab above the room in the Agents view; the one shown can be closed from it.</summary>
+public sealed record RoomTab(string Name, bool IsSelected, string ToolTip, System.Windows.Input.ICommand Select)
+{
+    public System.Windows.Input.ICommand? Close { get; init; }
+    public string? CloseToolTip { get; init; }
+    public bool CanClose => Close != null;
+}
+
+/// <summary>A room the project could open (its office, or a studio), with the command and its parameter ("Office", "Game", "Film").</summary>
+public sealed record RoomChoice(string Name, string ToolTip, System.Windows.Input.ICommand Open, string Room);

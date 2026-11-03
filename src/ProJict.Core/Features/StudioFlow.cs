@@ -124,6 +124,58 @@ public static class StudioFlow
 
     private static bool Same(string a, string b) => string.Equals(a.Trim(), b.Trim(), StringComparison.OrdinalIgnoreCase);
 
+    // ───────────── A project's rooms: the office and its studios ─────────────
+
+    /// <summary>The project's studios, open or closed: one of each kind at most.</summary>
+    public static IEnumerable<Studio> StudiosOf(Project project) => new[] { project.Studio, project.SecondStudio }.OfType<Studio>();
+
+    /// <summary>The studios that are among the project's rooms now.</summary>
+    public static IEnumerable<Studio> OpenStudiosOf(Project project) => StudiosOf(project).Where(s => !s.Closed);
+
+    public static Studio? StudioOf(Project project, StudioKind kind) => StudiosOf(project).FirstOrDefault(s => s.Kind == kind);
+
+    /// <summary>Whether the office is one of the project's rooms: unless you closed it, and always while no studio is open.</summary>
+    public static bool HasOffice(Project project) => !project.OfficeClosed || !OpenStudiosOf(project).Any();
+
+    /// <summary>The open studio the agent has a role in, if any (its first, if it has a role in both).</summary>
+    public static Studio? HiredIn(Project project, string agent) => OpenStudiosOf(project).FirstOrDefault(s => HireOf(s, agent) != null);
+
+    /// <summary>Opens the project's studio of that kind: the one it had, with its roles and hires, or a new one.</summary>
+    public static Studio OpenStudio(Project project, StudioKind kind)
+    {
+        if (StudioOf(project, kind) is { } kept)
+        {
+            kept.Closed = false;
+            return kept;
+        }
+        var studio = New(kind);
+        if (project.Studio == null) project.Studio = studio;
+        else project.SecondStudio = studio;
+        return studio;
+    }
+
+    /// <summary>Closes the studio, keeping its roles and hires for when it opens again; the office opens if no other room is left.</summary>
+    public static void CloseStudio(Project project, Studio studio)
+    {
+        studio.Closed = true;
+        if (!OpenStudiosOf(project).Any()) project.OfficeClosed = false;
+    }
+
+    /// <summary>Removes the studio for good, with its roles and hires.</summary>
+    public static void RemoveStudio(Project project, Studio studio)
+    {
+        if (project.SecondStudio == studio) project.SecondStudio = null;
+        else if (project.Studio == studio)
+        {
+            project.Studio = project.SecondStudio;
+            project.SecondStudio = null;
+        }
+        if (!OpenStudiosOf(project).Any()) project.OfficeClosed = false;
+    }
+
+    /// <summary>Closes or opens the office; it stays open while no studio is.</summary>
+    public static void SetOfficeOpen(Project project, bool open) => project.OfficeClosed = !open && OpenStudiosOf(project).Any();
+
     public static StudioHire? HireOf(Studio studio, string agent) => studio.Hires.FirstOrDefault(h => Same(h.Agent, agent));
 
     public static StudioRole? RoleOf(Studio studio, string agent) =>

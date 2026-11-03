@@ -189,10 +189,11 @@ public sealed partial class OfficeViewModel : ObservableObject
 
     /// <summary>The agents the view shows, each at its desk or at the cooler; called as they come, go and act.</summary>
     /// <param name="watching">A chat watcher runs for the agent.</param>
-    /// <param name="studio">A project's game studio to show instead of the office: hired agents work at their role's station, the others wait in the lobby.</param>
+    /// <param name="studio">A project's studio to show instead of the office: hired agents work at their role's station, the others wait in the lobby.</param>
     /// <param name="asleep">You put every agent to sleep: the ones done sleep at their desks.</param>
+    /// <param name="hireInto">The project's other open studios, whose roles a robot's menu offers too (in its office, all of them).</param>
     public void Update(IReadOnlyList<AgentCardViewModel> cards, DateTime now, Func<McpSession, bool> holdsItems, Func<McpSession, bool> watching,
-        Func<McpSession, string?> lastChat, StudioContext? studio = null, bool asleep = false)
+        Func<McpSession, string?> lastChat, StudioContext? studio = null, bool asleep = false, IReadOnlyList<StudioContext>? hireInto = null)
     {
         var sessions = cards.Select(c => c.Session).ToList();
         foreach (var gone in _agents.Keys.Except(sessions).ToList())
@@ -280,7 +281,7 @@ public sealed partial class OfficeViewModel : ObservableObject
             var desk = _deskOf.TryGetValue(agent.Session, out var d) ? Desks[d] : null;
             var activity = activities[agent];
             var hears = watching(agent.Session) || agent.Session.Listening;
-            agent.SetStudio(studio);
+            agent.SetStudio(studio, hireInto ?? []);
             if (activity == OfficeActivity.Talking)
             {
                 var (x, y) = TalkSpots[_spotOf[agent.Session]];
@@ -376,8 +377,11 @@ public interface IStudioHiring
     void Swap(string agent, string other);
 }
 
-/// <summary>A project's game studio, shown instead of the office: its name, roles and hires, how to change them, and its milestone board.</summary>
-public sealed record StudioContext(string ProjectName, Studio Studio, IStudioHiring Hiring, MilestoneBoard? Board = null);
+/// <summary>
+/// A project's studio, shown as its room: its name, roles and hires, how to change them, and its milestone board. While the project's office
+/// is open (<paramref name="HasOffice"/>), agents nobody hired are there rather than in the studio's lobby.
+/// </summary>
+public sealed record StudioContext(string ProjectName, Studio Studio, IStudioHiring Hiring, MilestoneBoard? Board = null, bool HasOffice = false);
 
 /// <summary>The studio's milestone board: the project's items done of all, and its categories as milestones.</summary>
 public sealed record MilestoneBoard(IReadOnlyList<MilestoneRow> Rows, int Done, int Total)
@@ -507,7 +511,10 @@ public sealed partial class OfficeAgentViewModel(AgentCardViewModel card, Action
 
     /// <summary>In a studio: its role there (null while it waits in the lobby).</summary>
     [ObservableProperty] private string? _roleName;
+    /// <summary>In a studio, or in the office of a project with studios: its menu offers the roles to hire it to.</summary>
     [ObservableProperty] private bool _inStudio;
+    /// <summary>Right-click › Fire: where it goes then.</summary>
+    [ObservableProperty] private string _fireText = "Fire (back to the lobby)";
     /// <summary>Right-click › Hire as…: the roles, "instead of" whoever has one.</summary>
     [ObservableProperty] private IReadOnlyList<StudioChoice> _hireChoices = [];
     /// <summary>Right-click › Swap roles with: the others who have a role.</summary>
@@ -522,32 +529,44 @@ public sealed partial class OfficeAgentViewModel(AgentCardViewModel card, Action
     /// <summary>Right-click › Fire: back to the lobby.</summary>
     [RelayCommand] private void Fire() => _fire?.Invoke();
 
-    internal void SetStudio(StudioContext? studio)
+    /// <param name="studio">The studio it's shown in, if it's one.</param>
+    /// <param name="others">The project's other open studios, whose roles its menu offers too (those it has none in yet).</param>
+    internal void SetStudio(StudioContext? studio, IReadOnlyList<StudioContext> others)
     {
-        InStudio = studio != null;
         var name = Session.AgentName;
+        var elsewhere = others.Where(o => StudioFlow.HireOf(o.Studio, name) == null).ToList();
+        InStudio = studio != null || elsewhere.Count > 0;
         var role = studio != null ? StudioFlow.RoleOf(studio.Studio, name) : null;
         RoleName = studio != null ? StudioFlow.TitleOf(studio.Studio, name) : null;
         _fire = studio != null && role != null ? () => studio.Hiring.Fire(name) : null;
-        if (studio == null)
-        {
-            HireChoices = SwapChoices = [];
-            return;
-        }
-        // A role with someone in it: in their place, or as a junior under them. A junior can take its senior's place.
-        var junior = StudioFlow.HireOf(studio.Studio, name)?.Junior == true;
-        HireChoices = [.. studio.Studio.Roles.Where(r => r != role || junior).SelectMany(r => StudioFlow.HolderOf(studio.Studio, r) is { } holder
-            ? r == role
-                ? [new StudioChoice($"{r.Name} (instead of {holder})", new RelayCommand(() => studio.Hiring.Hire(name, r)))]
-                : new[]
-                {
-                    new StudioChoice($"{r.Name} (instead of {holder})", new RelayCommand(() => studio.Hiring.Hire(name, r))),
-                    new StudioChoice($"Junior {r.Name} (under {holder})", new RelayCommand(() => studio.Hiring.Hire(name, r, junior: true))),
-                }
-            : [new StudioChoice(r.Name, new RelayCommand(() => studio.Hiring.Hire(name, r)))])];
-        SwapChoices = role == null ? [] : studio.Studio.Hires.Where(h => !string.Equals(h.Agent, name, StringComparison.OrdinalIgnoreCase))
+        FireText = studio?.HasOffice == true ? "Fire (back to the office)" : "Fire (back to the lobby)";
+        // Named by their studio when the menu offers two studios' roles.
+        var named = (studio != null ? 1 : 0) + elsewhere.Count > 1;
+        HireChoices = [.. (studio != null ? HireChoicesIn(studio, name, named) : []).Concat(elsewhere.SelectMany(o => HireChoicesIn(o, name, named)))];
+        SwapChoices = studio == null || role == null ? [] : studio.Studio.Hires.Where(h => !string.Equals(h.Agent, name, StringComparison.OrdinalIgnoreCase))
             .Select(h => new StudioChoice($"{h.Agent} ({StudioFlow.TitleOf(studio.Studio, h.Agent)})",
                 new RelayCommand(() => studio.Hiring.Swap(name, h.Agent)))).ToList();
+    }
+
+    /// <summary>
+    /// The studio's roles to hire the agent to. A role with someone in it: in their place, or as a junior under them. A
+    /// junior can take its senior's place.
+    /// </summary>
+    private static IEnumerable<StudioChoice> HireChoicesIn(StudioContext studio, string name, bool named)
+    {
+        var role = StudioFlow.RoleOf(studio.Studio, name);
+        var junior = StudioFlow.HireOf(studio.Studio, name)?.Junior == true;
+        var kind = StudioFlow.KindName(studio.Studio.Kind);
+        var prefix = named ? char.ToUpperInvariant(kind[0]) + kind[1..] + ": " : "";
+        return studio.Studio.Roles.Where(r => r != role || junior).SelectMany(r => StudioFlow.HolderOf(studio.Studio, r) is { } holder
+            ? r == role
+                ? [new StudioChoice($"{prefix}{r.Name} (instead of {holder})", new RelayCommand(() => studio.Hiring.Hire(name, r)))]
+                : new[]
+                {
+                    new StudioChoice($"{prefix}{r.Name} (instead of {holder})", new RelayCommand(() => studio.Hiring.Hire(name, r))),
+                    new StudioChoice($"{prefix}Junior {r.Name} (under {holder})", new RelayCommand(() => studio.Hiring.Hire(name, r, junior: true))),
+                }
+            : [new StudioChoice(prefix + r.Name, new RelayCommand(() => studio.Hiring.Hire(name, r)))]);
     }
 
     internal void Place(OfficeActivity activity, double x, double y, bool standing, bool facingRight, OfficeDeskViewModel? desk, string? said, bool hearsChat = false)

@@ -6,9 +6,9 @@ using ProJict.Core.Model;
 namespace ProJict.App.Services;
 
 /// <summary>
-/// A project's studio (a game or film studio), for agents: the user hires them to its roles (in the Agents view). An agent is told its role
-/// and what the role expects when it's hired, swapped or let go, and current_project and list_projects repeat it, with who
-/// has the other roles; agents not hired yet wait in the lobby and work as usual.
+/// A project's studios (a game studio, a film studio, or both), for agents: the user hires them to its roles (in the Agents view). An
+/// agent is told its role and what the role expects when it's hired, swapped or let go, and current_project and list_projects repeat
+/// it, with who has the other roles; agents not hired yet stay in the office (or wait in the lobby while it's closed) and work as usual.
 /// </summary>
 public sealed partial class AgentTools
 {
@@ -24,18 +24,28 @@ public sealed partial class AgentTools
         $"Talk with the team in {channel ?? "the project's channel"}: say what you're good at (your model and tools: code, images, sound, video, tests…), " +
         "volunteer for the items that fit you, and agree who takes what before starting; hand over what suits someone else better.";
 
-    /// <summary>The project with the agent's place in its studio, if it has one.</summary>
+    /// <summary>The project with the agent's place in its open studios, if it has any: "studio", or "studios" when it has two.</summary>
     private JsonObject WithStudio(JsonObject json, Project project, McpSession session)
     {
-        if (project.Studio is not { } studio || project.Remote != null) return json;
+        if (project.Remote != null) return json;
+        var studios = StudioFlow.OpenStudiosOf(project).Select(s => StudioJson(project, s, session)).ToList();
+        if (studios.Count == 1) json["studio"] = studios[0];
+        else if (studios.Count > 1) json["studios"] = new JsonArray([.. studios]);
+        return json;
+    }
+
+    /// <summary>The agent's place in one of the project's studios: its role and the team, or that it isn't hired there.</summary>
+    private JsonObject StudioJson(Project project, Studio studio, McpSession session)
+    {
         var channel = StudioChannelName(studio);
         var role = StudioFlow.RoleOf(studio, session.AgentName);
         var title = StudioFlow.TitleOf(studio, session.AgentName);
         var senior = role != null ? StudioFlow.HolderOf(studio, role) : null;
         var junior = StudioFlow.HireOf(studio, session.AgentName)?.Junior == true;
-        json["studio"] = role != null
+        var json = role != null
             ? new JsonObject
             {
+                ["kind"] = StudioFlow.KindName(studio.Kind),
                 ["yourRole"] = title,
                 ["whatItExpects"] = role.Definition,
                 ["team"] = Team(studio),
@@ -48,23 +58,25 @@ public sealed partial class AgentTools
             }
             : new JsonObject
             {
+                ["kind"] = StudioFlow.KindName(studio.Kind),
                 ["yourRole"] = null,
                 ["team"] = Team(studio),
                 ["channel"] = channel,
-                ["note"] = $"{project.Name} has a {StudioFlow.KindName(studio.Kind)}, and you're in its lobby: the user hasn't hired you to a role. Work as usual meanwhile.",
+                ["note"] = $"{project.Name} has a {StudioFlow.KindName(studio.Kind)}, and you're {(StudioFlow.HasOffice(project) ? "in the office" : "in its lobby")}: " +
+                           "you aren't hired to a role there. Work as usual meanwhile.",
             };
-        if (LeadReview.IsLead(studio, session.AgentName) && json["studio"] is JsonObject lead)
+        if (LeadReview.IsLead(studio, session.AgentName))
         {
-            // The lead hires: who waits in the lobby, and how.
-            lead["lobby"] = new JsonArray([.. Lobby(project, studio).Select(s => (JsonNode)new JsonObject
+            // The lead hires: who isn't hired here yet, and how.
+            json["lobby"] = new JsonArray([.. Lobby(project, studio).Select(s => (JsonNode)new JsonObject
             {
                 ["agent"] = s.AgentName,
                 ["client"] = s.Client,
                 ["doing"] = s.Status ?? s.Label ?? s.Recent.LastOrDefault()?.Text,
             })]);
-            lead["hiring"] = "As the studio's lead you hire: talk with the agents in the lobby first (post_message to @name: what they're good at, " +
-                             "their model and tools), then hire_to_role with the role, as its senior (the one there goes back to the lobby) or as a junior " +
-                             "under it. The user is told, and can change it.";
+            json["hiring"] = "As the studio's lead you hire: talk with the agents not hired here yet (lobby) first (post_message to @name: what they're " +
+                             "good at, their model and tools), then hire_to_role with the role, as its senior (the one there leaves the role) or as a " +
+                             "junior under it. The user is told, and can change it.";
         }
         return json;
     }
@@ -90,17 +102,32 @@ public sealed partial class AgentTools
             "it. It's told what the role expects and invited to the studio's channel; the user is told and can change it.",
             Schema(ProjectArg, ("agent", "string", "The agent to hire, by name; it must be connected.", true),
                 ("role", "string", "The role, by name (e.g. Programmer).", true),
-                ("as", "enum:senior|junior", "Senior (the default) takes the role over; junior joins under its senior.", false)),
+                ("as", "enum:senior|junior", "Senior (the default) takes the role over; junior joins under its senior.", false),
+                ("studio", "enum:game|film", "Which studio, when the project has both and you lead both.", false)),
             HireToRole);
     }
 
     private string HireToRole(McpSession session, Args args, List<Attachment> files)
     {
         var project = ProjectFor(session, args);
-        if (project.Studio is not { } studio || project.Remote != null) throw new McpToolException($"{project.Name} has no studio.");
+        var open = project.Remote == null ? StudioFlow.OpenStudiosOf(project).ToList() : [];
+        if (open.Count == 0) throw new McpToolException($"{project.Name} has no studio.");
         var me = session.AgentName;
-        if (!LeadReview.IsLead(studio, me))
-            throw new McpToolException($"Only the studio's lead ({LeadReview.LeadOf(studio) ?? "nobody yet"}) or the user hires. Ask them.");
+        var kind = args.String("studio") switch
+        {
+            null => (StudioKind?)null,
+            "game" => StudioKind.Game,
+            "film" => StudioKind.Film,
+            _ => throw new McpToolException("studio must be game or film."),
+        };
+        if (kind != null && open.All(s => s.Kind != kind))
+            throw new McpToolException($"{project.Name} has no {StudioFlow.KindName(kind.Value)} open; it has a {string.Join(" and a ", open.Select(s => StudioFlow.KindName(s.Kind)))}.");
+        var led = open.Where(s => (kind == null || s.Kind == kind) && LeadReview.IsLead(s, me)).ToList();
+        if (led.Count == 0)
+            throw new McpToolException("Only a studio's lead or the user hires: " +
+                                       string.Join("; ", open.Where(s => kind == null || s.Kind == kind).Select(s => $"the {StudioFlow.KindName(s.Kind)}'s is {LeadReview.LeadOf(s) ?? "nobody yet"}")) + ". Ask them.");
+        if (led.Count > 1) throw new McpToolException("You lead both studios: say which with studio=game or studio=film.");
+        var studio = led[0];
         var agent = args.Required("agent").Trim().TrimStart('@');
         var roleName = args.Required("role").Trim();
         var role = studio.Roles.FirstOrDefault(r => string.Equals(r.Name, roleName, StringComparison.OrdinalIgnoreCase))
@@ -130,22 +157,25 @@ public sealed partial class AgentTools
         _main.GetProjectViewModel(project).RefreshStudio();
         _main.AgentActivity.RefreshStudioView();
         var title = StudioFlow.TitleOf(studio, agent) ?? role.Name;
+        var back = StudioFlow.HasOffice(project) ? "in the office" : "in the lobby";
         _state.StatusText = $"{me} hired {agent} as {title} in {project.Name}'s {StudioFlow.KindName(studio.Kind)}" +
-                            (replaced != null ? $", instead of {replaced}, who's back in the lobby." : ".");
+                            (replaced != null ? $", instead of {replaced}, who's back {back}." : ".");
         return Json(new JsonObject
         {
             ["hired"] = agent,
             ["as"] = title,
             ["replaced"] = replaced,
-            ["note"] = $"{agent} is told what the role expects and invited to the studio's channel" + (replaced != null ? $"; {replaced} is back in the lobby" : "") + ".",
+            ["note"] = $"{agent} is told what the role expects and invited to the studio's channel" + (replaced != null ? $"; {replaced} is back {back}" : "") + ".",
             ["team"] = Team(studio),
         });
     }
 
-    /// <summary>For waitingForYou and the watcher: the agent's role in a project's studio, with what it expects, or that it lost it.</summary>
-    private IEnumerable<(string Key, string Line)> StudioLines(McpSession session, Project project)
+    /// <summary>For waitingForYou and the watcher: the agent's role in a project's open studios, with what it expects, or that it lost it.</summary>
+    private IEnumerable<(string Key, string Line)> StudioLines(McpSession session, Project project) =>
+        StudioFlow.OpenStudiosOf(project).SelectMany(studio => StudioLines(session, project, studio));
+
+    private IEnumerable<(string Key, string Line)> StudioLines(McpSession session, Project project, Studio studio)
     {
-        if (project.Studio is not { } studio) yield break;
         if (StudioFlow.HireOf(studio, session.AgentName) is { } hire && studio.Roles.FirstOrDefault(r => r.Id == hire.RoleId) is { } role)
         {
             var title = StudioFlow.TitleOf(studio, session.AgentName) ?? role.Name;
@@ -163,7 +193,7 @@ public sealed partial class AgentTools
         {
             var name = studio.Roles.FirstOrDefault(r => r.Id == ended.RoleId)?.Name ?? "your";
             yield return ($"studio-ended:{project.Id}:{ended.RoleId}:{ended.At.Ticks}",
-                $"{ended.By} took you off the {name} role in {project.Name}'s {StudioFlow.KindName(studio.Kind)}: you're back in its lobby, without a role, until you're hired again.");
+                $"{ended.By} took you off the {name} role in {project.Name}'s {StudioFlow.KindName(studio.Kind)}: you're back {(StudioFlow.HasOffice(project) ? "in the office" : "in its lobby")}, without a role, until you're hired again.");
         }
     }
 }

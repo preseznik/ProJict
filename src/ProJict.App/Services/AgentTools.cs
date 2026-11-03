@@ -298,9 +298,9 @@ public sealed partial class AgentTools : IMcpToolHost
         "then has (publish_plan), and end with finish_publish. " +
         "When a result says asleep, the user put every agent to sleep: finish what you're doing, then stop and stay idle until you're told you're " +
         "woken (claim_item is refused meanwhile). " +
-        "When a project shows a studio (a game or film studio), the user hires agents to its roles: if you have one, work as it expects, and agree with the " +
+        "When a project shows a studio (a game or film studio; it can have both), the user hires agents to its roles: if you have one, work as it expects, and agree with the " +
         "team in the studio's channel who takes what, volunteering for what suits your model and tools. A role's first agent is its senior, the others " +
-        "juniors who agree with it what they take. If you're its lead, you hire too: talk with the agents in its lobby first, then hire_to_role. And if " +
+        "juniors who agree with it what they take. If you're its lead, you hire too: talk with the agents not hired there yet first, then hire_to_role. And if " +
         "the user lets the lead review wiki pages, you're told which pages wait for you: accept them or send them back with review_wiki. " +
         "Outside tools the user set up for agents (such as ElevenLabs, Suno, or ffmpeg on this computer) are in list_tools; use_tool_key gets one's API key once the user allows it, " +
         "browser_open opens a tool used in the browser in ProJict's own browser (where the user signed in), " +
