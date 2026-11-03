@@ -175,6 +175,7 @@ public sealed partial class DiscussionViewModel : ObservableObject
     /// <summary>Adds files to a draft, leaving out (and saying so) the ones over the size limit (Settings › Comments &amp; history).</summary>
     internal void AddFiles(ObservableCollection<PendingFile> to, IEnumerable<string> paths)
     {
+        if (FolderZips.TakesFolders(paths, zipped => AddFiles(to, zipped), s => _state.StatusText = s)) return;
         foreach (var path in paths)
         {
             var info = new FileInfo(path);

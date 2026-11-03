@@ -590,7 +590,7 @@ public sealed partial class WikiPageViewModel : ObservableObject
     /// </summary>
     public async Task AddFilesAsync(IReadOnlyList<string> paths, bool insert, byte[]? png = null)
     {
-        if (!CanEdit) return;
+        if (!CanEdit || FolderZips.TakesFolders(paths, zipped => _ = AddFilesAsync(zipped, insert, png), s => State.StatusText = s)) return;
         var added = new List<Attachment>();
         if (Host != null)
         {

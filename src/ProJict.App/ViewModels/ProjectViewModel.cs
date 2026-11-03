@@ -755,6 +755,7 @@ public sealed partial class ProjectViewModel : ObservableObject
     /// </summary>
     public async Task AddItemWithAttachments(CategoryViewModel category, IReadOnlyList<string> files, byte[]? png)
     {
+        if (FolderZips.TakesFolders(files, zipped => _ = AddItemWithAttachments(category, zipped, png), s => _state.StatusText = s)) return;
         if (FocusItem != null) FocusOn(category.Model);
         List<Attachment> added;
         try
@@ -1101,6 +1102,7 @@ public sealed partial class ProjectViewModel : ObservableObject
     /// <summary>Copies the files into the data folder (off the UI thread, they may be large) and attaches them to the row's item.</summary>
     public async Task AttachFiles(ItemRowViewModel row, IReadOnlyList<string> paths)
     {
+        if (FolderZips.TakesFolders(paths, zipped => _ = AttachFiles(row, zipped), s => _state.StatusText = s)) return;
         // Video and audio are big: linked where they are rather than copied.
         var big = paths.Where(p => File.Exists(p) && MediaLinks.IsBig(p)).ToList();
         if (big.Count > 0)

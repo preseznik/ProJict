@@ -866,6 +866,7 @@ public sealed partial class ChatViewModel : ObservableObject
 
     public void AddFiles(IEnumerable<string> paths)
     {
+        if (FolderZips.TakesFolders(paths, AddFiles, s => _state.StatusText = s)) return;
         foreach (var path in paths)
         {
             var info = new FileInfo(path);
