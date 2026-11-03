@@ -369,15 +369,18 @@ public sealed partial class CommentViewModel : ObservableObject
         else SendAnswersCommand.NotifyCanExecuteChanged();
     }
 
-    /// <summary>Your answers, kept on the question and posted as your reply (so the agent hears it).</summary>
+    /// <summary>
+    /// Your answers, kept on the question and posted as your reply (so the agent hears it). They go on the comment as it is
+    /// now, which may be a newer copy than the one the questions were shown from (another ProJict's, or after an undo).
+    /// </summary>
     [RelayCommand(CanExecute = nameof(CanSendAnswers))]
     private void SendAnswers()
     {
-        if (!CanSendAnswers()) return;
-        foreach (var choice in Choices) choice.Model.Answer = choice.Picked;
-        if (!_owner.Post(CommentChoices.AnswerText(Model.Choices!), Id))
+        if (!CanSendAnswers() || Model.Choices is not { } questions || questions.Count != Choices.Count) return;
+        for (var i = 0; i < questions.Count; i++) questions[i].Answer = Choices[i].Picked;
+        if (!_owner.Post(CommentChoices.AnswerText(questions), Id))
         {
-            foreach (var choice in Choices) choice.Model.Answer = null;
+            foreach (var question in questions) question.Answer = null;
             return;
         }
         foreach (var choice in Choices) choice.Refresh();
@@ -435,11 +438,23 @@ public sealed partial class CommentViewModel : ObservableObject
     private void Update(Comment model)
     {
         var changed = model.Text != Model.Text || model.Deleted != Model.Deleted || (model.Attachments?.Count ?? 0) != (Model.Attachments?.Count ?? 0);
+        var newChoices = !ReferenceEquals(model.Choices, Model.Choices);
         Model = model;
+        // A newer copy of the comment (another ProJict's, or after an undo): its questions are new objects too. Shown from
+        // them, keeping what you picked but haven't sent, so the answers go on the comment as it is.
+        if (newChoices && _choices != null)
+        {
+            var picked = _choices.Select(c => (c.Question, c.Picked)).ToList();
+            _choices = null;
+            for (var i = 0; i < Choices.Count && i < picked.Count; i++)
+                if (Choices[i].Question == picked[i].Question && !Choices[i].IsAnswered && picked[i].Picked != null) Choices[i].Picked = picked[i].Picked;
+            changed = true;
+        }
         if (changed)
         {
             _attachments = null;
             OnPropertyChanged(string.Empty);
+            SendAnswersCommand.NotifyCanExecuteChanged();
         }
         SyncList(Replies, model.Replies, _owner, Depth + 1);
         OnPropertyChanged(nameof(HasReplies));
