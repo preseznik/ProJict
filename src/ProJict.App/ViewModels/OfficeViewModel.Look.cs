@@ -33,11 +33,11 @@ public sealed partial class OfficeViewModel
 
     /// <summary>
     /// The drawn rooms' floors are wider and shallower than the classic room's (its back desks would stand on their back
-    /// walls): their desks stand in two rows on either side of the cooler, the back row's robots between the front row's,
-    /// so none hides another. Its seat (where the robot sits) and how far down the floor (y) for the left side's desks,
-    /// back to front as <see cref="DeskDepths"/>; the right side's are the same, mirrored.
+    /// walls): their desks stand in rows on either side of the cooler, each row's robots between the next row's, so none
+    /// hides another: one at the back, then two and two. Its seat (where the robot sits) and how far down the floor (y)
+    /// for the left side's desks, back to front as <see cref="DeskDepths"/>; the right side's are the same, mirrored.
     /// </summary>
-    private static readonly (double SeatX, double Y)[] DrawnDesks = [(305, 400), (185, 405), (262, 466), (115, 468)];
+    private static readonly (double SeatX, double Y)[] DrawnDesks = [(245, 362), (305, 404), (185, 408), (262, 466), (115, 468)];
 
     /// <summary>Where talkers stand around the cooler in the drawn rooms: close in, between the desks on either side.</summary>
     private static readonly (double X, double Y)[] DrawnCoolerSpots =

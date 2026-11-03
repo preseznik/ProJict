@@ -12,17 +12,44 @@ public static class StudioFlow
     /// <summary>How many ended hires are kept for the agents to hear about.</summary>
     private const int EndedKept = 30;
 
-    /// <summary>A new game studio with its eight roles, each with what it's expected to do.</summary>
+    /// <summary>A new game studio with its ten roles, each with what it's expected to do.</summary>
     public static Studio NewGame() => New(StudioKind.Game);
 
-    /// <summary>A new studio of that kind, with its eight roles.</summary>
+    /// <summary>A new studio of that kind, with its roles: a game studio's ten, a film studio's eight.</summary>
     public static Studio New(StudioKind kind) => new() { Kind = kind, Roles = [.. kind == StudioKind.Film ? FilmRoles() : DefaultRoles()] };
 
     /// <summary>"game studio", "film studio".</summary>
     public static string KindName(StudioKind kind) => kind == StudioKind.Film ? "film studio" : "game studio";
 
-    /// <summary>Which of the eight places a station is (0–3 the left wall back to front, 4–7 the right).</summary>
-    public static int PlaceOf(StudioStation station) => (int)station % 8;
+    /// <summary>How many places a studio's room has: five a side.</summary>
+    public const int Places = 10;
+
+    /// <summary>
+    /// Which of the ten places a station is: 0–4 the left side back to front, 5–9 the right. A game studio's UI designer
+    /// and Cinematics have the two at the back (a film studio leaves them empty); the others keep their order behind them.
+    /// </summary>
+    public static int PlaceOf(StudioStation station) => station switch
+    {
+        StudioStation.UI => 0,
+        StudioStation.Cinematics => 5,
+        _ => (int)station % 8 + ((int)station % 8 < 4 ? 1 : 2),
+    };
+
+    /// <summary>
+    /// Gives a game studio from before them the roles a game studio has now (its UI designer and Cinematics), with nobody
+    /// hired yet; the roles it has stay as you left them. True when it added any.
+    /// </summary>
+    public static bool AddNewRoles(Project project)
+    {
+        var added = false;
+        foreach (var studio in StudiosOf(project).Where(s => s.Kind == StudioKind.Game))
+            foreach (var role in DefaultRoles().Where(r => studio.Roles.All(had => had.Station != r.Station)))
+            {
+                studio.Roles.Add(role);
+                added = true;
+            }
+        return added;
+    }
 
     public static IEnumerable<StudioRole> DefaultRoles()
     {
@@ -57,6 +84,15 @@ public static class StudioFlow
             "Owns the schedule and shipping: what goes into the next build or release, priorities, and that nothing waits unnoticed. Delivers milestones " +
             "and their items, release notes, ship requests and plans, and a short status when asked. Works with everyone: agrees scope with the Lead " +
             "designer and asks QA what blocks a release.");
+        yield return Role("UI designer", StudioStation.UI,
+            "Owns the game's interface: menus, HUD, screens and the flow between them, readable and easy to use on every platform it runs on (VR " +
+            "included). Delivers a mockup or wireframe in the item before it's built (what each element shows and does), UI art attached in the " +
+            "sizes the game needs, and fixes for the UI bugs QA finds. Works with the Game designer on what the UI must show, the Artist on the " +
+            "style and the Programmer to get it in.");
+        yield return Role("Cinematics", StudioStation.Cinematics,
+            "Owns the game's cinematic moments: cutscenes, in-game cameras, intros and trailers. Delivers a short script or storyboard in the item, " +
+            "camera and timing notes, and the cutscenes and trailer videos attached to their items. Works with the Lead designer on the story " +
+            "beats, the Artist and Sound engineer on what each shot needs, and the Programmer to get them into the game.");
     }
 
     /// <summary>

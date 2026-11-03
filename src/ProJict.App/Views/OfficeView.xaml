@@ -21,7 +21,7 @@
             through it, to a robot behind it or the room.
         -->
         <DataTemplate DataType="{x:Type vm:OfficeDeskViewModel}">
-            <Canvas IsHitTestVisible="False">
+            <Canvas IsHitTestVisible="False" Visibility="{Binding IsShown, Converter={StaticResource BoolToVis}}">
                 <Canvas.RenderTransform>
                     <TransformGroup>
                         <ScaleTransform ScaleX="{Binding ScaleX}" ScaleY="{Binding Scale}" />

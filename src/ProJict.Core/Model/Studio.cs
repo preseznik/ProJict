@@ -6,13 +6,14 @@ namespace ProJict.Core.Model;
 public enum StudioKind { Game, Film }
 
 /// <summary>
-/// Where a role works, and with what: the eight stations along the studio's side walls (left back to front, then right),
-/// a game studio's first, then a film studio's (the same eight places).
+/// Where a role works, and with what: a game studio's eight stations, then a film studio's (in the same places), then a
+/// game studio's UI designer's and Cinematics' (added later, in the two places a film studio leaves empty).
 /// </summary>
 public enum StudioStation
 {
     Lead, Design, Level, Code, Art, Sound, QA, Production,
     Director, Writer, Capture, Editing, Mixing, Graphics, Publishing, Producing,
+    UI, Cinematics,
 }
 
 /// <summary>A job in a project's studio: what it's called, and what it owns, delivers and how it works with the others.</summary>
