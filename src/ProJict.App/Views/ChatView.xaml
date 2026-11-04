@@ -696,7 +696,7 @@
                                   AutomationProperties.Name="Only what mentions you" Visibility="{Binding IsDirect, Converter={StaticResource InvBoolToVis}}">
                         <TextBlock Text="@" FontWeight="SemiBold" />
                     </ToggleButton>
-                    <ToggleButton x:Name="MembersToggle" Style="{StaticResource SubtleToggle}" IsChecked="{Binding ShowMembers}" ToolTip="Show or hide the members"
+                    <ToggleButton x:Name="MembersToggle" Style="{StaticResource SubtleToggle}" IsChecked="{Binding ShowMembers}" ToolTip="{Binding MembersToolTip}"
                                   AutomationProperties.Name="Members">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Style="{StaticResource Icon}" Text="&#xE716;" FontSize="13" Margin="0,1,6,0" />
@@ -754,12 +754,20 @@
                                   Content="Messages" Padding="9,3" Margin="0,0,4,0" AutomationProperties.Name="Messages" />
                     <ToggleButton x:Name="MediaTab" Style="{StaticResource SubtleToggle}" IsChecked="{Binding ShowsMedia, Mode=OneWay}" Command="{Binding ShowTabCommand}" CommandParameter="Media"
                                   Content="{Binding MediaTabText}" Padding="9,3" Margin="0,0,4,0" AutomationProperties.Name="Media"
-                                  ToolTip="The pictures, videos and sounds posted here, newest first" />
+                                  ToolTip="{Binding MediaTabToolTip}" />
                     <ToggleButton x:Name="FilesTab" Style="{StaticResource SubtleToggle}" IsChecked="{Binding ShowsFiles, Mode=OneWay}" Command="{Binding ShowTabCommand}" CommandParameter="Files"
                                   Content="{Binding FilesTabText}" Padding="9,3" AutomationProperties.Name="Files"
-                                  ToolTip="The other files posted here, newest first" />
+                                  ToolTip="{Binding FilesTabToolTip}" />
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Visibility="{Binding ShowsMessages, Converter={StaticResource InvBoolToVis}}">
+                    <!-- Their sort: newest, oldest, by name, largest (#b3359822) -->
+                    <Button x:Name="FileOrderButton" Style="{StaticResource SubtleButton}" Padding="7,4" Margin="0,0,6,0" VerticalAlignment="Center"
+                            Command="{Binding CycleFileOrderCommand}" ToolTip="{Binding FileOrderToolTip}" AutomationProperties.Name="Sort the files">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE8CB;" FontSize="12" VerticalAlignment="Center" />
+                            <TextBlock x:Name="FileOrderText" Text="{Binding FileOrderText}" FontSize="12" Margin="5,0,0,0" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
                     <ToggleButton Style="{StaticResource SubtleToggle}" IsChecked="{Binding MediaAsList}" Padding="7,4" Margin="0,0,6,0" AutomationProperties.Name="As a list"
                                   ToolTip="As a list, where videos and sounds play in place (off: a grid of pictures)" Visibility="{Binding ShowsMedia, Converter={StaticResource BoolToVis}}">
                         <TextBlock Style="{StaticResource Icon}" Text="&#xE8FD;" FontSize="13" />
@@ -933,7 +941,12 @@
                 </Style>
             </Border.Style>
             <DockPanel Margin="14,22,12,12">
-                <TextBlock DockPanel.Dock="Top" Text="Members" Style="{StaticResource SectionTitle}" Margin="0,0,0,10" />
+                <DockPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+                    <Button x:Name="HideMembersButton" DockPanel.Dock="Right" Style="{StaticResource SubtleIconButton}" Content="&#xE89F;" FontSize="12" Padding="6"
+                            VerticalAlignment="Center" Command="{Binding HideMembersCommand}" ToolTip="Hide the member list: the messages take the room (the members button brings it back)"
+                            AutomationProperties.Name="Hide the member list" />
+                    <TextBlock Text="Members" Style="{StaticResource SectionTitle}" VerticalAlignment="Center" />
+                </DockPanel>
                 <StackPanel DockPanel.Dock="Bottom" Margin="0,10,0,0" Visibility="{Binding CanInvite, Converter={StaticResource BoolToVis}}">
                     <TextBlock Text="Invite an agent or person" Style="{StaticResource MutedText}" FontSize="12" Margin="0,0,0,4" />
                     <DockPanel>

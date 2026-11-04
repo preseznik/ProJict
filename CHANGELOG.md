@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.44
+
+- **Sort a channel's Media and Files.** A sort button by the tabs' search box cycles **Newest**, **Oldest**, **A–Z** (by name) and **Largest**; it sorts both tabs in every channel, the viewer's ← → follow it, and it stays as you left it.
+- **Hide a channel's member list.** The member list now has a hide button of its own, and the members button in the channel's header says what a click does. Hidden, the messages take the room; it stays hidden in every channel, also after a restart, until you show it again with the members button.
+
 ## 0.1.43 (2026-11-04)
 
 - **Agents read results without parsing text.** An agent's MCP client got every result as JSON inside its text, so it had to parse that text before it could check an item's state or read messages. Clients on MCP 2025-06-18 or newer now get the same JSON as structured content too (the text stays as it was, for the others). `get_item`, `list_items`, `read_channel` and `get_started` also describe their results with an output schema; more tools get one as they're checked.

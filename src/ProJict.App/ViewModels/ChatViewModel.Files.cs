@@ -72,7 +72,7 @@ public sealed partial class ChatViewModel
         else
         {
             var owner = AttachmentOwner;
-            var found = ChatFiles.Of(channel, ShowsMedia, FileSearch, me, ignored).Select(f => new ChatFileViewModel(f, new AttachmentViewModel(owner, f.Attachment, () => { }), this)).ToList();
+            var found = ChatFiles.Of(channel, ShowsMedia, FileSearch, me, ignored, _state.AppSettings.ChatFileOrder).Select(f => new ChatFileViewModel(f, new AttachmentViewModel(owner, f.Attachment, () => { }), this)).ToList();
             Files = [.. found.Where(f => !f.File.CleanedOut)];
             var gone = found.Count - Files.Count;
             var what = ShowsMedia ? "pictures, videos or sounds" : "other files";
@@ -82,9 +82,29 @@ public sealed partial class ChatViewModel
         }
         // The file in the viewer went (its message was deleted, or a search left it out): the viewer closes.
         if (Viewing != null && ViewingIndex < 0) Viewing = null;
-        foreach (var name in new[] { nameof(ShowsMessages), nameof(ShowsMedia), nameof(ShowsFiles), nameof(ShowsFileGrid), nameof(ShowsFileList), nameof(Files),
+        foreach (var name in new[] { nameof(FileOrderText), nameof(FileOrderToolTip), nameof(MediaTabToolTip), nameof(FilesTabToolTip),
+                     nameof(ShowsMessages), nameof(ShowsMedia), nameof(ShowsFiles), nameof(ShowsFileGrid), nameof(ShowsFileList), nameof(Files),
                      nameof(MediaTabText), nameof(FilesTabText), nameof(FilesNote), nameof(CanViewPrevious), nameof(CanViewNext), nameof(ViewingPosition) })
             OnPropertyChanged(name);
+    }
+
+    // ───────────── Their sort (#b3359822) ─────────────
+
+    /// <summary>The sort button's word: Newest, Oldest, A–Z or Largest.</summary>
+    public string FileOrderText => ChatFiles.Label(_state.AppSettings.ChatFileOrder);
+    public string FileOrderToolTip =>
+        $"Sorted {ChatFiles.Describe(_state.AppSettings.ChatFileOrder)}: click to sort {ChatFiles.Describe(ChatFiles.Next(_state.AppSettings.ChatFileOrder))}";
+    public string MediaTabToolTip => $"The pictures, videos and sounds posted here, {ChatFiles.Describe(_state.AppSettings.ChatFileOrder)}";
+    public string FilesTabToolTip => $"The other files posted here, {ChatFiles.Describe(_state.AppSettings.ChatFileOrder)}";
+
+    /// <summary>The sort button: newest, oldest, by name, largest, then newest again; both tabs, every channel. Kept for next time.</summary>
+    [RelayCommand]
+    private void CycleFileOrder()
+    {
+        _state.AppSettings.ChatFileOrder = ChatFiles.Next(_state.AppSettings.ChatFileOrder);
+        _state.SaveAppSettings();
+        _state.StatusText = $"Media and Files are sorted {ChatFiles.Describe(_state.AppSettings.ChatFileOrder)}.";
+        RefreshFiles();
     }
 
     // ───────────── The viewer (#9113ea6a) ─────────────

@@ -548,7 +548,26 @@ public sealed partial class ChatViewModel : ObservableObject
         }
     }
 
-    [ObservableProperty] private bool _showMembers = true;
+    /// <summary>
+    /// The member list beside the messages (#a8c2bda4): the members button in the header, or the list's own hide button,
+    /// hides it and the messages take the room. Kept for next time, for every channel.
+    /// </summary>
+    public bool ShowMembers
+    {
+        get => _state.AppSettings.ChatShowsMembers;
+        set
+        {
+            if (_state.AppSettings.ChatShowsMembers == value) return;
+            _state.AppSettings.ChatShowsMembers = value;
+            _state.SaveAppSettings();
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(MembersToolTip));
+        }
+    }
+
+    public string MembersToolTip => ShowMembers ? "Hide the member list: the messages take the room" : "Show the member list";
+
+    [RelayCommand] private void HideMembers() => ShowMembers = false;
 
     private void SyncChannel()
     {
