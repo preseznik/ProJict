@@ -2,6 +2,7 @@
 
 ## 0.1.43
 
+- **Sort Chat's list.** A small sort button by Chat's title cycles the list's order: **A–Z** (by name), **Latest** (the last message first) and **Added** (the newest channels and conversations first). It sorts channels and private conversations alike, a conversation by the other one's name, and stays as you left it. Private conversations used to be newest first: **Latest** sorts them that way again.
 - **A browser tool stays with an agent that renames itself.** An agent that opened Suno before it picked its name, then picked one, was refused its own browser ("Claude Code is using it"), and closing it didn't let it go. Now a tool's browser goes with the agent's connection, whatever it's called, and comes free when the agent closes it or disconnects.
 
 ## 0.1.42 (2026-11-03)

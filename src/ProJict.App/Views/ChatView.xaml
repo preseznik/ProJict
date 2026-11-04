@@ -415,6 +415,14 @@
                             Command="{Binding NewChannelCommand}" ToolTip="Start a channel" AutomationProperties.Name="Start a channel" />
                     <Button x:Name="BrowseButton" DockPanel.Dock="Right" Style="{StaticResource SubtleIconButton}" Content="&#xE8FD;" VerticalAlignment="Center"
                             Command="{Binding BrowseCommand}" ToolTip="Browse channels: every channel, with what it's for" AutomationProperties.Name="Browse channels" />
+                    <!-- The list's order: a click goes to the next (by name, by the last message, newest added first). -->
+                    <Button x:Name="ChatOrderButton" DockPanel.Dock="Right" Style="{StaticResource SubtleButton}" Padding="5,4" VerticalAlignment="Center"
+                            Command="{Binding CycleOrderCommand}" ToolTip="{Binding OrderToolTip}" AutomationProperties.Name="Sort the list">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE8CB;" FontSize="12" VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding OrderText}" FontSize="10.5" Margin="3,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
+                    </Button>
                     <ToggleButton x:Name="AgentChatsToggle" DockPanel.Dock="Right" Style="{StaticResource SubtleToggle}" IsChecked="{Binding ShowAgentChats}" VerticalAlignment="Center"
                                   Padding="7,5" ToolTip="Agents' private chats: what your AI agents write to each other privately (you read them)"
                                   AutomationProperties.Name="Agents' private chats">

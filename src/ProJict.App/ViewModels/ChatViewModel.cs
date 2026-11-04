@@ -383,18 +383,34 @@ public sealed partial class ChatViewModel : ObservableObject
         Refresh();
     }
 
+    /// <summary>The sort button's word for how the list is sorted: "A–Z", "Latest" or "Added".</summary>
+    public string OrderText => _state.AppSettings.ChatOrder switch { ChatOrder.LastMessage => "Latest", ChatOrder.Added => "Added", _ => "A–Z" };
+    public string OrderToolTip =>
+        $"Sorted {ChatSorting.Describe(_state.AppSettings.ChatOrder)}: click to sort {ChatSorting.Describe(ChatSorting.Next(_state.AppSettings.ChatOrder))}";
+
+    /// <summary>The sort button: by name, then by the last message, then newest added first, then by name again. Kept for next time.</summary>
+    [RelayCommand]
+    private void CycleOrder()
+    {
+        _state.AppSettings.ChatOrder = ChatSorting.Next(_state.AppSettings.ChatOrder);
+        _state.SaveAppSettings();
+        _state.StatusText = $"Chat's list is sorted {ChatSorting.Describe(_state.AppSettings.ChatOrder)}.";
+        Refresh();
+    }
+
     /// <summary>Rebuilds the channel lists and tells the sidebar.</summary>
     public void Refresh()
     {
         var mine = new List<ChannelRowViewModel>();
         var others = new List<ChannelRowViewModel>();
-        foreach (var channel in Room.Channels.Where(c => !c.Direct).OrderBy(c => c.Name, StringComparer.Ordinal))
+        // As the sort button says: by name, by the last message, or newest added first.
+        var order = _state.AppSettings.ChatOrder;
+        foreach (var channel in ChatSorting.Sort(Room.Channels.Where(c => !c.Direct), order, c => c.Name))
             (ChatRoom.Member(channel, MyName) != null ? mine : others).Add(new ChannelRowViewModel(channel, this));
         YourChannels = mine;
         OtherChannels = others;
-        // Yours; the agents' conversations with each other have a panel of their own. The newest first.
-        var yours = Room.Channels.Where(c => c.Direct && ChatRoom.Member(c, MyName) != null)
-            .OrderByDescending(c => c.Messages.LastOrDefault()?.At ?? c.CreatedAt)
+        // Yours; the agents' conversations with each other have a panel of their own.
+        var yours = ChatSorting.Sort(Room.Channels.Where(c => c.Direct && ChatRoom.Member(c, MyName) != null), order, c => ChatRoom.Title(c, MyName))
             .Select(c => new ChannelRowViewModel(c, this)).ToList();
         PrivateChats = [.. yours.Where(r => !r.IsArchived)];
         ArchivedChats = [.. yours.Where(r => r.IsArchived)];
@@ -406,8 +422,11 @@ public sealed partial class ChatViewModel : ObservableObject
         // And each guest's that shares its own channels back with you.
         HostChats = _main.Guest.Connections.Where(c => c.Chat is { Channels.Count: > 0 }).Cast<IChatRemote>().Concat(_main.Host.BackChats)
             .Select(c => new ChatSection(_state, "host:" + c.OwnerName, $"{c.OwnerName}'s ProJict", "Shared with you: it's kept there, not here", shared: true).Set(
-                c.Chat!.Channels.OrderBy(ch => ch.Direct).ThenByDescending(ch => ChatRoom.Member(ch, c.MyName ?? "") != null).ThenBy(ch => ch.Name, StringComparer.Ordinal)
+                ChatSorting.Sort(c.Chat!.Channels, order, ch => ChatRoom.Title(ch, c.MyName ?? ""))
+                    .OrderBy(ch => ch.Direct).ThenByDescending(ch => ChatRoom.Member(ch, c.MyName ?? "") != null)
                     .Select(ch => new ChannelRowViewModel(ch, this)).ToList())).ToList();
+        OnPropertyChanged(nameof(OrderText));
+        OnPropertyChanged(nameof(OrderToolTip));
         Yours.Set(YourChannels);
         Others.Set(OtherChannels);
         Private.Set(PrivateChats);
