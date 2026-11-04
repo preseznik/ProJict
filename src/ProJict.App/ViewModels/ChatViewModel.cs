@@ -1601,6 +1601,8 @@ public sealed partial class ChatMessageViewModel : ObservableObject
     public List<ChatSegmentViewModel> Segments { get; private set; } = [];
     public bool IsDeleted { get; private set; }
     public string? EditedText { get; private set; }
+    /// <summary>"Lark is answering…" under a person's message an agent said it answers (claim_reply), until it does.</summary>
+    public string? AnsweringText { get; private set; }
     public bool MentionsMe { get; private set; }
     public List<AttachmentViewModel> Attachments { get; private set; } = [];
     public bool HasAttachments => Attachments.Count > 0;
@@ -1624,6 +1626,8 @@ public sealed partial class ChatMessageViewModel : ObservableObject
         ShowHeader = line.ShowHeader;
         IsDeleted = Model.Deleted;
         EditedText = Model.EditedAt != null && !Model.Deleted ? "(edited)" : null;
+        AnsweringText = !Model.Agent && Model.ClaimedBy is { } answerer && Model.AnsweredAt == null && Model.ClaimedAt is { } at &&
+                        DateTime.Now - at < ChatRoom.ClaimLapse ? $"{answerer} is answering…" : null;
         MentionsMe = !IsMine && _owner.Channel is { } here && ChatRoom.Mentions(here, Model, _owner.NameIn(here));
         var parsed = ChatText.Parse(Model.Text, _owner.MentionNames, _owner.IsChannelName, _owner.FindItem);
         if (_owner.ShipWaitingFor(_owner.Channel, Model) is { } shipping) parsed = ChatViewModel.WithShipButtons(parsed, _owner.ShowsShipButtons(shipping));

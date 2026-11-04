@@ -168,6 +168,7 @@ public sealed partial class AgentTools
                         found.AddRange(SharedWatchLines(identity));
                         found.AddRange(SharedRefusalLines(identity).Select(l => "[ProJict] " + l));
                         found.AddRange(WatchAnswerLines(identity));
+                        found.AddRange(WatchClaimLines(identity));
                     }
                     found.AddRange(WatchWorkLines(identity));
                     feed.Noticed.UnionWith(identity.Noticed);
@@ -233,6 +234,18 @@ public sealed partial class AgentTools
         lock (_live) same = _live.Where(s => string.Equals(s.AgentName, identity.AgentName, StringComparison.OrdinalIgnoreCase)).ToList();
         foreach (var session in same) identity.Noticed.UnionWith(session.Noticed);
         var lines = SleepLines(identity).Select(l => "[ProJict] " + l).ToList();
+        foreach (var session in same) session.Noticed.UnionWith(identity.Noticed);
+        Keep(identity);
+        return lines;
+    }
+
+    /// <summary>Messages another agent is answering, as "[#channel] Lark is answering …" lines; told once, by the watcher or a tool result.</summary>
+    private List<string> WatchClaimLines(McpSession identity)
+    {
+        List<McpSession> same;
+        lock (_live) same = _live.Where(s => string.Equals(s.AgentName, identity.AgentName, StringComparison.OrdinalIgnoreCase)).ToList();
+        foreach (var session in same) identity.Noticed.UnionWith(session.Noticed);
+        var lines = ClaimLines(identity, watcher: true);
         foreach (var session in same) session.Noticed.UnionWith(identity.Noticed);
         Keep(identity);
         return lines;

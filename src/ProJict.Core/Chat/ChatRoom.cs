@@ -466,6 +466,10 @@ public sealed class ChatRoom
             throw new ChatException(until == DateTime.MaxValue ? $"You're muted in #{channel.Name} until a moderator unmutes you."
                 : $"You're muted in #{channel.Name} until {until.ToString("HH:mm", CultureInfo.CurrentCulture)}.");
         if (replyTo is { } r && channel.Messages.All(m => m.Id != r)) throw new ChatException("The message to reply to isn't there any more.");
+        var answered = actor.Agent && replyTo is { } to ? channel.Messages.First(m => m.Id == to) : null;
+        if (answered != null && AnswererOf(channel, answered, Now) is { } answerer && !string.Equals(answerer, actor.Name, StringComparison.OrdinalIgnoreCase))
+            throw new ChatException($"{answerer} is answering that message: leave it to them (claim_reply says who answers what). " +
+                                    "If you have something they don't, say it to them privately.");
         if (actor.Agent) Throttle(actor.Name);
         if (Member(channel, actor.Name) == null) Join(channel, actor);
         approval = approval?.Trim();
@@ -477,6 +481,15 @@ public sealed class ChatRoom
             Approval = approval,
         };
         channel.Messages.Add(message);
+        if (answered is { Agent: false, Notice: false })
+        {
+            if (!string.Equals(answered.ClaimedBy, actor.Name, StringComparison.OrdinalIgnoreCase))
+            {
+                answered.ClaimedBy = actor.Name;
+                answered.ClaimedAt = message.At;
+            }
+            answered.AnsweredAt ??= message.At;
+        }
         Member(channel, actor.Name)!.LastRead = message.At;
         Changed?.Invoke(channel);
         Posted?.Invoke(channel, message);
@@ -608,6 +621,47 @@ public sealed class ChatRoom
     /// Whether the message @mentions them: by name, or with @everyone when they're in the channel (its author aside).
     /// @everyone doesn't reach people and agents who only see an Open channel without being in it.
     /// </summary>
+    // ───────────── Who answers a person's message (#1581da50) ─────────────
+
+    /// <summary>An agent's claim on a person's message lapses if it hasn't answered by then: another may answer.</summary>
+    public static readonly TimeSpan ClaimLapse = TimeSpan.FromMinutes(10);
+
+    /// <summary>
+    /// The agent that answers a person's message: the one that claimed it (or replied first), while its claim holds; else
+    /// the one agent the message @mentions, if it mentions just one (and not @everyone). Null when any may answer.
+    /// </summary>
+    public static string? AnswererOf(ChatChannel channel, ChatMessage message, DateTime now)
+    {
+        if (message.Agent || message.Notice || message.Deleted) return null;
+        if (message.ClaimedBy is { } claimer && (message.AnsweredAt != null || message.ClaimedAt is not { } at || now - at < ClaimLapse)) return claimer;
+        if (ChatText.MentionsEveryone(message.Text)) return null;
+        var mentioned = channel.Members.Where(m => m.Agent && ChatText.Mentions(message.Text, m.Name)).Select(m => m.Name).ToList();
+        return mentioned.Count == 1 ? mentioned[0] : null;
+    }
+
+    /// <summary>
+    /// An agent says it answers a person's message: true when it's its now (nobody else had it), else false with who does.
+    /// Others are then told to leave it, and their replies to it are refused.
+    /// </summary>
+    public (bool Yours, string? Answerer) ClaimReply(ChatChannel channel, ChatActor actor, Guid id)
+    {
+        var message = Message(channel, id);
+        if (!actor.Agent) throw new ChatException("Only agents claim messages to answer.");
+        if (message.Agent || message.Notice || message.Deleted) throw new ChatException("Only a person's message is claimed, to answer it.");
+        if (!CanSee(channel, actor)) throw new ChatException($"You can't answer in #{channel.Name}.");
+        var now = Now;
+        if (AnswererOf(channel, message, now) is { } answerer && !string.Equals(answerer, actor.Name, StringComparison.OrdinalIgnoreCase))
+            return (false, answerer);
+        if (!string.Equals(message.ClaimedBy, actor.Name, StringComparison.OrdinalIgnoreCase))
+        {
+            message.ClaimedBy = actor.Name;
+            message.ClaimedAt = now;
+            message.AnsweredAt = null;
+            Changed?.Invoke(channel);
+        }
+        return (true, actor.Name);
+    }
+
     public static bool Mentions(ChatChannel channel, ChatMessage message, string name) =>
         ChatText.Mentions(message.Text, name) ||
         (ChatText.MentionsEveryone(message.Text) && !string.Equals(message.By, name, StringComparison.OrdinalIgnoreCase) && Member(channel, name) != null);

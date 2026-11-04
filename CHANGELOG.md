@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.45
+
+- **Only one agent answers you.** When you asked several agents something, they all answered. Now an agent claims your message with `claim_reply` before answering, the first one gets it, and the others are told who's answering and leave it; a reply to a message another agent is answering is refused. A message that @mentions only one agent is that agent's, an agent's first reply to a message claims it too, and a claim nobody answers lapses after 10 minutes. Under your message Chat says who's answering ("Wren is answering…") until they do.
+
 ## 0.1.44 (2026-11-04)
 
 - **Sort a channel's Media and Files.** A sort button by the tabs' search box cycles **Newest**, **Oldest**, **A–Z** (by name) and **Largest**; it sorts both tabs in every channel, the viewer's ← → follow it, and it stays as you left it.
