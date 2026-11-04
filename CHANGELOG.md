@@ -2,6 +2,7 @@
 
 ## 0.1.43
 
+- **Voice calls with agents.** A phone button in a private conversation with an agent calls it; in a channel you pick which of its agents to call. An agent can take a call while it hears Chat right away (a chat watcher runs for it, or it's waiting for messages): it's rung, and picks up or says no with `answer_call`. The call window has a tile for each of you, lit while that one speaks, with captions, **Mute** and **Hang up**. What you say is heard with Windows speech recognition and posted as your message; an agent's answers are read aloud in a Windows voice of its own. What was said stays in the conversation.
 - **Sort Chat's list.** A small sort button by Chat's title cycles the list's order: **A–Z** (by name), **Latest** (the last message first) and **Added** (the newest channels and conversations first). It sorts channels and private conversations alike, a conversation by the other one's name, and stays as you left it. Private conversations used to be newest first: **Latest** sorts them that way again.
 - **A browser tool stays with an agent that renames itself.** An agent that opened Suno before it picked its name, then picked one, was refused its own browser ("Claude Code is using it"), and closing it didn't let it go. Now a tool's browser goes with the agent's connection, whatever it's called, and comes free when the agent closes it or disconnects.
 

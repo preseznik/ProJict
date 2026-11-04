@@ -550,7 +550,7 @@ public sealed partial class ChatViewModel : ObservableObject
         if (Channel != null && Here.Host is BackChat back) _main.Host.BackFetchFiles(back, Channel.Messages.SelectMany(m => m.Attachments ?? []));
         foreach (var name in new[] { nameof(HasChannel), nameof(Title), nameof(IsDirect), nameof(ShowJoin), nameof(IsInviteOnly), nameof(AccessText), nameof(AccessToolTip), nameof(LinkText), nameof(LinkSeparator), nameof(StartedText),
                      nameof(IsMember), nameof(IsModerator), nameof(MembersText), nameof(CanWrite), nameof(TopicText), nameof(ComposerNote),
-                     nameof(CanInvite), nameof(ShowChannelPane), nameof(ShowEmptyPane), nameof(IsOwner) })
+                     nameof(CanInvite), nameof(ShowChannelPane), nameof(ShowEmptyPane), nameof(IsOwner), nameof(CanCall), nameof(CallToolTip) })
             OnPropertyChanged(name);
         RefreshInviteChoices();
         RefreshPresence();

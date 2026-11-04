@@ -14,6 +14,8 @@ public partial class MainWindow : Window
         RestorePlacement();
         // Back in front: the chat channel you look at is read now.
         Activated += (_, _) => viewModel.Chat.OnActivated();
+        // A voice call started: its window opens beside this one.
+        viewModel.Calls.Started += calls => new Views.CallWindow(new CallViewModel(calls, viewModel.State)) { Owner = this }.Show();
         // The mouse's side buttons go back and forward, like in a browser.
         PreviewMouseDown += (_, e) =>
         {

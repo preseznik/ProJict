@@ -594,6 +594,17 @@ public sealed class ChatRoom
         return true;
     }
 
+    /// <summary>
+    /// A line from ProJict in the channel (a call ringing, picked up, over); <paramref name="about"/> hears
+    /// <paramref name="aboutText"/> instead, as news for it.
+    /// </summary>
+    public ChatMessage PostNotice(ChatChannel channel, ChatActor by, string text, string? about = null, string? aboutText = null)
+    {
+        AddNotice(channel, by, text, about, aboutText);
+        Changed?.Invoke(channel);
+        return channel.Messages[^1];
+    }
+
     // ───────────── Helpers ─────────────
 
     private void AddNotice(ChatChannel channel, ChatActor by, string text, string? about = null, string? aboutText = null) =>

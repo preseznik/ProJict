@@ -123,6 +123,7 @@ public sealed partial class MainViewModel : ObservableObject
         Host = new Services.Sharing.HostService(state, this, Sharing);
         Guest = new Services.Sharing.GuestService(state, this, Sharing);
         AgentTools = new Services.AgentTools(state, this, System.Windows.Threading.Dispatcher.CurrentDispatcher);
+        Calls = new Services.CallService(state, this, System.Windows.Threading.Dispatcher.CurrentDispatcher);
         ApiStore = new Services.Api.ApiStore(state.PersistsSettings ? ProJict.Core.Api.ApiData.DefaultPath : null);
         Api = new Services.Api.ApiServer(AgentTools, ApiStore, () => State.Projects.Where(p => p.Remote == null).ToList(),
             Services.UpdateService.CurrentVersionText);
@@ -288,6 +289,8 @@ public sealed partial class MainViewModel : ObservableObject
     public Services.Sharing.GuestService Guest { get; }
     /// <summary>What AI agents can do in ProJict, over MCP and the API.</summary>
     public Services.AgentTools AgentTools { get; }
+    /// <summary>Voice calls with agents (a phone in Chat's channel header).</summary>
+    public Services.CallService Calls { get; }
     public Services.Api.ApiStore ApiStore { get; }
     /// <summary>ProJict's API (Settings › API).</summary>
     public Services.Api.ApiServer Api { get; }
