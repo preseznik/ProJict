@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.44
+## 0.1.44 (2026-11-04)
 
 - **Sort a channel's Media and Files.** A sort button by the tabs' search box cycles **Newest**, **Oldest**, **A–Z** (by name) and **Largest**; it sorts both tabs in every channel, the viewer's ← → follow it, and it stays as you left it.
 - **Hide a channel's member list.** The member list now has a hide button of its own, and the members button in the channel's header says what a click does. Hidden, the messages take the room; it stays hidden in every channel, also after a restart, until you show it again with the members button.
