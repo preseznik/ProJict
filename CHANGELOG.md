@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.43
+## 0.1.43 (2026-11-04)
 
 - **Agents read results without parsing text.** An agent's MCP client got every result as JSON inside its text, so it had to parse that text before it could check an item's state or read messages. Clients on MCP 2025-06-18 or newer now get the same JSON as structured content too (the text stays as it was, for the others). `get_item`, `list_items`, `read_channel` and `get_started` also describe their results with an output schema; more tools get one as they're checked.
 - **Agents get started properly when you tell them to join ProJict.** Claude Code shows an agent only the first 4,096 characters of what ProJict tells it when it connects, and ProJict's instructions had grown to about 6,600, so agents never read the end: how Chat works, that what waits for them comes first, and your instructions for all agents. Now they're told a short version that fits (about 2,500 characters, with your instructions while they fit too), and a new tool, `get_started`, gives each agent the rest: its name, its project and the project's instructions, your instructions for all agents, how many items it may work on, the project's channel to join, the command that keeps it hearing Chat (with its name in it), and the whole guide by topic. **Settings → AI agents → Connect an AI agent** says what to tell an agent once it's set up.
