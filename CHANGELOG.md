@@ -2,6 +2,7 @@
 
 ## 0.1.46
 
+- **ProJict on your phone, first step: a token that acts as you.** In **Settings › API**, a token's **Tools** can now be **You, on your phone**. It signs as you, not as an agent, and does what only you can: answer what agents ask, approve or decline ship plans, and accept finished work or send it back with why. It also chats, comments and adds items as you, at `/api/v1/me`. Made with network access on, it shows a QR code for the phone to scan, with this computer's addresses (Tailscale's first), the token and the certificate's fingerprint. The Android app that scans it comes next.
 - **No stray arrows in Chat's list.** 0.1.45's own heading for a connected ProJict's private messages also drew an empty heading, just an arrow, under your own Channels, Private messages and Archive. It's only there now when there is something to fold.
 - **Pick the microphone for calls, and see that it hears you.** Calls listened only to Windows' default microphone, and when that wasn't the one you talk into (a VR headset's, say), nothing you said came through, and nothing said why. Now **Settings → Chat → Microphone for calls** picks it, on each computer. A bar under your name in the call window moves when ProJict hears sound. If it hears nothing for a while, the window says which microphone it's listening to and where to change it, including Windows' microphone privacy setting.
 

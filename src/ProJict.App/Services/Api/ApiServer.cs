@@ -304,7 +304,10 @@ public sealed class ApiServer
         try
         {
             if (path.Equals(McpPath, StringComparison.OrdinalIgnoreCase) || path.Equals(McpPath + "/", StringComparison.OrdinalIgnoreCase))
-                await McpAsync(context, token, baseUrl);
+            {
+                if (token.ActsAsYou) await Problem(context, 403, YouOnly);
+                else await McpAsync(context, token, baseUrl);
+            }
             else if (path.StartsWith(ApiRoutes.Base, StringComparison.OrdinalIgnoreCase) &&
                      (path.Length == ApiRoutes.Base.Length || path[ApiRoutes.Base.Length] == '/'))
                 await RestAsync(context, token, baseUrl, path[ApiRoutes.Base.Length..]);
@@ -344,6 +347,17 @@ public sealed class ApiServer
     private async Task RestAsync(HttpContext context, ApiToken token, string baseUrl, string path)
     {
         var method = context.Request.Method;
+        var me = path.Equals("/me", StringComparison.OrdinalIgnoreCase) || path.StartsWith("/me/", StringComparison.OrdinalIgnoreCase);
+        if (token.ActsAsYou)
+        {
+            await PhoneAsync(context, token, path is "" or "/" ? "/me" : path, me || path is "" or "/");
+            return;
+        }
+        if (me)
+        {
+            await Problem(context, 403, "Only a “You, on your phone” token reaches /me (Settings › API): this one is an agent's.");
+            return;
+        }
         var session = RestSession(token, baseUrl);
         var host = HostFor(token);
 
@@ -399,6 +413,61 @@ public sealed class ApiServer
         {
             var text = await _tools.CallAsync(session, route.Tool, args);
             await Reply(context, route.Status, text);
+        }
+        catch (McpToolException ex)
+        {
+            await Problem(context, ex.Problem switch
+            {
+                ToolProblem.NotFound => 404,
+                ToolProblem.Forbidden => 403,
+                ToolProblem.Conflict => 409,
+                _ => 400,
+            }, ex.Message);
+        }
+        catch (Exception ex)
+        {
+            await Problem(context, 500, $"ProJict could not do that: {ex.Message}");
+        }
+    }
+
+    private const string YouOnly =
+        "This token is ProJict on your phone: it acts as you at " + ApiRoutes.Base + "/me (GET /me, GET /me/waiting, …), not with agents' tools or MCP.";
+
+    /// <summary>
+    /// ProJict on your phone (#1bbc8a8d): a "You, on your phone" token acts as you, at /me only. Reading needs nothing
+    /// more; a read-only token can't decide, post or add.
+    /// </summary>
+    private async Task PhoneAsync(HttpContext context, ApiToken token, string path, bool me)
+    {
+        var method = context.Request.Method;
+        if (!me)
+        {
+            await Problem(context, 403, YouOnly);
+            return;
+        }
+        if (token.Frozen)
+        {
+            await Problem(context, 403, AgentTools.FrozenMessage);
+            return;
+        }
+        if (method is not ("GET" or "POST"))
+        {
+            await NotAllowed(context, "GET, POST");
+            return;
+        }
+        if (token.ReadOnly && method != "GET")
+        {
+            await Problem(context, 403, $"The token “{token.Name}” is read only: it can't decide, post or add (Settings › API).");
+            return;
+        }
+        var body = method == "GET" ? null : await BodyAsync(context.Request, false);
+        var query = context.Request.Query.ToDictionary(q => q.Key, q => q.Value.ToString(), StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            var text = await _tools.MeAsync(method, path, body, query);
+            var made = method == "POST" && (path.EndsWith("/items", StringComparison.OrdinalIgnoreCase) || path.EndsWith("/comments", StringComparison.OrdinalIgnoreCase) ||
+                                             path.EndsWith("/messages", StringComparison.OrdinalIgnoreCase));
+            await Reply(context, made ? 201 : 200, text);
         }
         catch (McpToolException ex)
         {

@@ -9,9 +9,16 @@ public enum ApiAccess { ReadWrite, ReadOnly }
 
 /// <summary>
 /// The tools a token's agent is offered, and may use: all an agent needs over the network (not the ones that need this
-/// computer itself), Chat only, or the ones you ticked.
+/// computer itself), Chat only, or the ones you ticked. Or no agent at all: <see cref="You"/> is ProJict on your phone, acting as you.
 /// </summary>
-public enum ApiToolSet { Agent, ChatOnly, Custom }
+public enum ApiToolSet
+{
+    Agent,
+    ChatOnly,
+    Custom,
+    /// <summary>You, on your phone (#1bbc8a8d): it signs as you, at /api/v1/me only, and decides what only you can.</summary>
+    You,
+}
 
 /// <summary>
 /// A key for ProJict's API (Settings › API). Its secret is shown once when it's made; only a hash of it is kept, plus
@@ -53,6 +60,8 @@ public sealed class ApiToken
 
     public bool IsExpired(DateTime now) => now >= ExpiresAt;
     public bool ReadOnly => Access == ApiAccess.ReadOnly;
+    /// <summary>ProJict on your phone: it acts as you, not as an agent.</summary>
+    public bool ActsAsYou => ToolSet == ApiToolSet.You;
     public string Masked => $"{ApiData.SecretPrefix}…{Hint}";
 }
 

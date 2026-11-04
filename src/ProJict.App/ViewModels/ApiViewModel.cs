@@ -136,6 +136,9 @@ public sealed partial class ApiViewModel : ObservableObject
         new(ApiToolSet.Agent, "All an agent needs", "Everything an agent does here, except clean-ups, shipping and linking local files, which need this computer."),
         new(ApiToolSet.ChatOnly, "Chat only", "Channels and private messages, nothing else."),
         new(ApiToolSet.Custom, "Only the tools I tick", "Tick them below. Picking a name and saying what it's doing are always allowed."),
+        new(ApiToolSet.You, "You, on your phone",
+            "ProJict on your phone, acting as you, not as an agent: it answers what agents ask, approves ship plans, accepts or sends back finished work, " +
+            "and chats and adds items as you (at " + ApiRoutes.Base + "/me). It reaches all your projects. Pair the phone with the QR code shown when it's made."),
     ];
     [ObservableProperty] [NotifyPropertyChangedFor(nameof(IsNewCustom))] private ToolSetChoice? _newToolSet;
     public bool IsNewCustom => NewToolSet?.Set == ApiToolSet.Custom;
@@ -155,12 +158,49 @@ public sealed partial class ApiViewModel : ObservableObject
 
     /// <summary>A secret just made or renewed, shown once.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasSecret), nameof(SecretTitle), nameof(SetupText), nameof(HasSetup))]
+    [NotifyPropertyChangedFor(nameof(HasSecret), nameof(SecretTitle), nameof(SetupText), nameof(HasSetup), nameof(IsPhoneSecret), nameof(IsAgentSecret),
+        nameof(PairingImage), nameof(PairingText))]
     private string? _secret;
     private string _secretFor = "";
+    /// <summary>The secret just shown is a "You, on your phone" token's: it's paired with a QR code, not set up in an agent.</summary>
+    private bool _secretIsPhone;
 
     public bool HasSecret => Secret != null;
-    public string SecretTitle => $"Copy the token for “{_secretFor}” now: ProJict keeps only a fingerprint of it and can't show it again.";
+    public string SecretTitle => _secretIsPhone
+        ? $"Pair your phone with “{_secretFor}” now: ProJict keeps only a fingerprint of the token and can't show it again."
+        : $"Copy the token for “{_secretFor}” now: ProJict keeps only a fingerprint of it and can't show it again.";
+    public bool IsPhoneSecret => Secret != null && _secretIsPhone;
+    public bool IsAgentSecret => Secret != null && !_secretIsPhone;
+
+    // ───────────── Pairing your phone ─────────────
+
+    /// <summary>
+    /// The QR code ProJict on your phone scans: this computer's addresses (Tailscale's first), the token and the
+    /// certificate's fingerprint. Only while the API serves the network over HTTPS: the phone reaches it no other way.
+    /// </summary>
+    public System.Windows.Media.ImageSource? PairingImage => IsPhoneSecret && Server is { IsRunning: true, Https: true } && PairingAddresses().Count > 0
+        ? PairingCode.Draw(ApiPairing.Payload(_secretFor, Secret!, PairingAddresses(), Server.Port, Server.Fingerprint))
+        : null;
+
+    /// <summary>Where the phone can find this computer, best first; tests set it.</summary>
+    public Func<IReadOnlyList<System.Net.IPAddress>> PairingAddresses { get; set; } = ApiPairing.Addresses;
+
+    public string PairingText
+    {
+        get
+        {
+            if (!IsPhoneSecret) return "";
+            if (Server is not { IsRunning: true, Https: true })
+                return "Your phone reaches ProJict over the network: tick “Let other devices on the network connect” above, then renew this token to get its QR code.";
+            var addresses = PairingAddresses();
+            if (addresses.Count == 0) return "This computer has no network address a phone could reach. Connect it to your network (or Tailscale), then renew this token.";
+            return "Scan it in ProJict on your phone: it pairs with this computer only, and tries " +
+                   string.Join(", ", addresses.Select(a => ApiPairing.Url(a, Server.Port))) + ". " +
+                   (addresses.Any(ApiPairing.IsPrivateVpn)
+                       ? "The first is Tailscale's, so it works away from home too."
+                       : "Away from home, put Tailscale on this computer and your phone, then renew this token: its address comes first.");
+        }
+    }
 
     // ───────────── Connecting an agent ─────────────
 
@@ -224,9 +264,12 @@ public sealed partial class ApiViewModel : ObservableObject
         var projects = AllProjects ? null : ProjectChoices.Where(c => c.IsChecked).Select(c => c.Project.Id).ToList();
         try
         {
-            var secret = Server.CreateToken(NewName, NewAccess?.Access ?? ApiAccess.ReadWrite, projects, NewExpiry?.Days ?? ApiData.DefaultExpiryDays,
+            var phone = NewToolSet?.Set == ApiToolSet.You;
+            // Your phone acts as you, in all your projects.
+            var secret = Server.CreateToken(NewName, NewAccess?.Access ?? ApiAccess.ReadWrite, phone ? null : projects, NewExpiry?.Days ?? ApiData.DefaultExpiryDays,
                 NewToolSet?.Set ?? ApiToolSet.Agent, NewTools.Where(t => t.IsChecked).Select(t => t.Name).ToList());
             _secretFor = NewName.Trim();
+            _secretIsPhone = phone;
             SetupFor = null;
             Secret = secret;
             NewName = "";
@@ -281,6 +324,7 @@ public sealed partial class ApiViewModel : ObservableObject
     internal void Renew(TokenRow row)
     {
         _secretFor = row.Token.Name;
+        _secretIsPhone = row.Token.ActsAsYou;
         Secret = Server.RenewToken(row.Token);
     }
 

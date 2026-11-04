@@ -39,6 +39,7 @@
     <!-- Draws wiki diagrams (mermaid.js) in Windows' Edge WebView2, off screen -->
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31" />
     <PackageReference Include="NAudio.WinMM" Version="3.3.0" />
+    <PackageReference Include="QRCoder" Version="1.6.0" />
     <PackageReference Include="System.Speech" Version="10.0.14" />
   </ItemGroup>
 

@@ -53,13 +53,25 @@
                             <Button DockPanel.Dock="Right" Content="Copy" MinWidth="70" Margin="8,0,0,0" Click="CopySecret_Click" />
                             <TextBox x:Name="SecretText" Style="{StaticResource Code}" Text="{Binding Secret, Mode=OneWay}" AutomationProperties.Name="Token" />
                         </DockPanel>
-                        <StackPanel Orientation="Horizontal" Margin="2,10,0,4">
-                            <TextBlock Text="Connect an agent in" Style="{StaticResource MutedText}" VerticalAlignment="Center" Margin="0,0,8,0" />
-                            <ComboBox ItemsSource="{Binding SetupClients}" SelectedItem="{Binding SetupClient}" Width="190" AutomationProperties.Name="Agent program" />
+                        <!-- An agent's token: how to connect it. -->
+                        <StackPanel Visibility="{Binding IsAgentSecret, Converter={StaticResource BoolToVis}}">
+                            <StackPanel Orientation="Horizontal" Margin="2,10,0,4">
+                                <TextBlock Text="Connect an agent in" Style="{StaticResource MutedText}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                <ComboBox ItemsSource="{Binding SetupClients}" SelectedItem="{Binding SetupClient}" Width="190" AutomationProperties.Name="Agent program" />
+                            </StackPanel>
+                            <DockPanel>
+                                <Button DockPanel.Dock="Right" Content="Copy" MinWidth="70" Margin="8,0,0,0" VerticalAlignment="Top" Click="CopySetup_Click" />
+                                <TextBox Style="{StaticResource Code}" Text="{Binding SetupText, Mode=OneWay}" TextWrapping="Wrap" AutomationProperties.Name="Setup" />
+                            </DockPanel>
                         </StackPanel>
-                        <DockPanel>
-                            <Button DockPanel.Dock="Right" Content="Copy" MinWidth="70" Margin="8,0,0,0" VerticalAlignment="Top" Click="CopySetup_Click" />
-                            <TextBox Style="{StaticResource Code}" Text="{Binding SetupText, Mode=OneWay}" TextWrapping="Wrap" AutomationProperties.Name="Setup" />
+                        <!-- Your phone's: the QR code it scans to pair (#1bbc8a8d). -->
+                        <DockPanel x:Name="PairingPanel" Margin="0,10,0,0" Visibility="{Binding IsPhoneSecret, Converter={StaticResource BoolToVis}}">
+                            <Border DockPanel.Dock="Left" Background="White" Padding="8" CornerRadius="4" Margin="0,0,14,0" VerticalAlignment="Top"
+                                    Visibility="{Binding PairingImage, Converter={StaticResource EmptyToVis}}">
+                                <Image x:Name="PairingQr" Source="{Binding PairingImage}" Width="220" Height="220" RenderOptions.BitmapScalingMode="NearestNeighbor"
+                                       AutomationProperties.Name="QR code to pair your phone" />
+                            </Border>
+                            <TextBlock Text="{Binding PairingText}" TextWrapping="Wrap" VerticalAlignment="Center" />
                         </DockPanel>
                         <Button Content="Done" HorizontalAlignment="Right" MinWidth="90" Margin="0,10,0,0" Command="{Binding DismissSecretCommand}" />
                     </StackPanel>
