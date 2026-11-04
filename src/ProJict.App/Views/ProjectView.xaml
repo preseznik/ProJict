@@ -926,7 +926,7 @@
                                                     <CheckBox IsChecked="{Binding IsChecked}" IsEnabled="{Binding IsEditable}" MinWidth="0" VerticalAlignment="Top" Margin="0,0,6,0"
                                                               AutomationProperties.Name="{Binding Path}" />
                                                     <Border x:Name="Level" Style="{StaticResource TagChip}" Background="{DynamicResource SystemFillColorCautionBrush}" Margin="0,1,8,0" VerticalAlignment="Top" Width="62">
-                                                        <TextBlock Text="{Binding Level}" FontSize="11" HorizontalAlignment="Center" Foreground="Black" />
+                                                        <TextBlock Text="{Binding Level}" FontSize="11" HorizontalAlignment="Center" Foreground="{DynamicResource TextOnCautionBrush}" />
                                                     </Border>
                                                     <StackPanel>
                                                         <TextBlock Text="{Binding Path}" FontFamily="{StaticResource MonoFont}" FontSize="12" TextTrimming="CharacterEllipsis" ToolTip="{Binding Path}" />
@@ -1365,7 +1365,7 @@
                                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
                                     <Border Width="8" Height="8" CornerRadius="2" Background="{DynamicResource AccentFillColorDefaultBrush}" Margin="0,0,5,0" />
                                     <TextBlock Text="People" Style="{StaticResource MutedText}" Margin="0,0,12,0" />
-                                    <Border Width="8" Height="8" CornerRadius="2" Background="{StaticResource AgentActivityBrush}" Margin="0,0,5,0" />
+                                    <Border Width="8" Height="8" CornerRadius="2" Background="{DynamicResource AgentActivityBrush}" Margin="0,0,5,0" />
                                     <TextBlock Text="AI agents" Style="{StaticResource MutedText}" />
                                 </StackPanel>
                                 <TextBlock Text="Week by week" Style="{StaticResource SectionTitle}" Margin="0" />
@@ -1384,7 +1384,7 @@
                                                 <RowDefinition Height="{Binding Agents}" />
                                                 <RowDefinition Height="{Binding People}" />
                                             </Grid.RowDefinitions>
-                                            <Border Grid.Row="1" Background="{StaticResource AgentActivityBrush}" CornerRadius="1" />
+                                            <Border Grid.Row="1" Background="{DynamicResource AgentActivityBrush}" CornerRadius="1" />
                                             <Border Grid.Row="2" Background="{DynamicResource AccentFillColorDefaultBrush}" CornerRadius="1" />
                                         </Grid>
                                     </DataTemplate>

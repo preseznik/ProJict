@@ -5,6 +5,7 @@ using ProJict.App.Services;
 using ProJict.App.ViewModels;
 using ProJict.App.Views;
 using ProJict.Core.Export;
+using ProJict.Core.Model;
 using ProJict.Core.Storage;
 using ProJict.Core.Updates;
 
@@ -76,7 +77,7 @@ public partial class App : Application
             return;
         }
 
-        ApplyTheme(State.Settings.Theme);
+        ApplyLook(State.Settings);
         // One snapshot per launch, before anything is written.
         State.BackupNow();
         State.CleanUpAttachments();
@@ -179,15 +180,9 @@ public partial class App : Application
         return ok;
     }
 
-    public static void ApplyTheme(string theme)
-    {
-        Current.ThemeMode = theme switch
-        {
-            "Light" => ThemeMode.Light,
-            "Dark" => ThemeMode.Dark,
-            _ => ThemeMode.System,
-        };
-    }
+    /// <summary>The theme and colors the settings pick (#ed53e5d4).</summary>
+    public static void ApplyLook(WorkspaceSettings settings) =>
+        Look.Apply(settings.Theme, ColorScheme.For(settings.ColorScheme, settings.CustomColors));
 
     public void ShowMainWindow()
     {

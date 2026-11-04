@@ -163,7 +163,7 @@
                             <!-- Pages agents changed (or with clashing edits) that wait for you. -->
                             <Border Grid.Column="2" CornerRadius="8" Padding="6,0" MinWidth="18" VerticalAlignment="Center" Background="{DynamicResource SystemFillColorCautionBrush}"
                                     Visibility="{Binding HasWikiReview, Converter={StaticResource BoolToVis}}">
-                                <TextBlock Text="{Binding WikiReviewCount}" FontSize="11" HorizontalAlignment="Center" Foreground="Black" />
+                                <TextBlock Text="{Binding WikiReviewCount}" FontSize="11" HorizontalAlignment="Center" Foreground="{DynamicResource TextOnCautionBrush}" />
                             </Border>
                         </Grid>
                     </Button>

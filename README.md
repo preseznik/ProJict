@@ -266,6 +266,7 @@ One wiki for the whole workspace, for what's worth keeping: how things work, dec
 - **Project links**: open the project's folder, VS Code, a terminal or its GitHub page from the project header.
 - **Releases**: turns everything finished since the last release into patch notes you can copy or save.
 - **Notes**: free-text notes per project, with attached files. **To wiki** turns one into a [wiki](#wiki) page.
+- **Colors**: beside the light and dark theme, **Settings › Board & prompts › Colors** offers premade schemes (Ocean, Forest, Sunset, Rose, Grape, Gold, Slate), each an accent color with a tinted background, and **Custom**, where you pick the accent, the background tint, and the colors of notice bars, warnings, errors, success and agents at work. **Windows** keeps your Windows accent color.
 
 ## Your data
 
