@@ -10,11 +10,19 @@ namespace ProJict.App.ViewModels;
 /// </summary>
 public sealed partial class ChatViewModel
 {
-    /// <summary>There's an agent here to call: in your own ProJict's channels you can write in.</summary>
-    public bool CanCall => Channel is { } channel && Here.Host == null && CanWrite && AgentsIn(channel).Any();
+    /// <summary>
+    /// There's someone here to call: agents in your own ProJict's channels you can write in, or the person in a private
+    /// conversation while their ProJict is connected to yours.
+    /// </summary>
+    public bool CanCall => Channel is { } channel && CanWrite &&
+                           ((Here.Host == null && AgentsIn(channel).Any()) || (PersonIn(channel) is { } person && _main.Calls.LinkFor(channel, person) != null));
+
+    /// <summary>The other one in a private conversation, when it's a person.</summary>
+    private string? PersonIn(ChatChannel channel) =>
+        channel.Direct ? channel.Members.FirstOrDefault(m => !m.Agent && !string.Equals(m.Name, NameIn(channel), StringComparison.OrdinalIgnoreCase))?.Name : null;
 
     public string CallToolTip => Channel is { Direct: true } direct
-        ? $"Call {ChatRoom.Title(direct, MyName)}: a voice call (you speak, it answers aloud)"
+        ? PersonIn(direct) is { } person ? $"Call {person}: a voice call, both ways" : $"Call {ChatRoom.Title(direct, MyName)}: a voice call (you speak, it answers aloud)"
         : "Call agents in this channel: pick who";
 
     /// <summary>The channel's picker of who to call is open.</summary>
@@ -30,7 +38,7 @@ public sealed partial class ChatViewModel
         if (Channel is not { } channel) return;
         if (channel.Direct)
         {
-            StartCallWith(channel, [.. AgentsIn(channel).Select(m => m.Name)]);
+            StartCallWith(channel, PersonIn(channel) is { } person ? [person] : [.. AgentsIn(channel).Select(m => m.Name)]);
             return;
         }
         CallChoices = [.. AgentsIn(channel).OrderBy(m => m.Name, StringComparer.CurrentCultureIgnoreCase).Select(m => new CallChoice(m.Name, _main.AgentTools.HearsChat(m.Name)))];

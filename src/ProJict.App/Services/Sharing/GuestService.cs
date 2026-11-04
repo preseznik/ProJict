@@ -414,6 +414,9 @@ public sealed partial class GuestService
             case "testBuildError":
                 TestBuildFailed(connection, message);
                 break;
+            case "callRing" or "callAnswer" or "callHangUp" or "callAudio":
+                HandleCall(connection, message);
+                break;
             case "file":
                 StoreFile(connection, message);
                 break;
