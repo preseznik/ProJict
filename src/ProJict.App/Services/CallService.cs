@@ -23,8 +23,9 @@ public sealed partial class CallService(AppState state, MainViewModel main, Disp
     private bool _saying;
     private bool _clockSet;
 
-    /// <summary>Hears you (Windows speech recognition, unless off-screen tests put in their own).</summary>
-    public Func<ISpeechIn> SpeechIn { get; set; } = () => new WindowsSpeechIn();
+    /// <summary>Hears you (Windows speech recognition, from the microphone Settings › Chat picked, unless off-screen tests put in their own).</summary>
+    public Func<ISpeechIn> SpeechIn { get; set; } = () =>
+        new WindowsSpeechIn(Microphones.DeviceOf(state.AppSettings.CallMicrophone) is >= 0 and var device ? new MicrophoneIn(device) : null);
     /// <summary>Reads agents' answers aloud; unset, the voices Settings › Chat picked (Windows' or ElevenLabs'). Tests put in their own.</summary>
     public Func<ISpeechOut>? SpeechOut { get; set; }
 
@@ -56,6 +57,66 @@ public sealed partial class CallService(AppState state, MainViewModel main, Disp
     public string? Problem { get; private set; }
     /// <summary>What's been said in the call, and the lines from ProJict about it, oldest first.</summary>
     public List<(string Who, string Text)> Captions { get; } = [];
+
+    // ───────────── Your microphone (#b39e8f23) ─────────────
+
+    /// <summary>How loud your microphone is now, 0 to 1 (the bar on your tile).</summary>
+    public double MicLevel { get; private set; }
+    /// <summary>The microphone's level changed (often: the window moves its bar, nothing else).</summary>
+    public event Action? LevelChanged;
+    /// <summary>Not hearing you: which microphone it listens to and where to change it; null once it hears you.</summary>
+    public string? Hint { get; private set; }
+    /// <summary>How long a call hears nothing from your microphone before it says so.</summary>
+    public static TimeSpan QuietFor { get; set; } = TimeSpan.FromSeconds(12);
+    /// <summary>This loud (0 to 1) counts as hearing sound.</summary>
+    public const double SoundLevel = 0.04;
+
+    private DateTime? _listeningSince;
+    private bool _heardSound;
+
+    /// <summary>The microphone started listening (a call with an agent, or a person).</summary>
+    private void StartedListening()
+    {
+        _listeningSince = DateTime.Now;
+        _heardSound = false;
+        Hint = null;
+        MicLevel = 0;
+    }
+
+    /// <summary>How loud the microphone is (UI thread); sound clears the hint.</summary>
+    private void OnLevel(double level)
+    {
+        if (!IsOn) return;
+        MicLevel = Muted ? 0 : Math.Clamp(level, 0, 1);
+        if (!Muted && level >= SoundLevel) HeardYou();
+        LevelChanged?.Invoke();
+    }
+
+    /// <summary>It hears you: the hint goes.</summary>
+    private void HeardYou()
+    {
+        _heardSound = true;
+        if (Hint == null) return;
+        Hint = null;
+        Changed?.Invoke();
+    }
+
+    /// <summary>Every second: a while without a sound from the microphone (not muted), and the call says which one it listens to.</summary>
+    private void CheckHeard()
+    {
+        if (_heardSound || Hint != null || Muted || _listeningSince is not { } since || DateTime.Now - since < QuietFor) return;
+        Hint = $"Not hearing you? ProJict listens to {Microphones.Describe(state.AppSettings.CallMicrophone)}, and the bar under your name moves when it " +
+               "hears sound. Pick the one you talk into in Settings › Chat › Microphone for calls, and check that Windows lets desktop apps use the " +
+               "microphone (Windows Settings › Privacy & security › Microphone).";
+    }
+
+    private void StoppedListening()
+    {
+        _listeningSince = null;
+        _heardSound = false;
+        Hint = null;
+        MicLevel = 0;
+    }
     public string Me => state.ChatMe.Name;
 
     /// <summary>Anything about the call changed.</summary>
@@ -206,9 +267,11 @@ public sealed partial class CallService(AppState state, MainViewModel main, Disp
         if (call.Person != null)
         {
             TickPerson(call);
+            CheckHeard();
             Changed?.Invoke();
             return;
         }
+        CheckHeard();
         foreach (var missed in call.TimeOut(DateTime.Now))
             Line($"📞 {missed.Name} didn't answer.", missed.Name, $"You missed {Me}'s call in {Where}.");
         EndIfEmpty();
@@ -239,6 +302,7 @@ public sealed partial class CallService(AppState state, MainViewModel main, Disp
         _fallback = null;
         _saying = false;
         StopSound();
+        StoppedListening();
         Speaking = null;
         Changed?.Invoke();
     }
@@ -269,11 +333,14 @@ public sealed partial class CallService(AppState state, MainViewModel main, Disp
         heard.Hearing += on => dispatcher.InvokeAsync(() =>
         {
             if (Muted || _saying || !IsOn) return;
+            if (on) HeardYou();
             Speaking = on ? Me : Speaking == Me ? null : Speaking;
             Changed?.Invoke();
         });
+        heard.Level += level => dispatcher.InvokeAsync(() => OnLevel(level));
         _in = heard;
         Problem = heard.Start();
+        if (Problem == null) StartedListening();
     }
 
     /// <summary>A phrase of yours: posted in the conversation (not while muted, or while an agent is read aloud).</summary>

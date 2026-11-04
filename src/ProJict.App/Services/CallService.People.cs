@@ -15,8 +15,8 @@ public sealed record PersonLink(string Person, Action<JsonObject> Send, bool OnH
 /// </summary>
 public sealed partial class CallService
 {
-    /// <summary>The microphone (tests put in their own).</summary>
-    public Func<ISoundIn> SoundIn { get; set; } = () => new MicrophoneIn();
+    /// <summary>The microphone Settings › Chat picked (tests put in their own).</summary>
+    public Func<ISoundIn> SoundIn { get; set; } = () => new MicrophoneIn(Microphones.DeviceOf(state.AppSettings.CallMicrophone));
     /// <summary>The speakers (likewise).</summary>
     public Func<ISoundOut> SoundOut { get; set; } = () => new SpeakersOut();
     /// <summary>A ring, every few seconds while a call rings here (tests put in their own, so nothing sounds).</summary>
@@ -158,11 +158,14 @@ public sealed partial class CallService
         var speakers = SoundOut();
         _speakers = speakers;
         Problem = mic.Start() ?? speakers.Start();
+        if (Problem == null) StartedListening();
     }
 
     /// <summary>A frame of your voice to them (not while muted).</summary>
     private void SendSound(byte[] pcm)
     {
+        // Its level moves the bar on your tile.
+        OnLevel(CallVoice.Loudness(pcm));
         if (Muted || _link is not { } link || Current is not { IsOver: false, Person.State: CallState.Joined } call) return;
         link.Send(Wire.Message("callAudio", ("callId", call.Id.ToString()), ("data", Convert.ToBase64String(pcm))));
         Heard(Me, pcm);

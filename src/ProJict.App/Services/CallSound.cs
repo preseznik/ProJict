@@ -42,10 +42,39 @@ public static class CallVoice
 
     /// <summary>A frame this loud counts as speaking.</summary>
     public const double Speaking = 0.02;
+
+    /// <summary>How loud a frame is for the bar on your tile, 0 to 1 (a voice's level is small: scaled so speaking fills most of it).</summary>
+    public static double Loudness(byte[] pcm) => Math.Min(1, Level(pcm) * 8);
 }
 
-/// <summary>The default microphone (Windows' wave input).</summary>
-public sealed class MicrophoneIn : ISoundIn
+/// <summary>The microphones Windows has, by name, and the one calls use (Settings › Chat, #b39e8f23).</summary>
+public static class Microphones
+{
+    /// <summary>Windows' default, as the choice in Settings says it.</summary>
+    public const string DefaultName = "Windows' default microphone";
+
+    /// <summary>Their names, as Windows lists them (off-screen tests put in their own).</summary>
+    public static Func<IReadOnlyList<string>> List { get; set; } = () =>
+    {
+        var names = new List<string>();
+        try
+        {
+            for (var i = 0; i < WaveIn.DeviceCount; i++) names.Add(WaveIn.GetCapabilities(i).ProductName);
+        }
+        catch (NAudio.MmException) { }
+        return names;
+    };
+
+    /// <summary>The device the named microphone is; -1 (Windows' default) for none, or one that isn't there now.</summary>
+    public static int DeviceOf(string? name) =>
+        name == null ? -1 : List().ToList().FindIndex(n => string.Equals(n, name, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>What a call listens to, for the hint when it hears nothing.</summary>
+    public static string Describe(string? name) => DeviceOf(name) >= 0 ? name! : DefaultName;
+}
+
+/// <summary>A microphone (Windows' wave input): Windows' default (-1), or the device you picked.</summary>
+public sealed class MicrophoneIn(int device = -1) : ISoundIn
 {
     private WaveIn? _wave;
     public event Action<byte[]>? Captured;
@@ -55,7 +84,7 @@ public sealed class MicrophoneIn : ISoundIn
         if (_wave != null) return null;
         try
         {
-            var wave = new WaveIn { WaveFormat = CallVoice.Format, BufferMilliseconds = CallVoice.FrameMs };
+            var wave = new WaveIn { DeviceNumber = device, WaveFormat = CallVoice.Format, BufferMilliseconds = CallVoice.FrameMs };
             wave.DataAvailable += (_, e) =>
             {
                 if (e.BytesRecorded > 0) Captured?.Invoke(e.Buffer.AsSpan(0, e.BytesRecorded).ToArray());

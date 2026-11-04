@@ -11,6 +11,9 @@
             <TextBlock x:Name="Status" Text="{Binding StatusText}" Style="{StaticResource MutedText}" Margin="0,2,0,0" />
             <TextBlock Text="{Binding Problem}" Foreground="{DynamicResource SystemFillColorCautionBrush}" TextWrapping="Wrap" Margin="0,6,0,0"
                        Visibility="{Binding Problem, Converter={StaticResource EmptyToVis}}" />
+            <!-- It hears nothing from your microphone: which one it listens to, and where to change it (#b39e8f23) -->
+            <TextBlock x:Name="HintText" Text="{Binding Hint}" Foreground="{DynamicResource SystemFillColorCautionBrush}" TextWrapping="Wrap" Margin="0,6,0,0"
+                       Visibility="{Binding Hint, Converter={StaticResource EmptyToVis}}" />
         </StackPanel>
 
         <!-- A person calling you: Accept or Decline -->
@@ -92,6 +95,11 @@
                                 </Grid>
                                 <TextBlock Text="{Binding Name}" FontSize="16" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,10,0,0" />
                                 <TextBlock Text="{Binding StateText}" Style="{StaticResource MutedText}" HorizontalAlignment="Center" />
+                                <!-- Your microphone: the bar moves when it hears sound -->
+                                <ProgressBar x:Name="MicBar" Width="120" Height="4" Margin="0,8,0,0" Minimum="0" Maximum="1"
+                                             Value="{Binding DataContext.MicLevel, RelativeSource={RelativeSource AncestorType=Window}, Mode=OneWay}"
+                                             Visibility="{Binding IsYou, Converter={StaticResource BoolToVis}}" ToolTip="Your microphone: it moves when ProJict hears sound"
+                                             AutomationProperties.Name="Microphone level" />
                             </StackPanel>
                         </Grid>
                     </Border>

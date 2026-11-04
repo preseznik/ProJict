@@ -59,6 +59,7 @@ public partial class SettingsWindow : Window
         PrivateFilesDays.Text = state.AppSettings.PrivateFilesDays.ToString();
         BigChannelFile.Text = state.AppSettings.BigChannelFileMb.ToString();
         ChatCacheMax.Text = state.AppSettings.ChatCacheMaxGb.ToString();
+        ShowMicrophones(state.AppSettings.CallMicrophone);
         WindowsVoices.IsChecked = state.AppSettings.CallVoices == ProJict.Core.Chat.CallVoices.Windows;
         ElevenLabsVoices.IsChecked = state.AppSettings.CallVoices == ProJict.Core.Chat.CallVoices.ElevenLabs;
         ElevenLabsVoicesNote.Text = App.Current.MainVm.Calls.HasElevenLabsKey
@@ -117,6 +118,20 @@ public partial class SettingsWindow : Window
             if (_lookPreviewed && DialogResult != true) App.ApplyLook(_state.Settings);
         };
         _lookReady = true;
+    }
+
+    // ───────────── Microphone for calls (#b39e8f23) ─────────────
+
+    /// <summary>Windows' default first, then each microphone Windows has; one picked earlier that isn't there now stays, marked so.</summary>
+    private void ShowMicrophones(string? picked)
+    {
+        CallMicrophone.Items.Add(new ComboBoxItem { Content = Microphones.DefaultName, Tag = null });
+        var names = Microphones.List();
+        foreach (var name in names) CallMicrophone.Items.Add(new ComboBoxItem { Content = name, Tag = name });
+        if (picked != null && !names.Contains(picked, StringComparer.OrdinalIgnoreCase))
+            CallMicrophone.Items.Add(new ComboBoxItem { Content = picked + " (not connected now)", Tag = picked });
+        CallMicrophone.SelectedItem = CallMicrophone.Items.Cast<ComboBoxItem>().FirstOrDefault(i => string.Equals(i.Tag as string, picked, StringComparison.OrdinalIgnoreCase))
+                                      ?? CallMicrophone.Items[0];
     }
 
     // ───────────── Colors (#ed53e5d4) ─────────────
@@ -635,6 +650,7 @@ public partial class SettingsWindow : Window
         _state.AppSettings.BigChannelFileMb = bigChannelFile;
         _state.AppSettings.ChatCacheMaxGb = cacheMax;
         _state.AppSettings.CallVoices = ElevenLabsVoices.IsChecked == true ? ProJict.Core.Chat.CallVoices.ElevenLabs : ProJict.Core.Chat.CallVoices.Windows;
+        _state.AppSettings.CallMicrophone = (CallMicrophone.SelectedItem as ComboBoxItem)?.Tag as string;
         var privateFolder = PrivateFilesFolder.Text.Trim();
         if (!string.Equals(privateFolder, _state.PrivateFilesRoot, StringComparison.OrdinalIgnoreCase))
             _state.MovePrivateFiles(string.Equals(privateFolder, _state.DefaultPrivateFilesRoot, StringComparison.OrdinalIgnoreCase) ? null : privateFolder);

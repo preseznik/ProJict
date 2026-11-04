@@ -91,6 +91,9 @@ public sealed class AppSettings
     public string? ShowingFrom { get; set; }
     /// <summary>Whose voices read agents' answers in calls (Settings › Chat).</summary>
     public Chat.CallVoices CallVoices { get; set; }
+    /// <summary>The microphone calls listen to, by its name in Windows; null for Windows' default (Settings › Chat, #b39e8f23).</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? CallMicrophone { get; set; }
     /// <summary>Whether a file of this size, posted in such a channel, goes to the Chat cache.</summary>
     public bool GoesToChatCache(bool direct, long size) => direct || (BigChannelFileMb > 0 && size > (long)BigChannelFileMb * 1024 * 1024);
     /// <summary>Read-only API tokens may still use Chat fully: post, start channels, invite (Settings › API).</summary>

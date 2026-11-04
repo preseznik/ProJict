@@ -21,8 +21,16 @@ public sealed partial class CallViewModel : ObservableObject
         _calls = calls;
         _state = state;
         _calls.Changed += Refresh;
+        _calls.LevelChanged += LevelChanged;
         Refresh();
     }
+
+    /// <summary>How loud your microphone is (the bar on your tile, #b39e8f23).</summary>
+    public double MicLevel => _calls.MicLevel;
+    /// <summary>Not hearing you: which microphone and where to change it.</summary>
+    public string? Hint => _calls.Hint;
+
+    private void LevelChanged() => OnPropertyChanged(nameof(MicLevel));
 
     public string Title { get; private set; } = "";
     public IReadOnlyList<CallTile> Tiles { get; private set; } = [];
@@ -53,6 +61,7 @@ public sealed partial class CallViewModel : ObservableObject
     public void Closed()
     {
         _calls.Changed -= Refresh;
+        _calls.LevelChanged -= LevelChanged;
         if (_calls.IsIncoming) _calls.Decline();
         else _calls.HangUp();
     }
@@ -62,7 +71,7 @@ public sealed partial class CallViewModel : ObservableObject
         if (_calls.Current is not { } call) return;
         var where = _calls.Channel is { Direct: true } direct ? ChatRoom.Title(direct, _calls.Me) : "#" + _calls.Channel?.Name;
         Title = _calls.Channel is { Direct: true } ? $"Call with {where}" : $"Call in {where}";
-        var tiles = new List<CallTile> { Tile(_calls.Me, _calls.Muted ? "muted" : "you", away: false) };
+        var tiles = new List<CallTile> { Tile(_calls.Me, _calls.Muted ? "muted" : "you", away: false) with { IsYou = true } };
         tiles.AddRange(call.Agents.Select(a => Tile(a.Name, a.IsPerson && call.Incoming && a.State == CallState.Ringing ? "calling you" : ChatCall.Describe(a.State),
             away: a.State != CallState.Joined)));
         Tiles = tiles;
@@ -84,6 +93,8 @@ public sealed partial class CallViewModel : ObservableObject
 public sealed record CallTile(string Name, ImageSource? Picture, WorkerBadge Badge, string StateText, bool IsSpeaking, bool IsAway)
 {
     public bool HasPicture => Picture != null;
+    /// <summary>Your own tile: it shows your microphone's level.</summary>
+    public bool IsYou { get; init; }
 }
 
 /// <summary>A caption: who said it (ProJict for its own lines) and what.</summary>
