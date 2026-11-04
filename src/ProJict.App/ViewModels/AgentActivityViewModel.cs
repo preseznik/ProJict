@@ -20,8 +20,6 @@ namespace ProJict.App.ViewModels;
 public sealed partial class AgentActivityViewModel : ObservableObject
 {
     public const string AllProjects = "All projects";
-    /// <summary>An agent counts as busy this long after its last call, or after setting its status.</summary>
-    public static readonly TimeSpan BusyFor = TimeSpan.FromSeconds(30);
     private const int HistoryShown = 100;
 
     private readonly AppState _state;
@@ -227,31 +225,7 @@ public sealed partial class AgentActivityViewModel : ObservableObject
     {
         var registry = _state.Settings.AgentNames ?? [];
         var live = _main.Agents.Sessions.OrderBy(s => s.AgentName, StringComparer.CurrentCultureIgnoreCase).ToList();
-        var clients = registry.Values.Concat(live.Select(s => s.Client)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        var seen = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
-        // Members of channels it never wrote in are known, not seen (being invited isn't being here).
-        void Saw(string by, DateTime at)
-        {
-            var name = AgentNaming.Identity(by);
-            foreach (var client in clients) name = AgentNaming.Unnumbered(name, client);
-            if (name.Length > 0 && (!seen.TryGetValue(name, out var last) || at > last)) seen[name] = at;
-        }
-        foreach (var project in _state.Projects.Where(p => p.Remote == null))
-        {
-            foreach (var loc in project.Walk())
-            {
-                foreach (var entry in loc.Item.Activity ?? []) if (entry.Agent) Saw(entry.By, entry.At);
-                foreach (var (comment, _) in loc.Item.Comments.Walk()) if (comment.Agent) Saw(comment.By, comment.At);
-            }
-            foreach (var category in project.Categories)
-                foreach (var (comment, _) in category.Comments.Walk()) if (comment.Agent) Saw(comment.By, comment.At);
-        }
-        foreach (var channel in _state.Chat.Channels)
-        {
-            foreach (var message in channel.Messages) if (message.Agent && !message.Notice) Saw(message.By, message.At);
-            foreach (var member in channel.Members) if (member.Agent) Saw(member.Name, DateTime.MinValue);
-        }
-        foreach (var name in registry.Keys) seen.TryAdd(name, DateTime.MinValue);
+        var seen = AgentRoster.Seen(_state.Projects, _state.Chat.Channels, registry, live);
         foreach (var session in live) _seenLive[session.AgentName] = AgentsViewSettings.LastSeen(session);
         foreach (var (name, at) in _seenLive) if (!seen.TryGetValue(name, out var last) || at > last) seen[name] = at;
         // A connected agent's earlier names (it picked another, or you renamed it) are the same agent.
@@ -609,31 +583,12 @@ public sealed partial class AgentActivityViewModel : ObservableObject
         if (!View.ShowOffice) return;
         var project = FilterProject;
         var shown = ShownStudio;
-        IReadOnlyList<AgentCardViewModel> cards = Live;
-        string? elsewhere = null;
-        if (project == null)
-        {
-            // All projects: agents hired in the studio of a project they work in are there, not in the office.
-            var inStudios = Live.Where(c => StudioOf(c.Session) != null).ToList();
-            cards = [.. Live.Except(inStudios)];
-            elsewhere = inStudios.Count == 0 ? null
-                : "In studios: " + string.Join("; ", inStudios.GroupBy(c => StudioOf(c.Session)!.Name).Select(g => $"{string.Join(", ", g.Select(c => c.Name))} ({g.Key})"));
-        }
-        else if (project.Remote == null && StudioFlow.HasOffice(project) && StudioFlow.OpenStudiosOf(project).Any())
-        {
-            // The office holds the agents not hired in the project's studios; a studio, those hired to it.
-            var hired = Live.Where(c => StudioFlow.HiredIn(project, c.Session.AgentName) != null).ToList();
-            if (shown == null)
-            {
-                cards = [.. Live.Except(hired)];
-                elsewhere = hired.Count == 0 ? null
-                    : "In the studios: " + string.Join("; ", hired.GroupBy(c => StudioFlow.HiredIn(project, c.Session.AgentName)!.Kind)
-                        .Select(g => $"{string.Join(", ", g.Select(c => c.Name))} ({StudioFlow.KindName(g.Key)})"));
-            }
-            else cards = [.. Live.Where(c => StudioFlow.HireOf(shown, c.Session.AgentName) != null)];
-        }
+        // Who works in the room shown (the office, a studio), and where the others are.
+        var (here, elsewhere) = ProjectRooms.Split([.. Live.Select(c => c.Session)], project, shown, StudioOf);
+        IReadOnlyList<AgentCardViewModel> cards = [.. Live.Where(c => here.Contains(c.Session))];
         Office.Elsewhere = elsewhere;
-        Office.Update(cards, DateTime.Now, s => s.Claimed.Count > 0 && CheckedOut(s, project).Count > 0, IsWatching, LastSaid, Studio, IsAsleep, HireInto(shown));
+        Office.Update(cards, DateTime.Now, s => s.Claimed.Count > 0 && CheckedOut(s, project).Count > 0, IsWatching, s => AgentRoster.LastSaid(_state.Chat.Channels, s),
+            Studio, IsAsleep, HireInto(shown));
         Office.SetVisitors(Visitors(), MessagePrivately);
     }
 
@@ -679,35 +634,20 @@ public sealed partial class AgentActivityViewModel : ObservableObject
 
     // ───────────── The project's rooms: its office and studios ─────────────
 
-    /// <summary>The room you last showed of each project (null: its office), while ProJict runs.</summary>
-    private readonly Dictionary<Guid, StudioKind?> _roomOf = [];
+    /// <summary>The room each project shows: the one you last showed, else its first open studio, else its office.</summary>
+    private readonly ProjectRooms _rooms = new();
 
     /// <summary>The project shown, when it's one of yours that can have studios.</summary>
     private Project? OwnProject => FilterProject is { Remote: null, IsInbox: false } project ? project : null;
 
     /// <summary>The studio shown as the room, or null for the office: the room you last showed, else the project's first open studio.</summary>
-    private Studio? ShownStudio
-    {
-        get
-        {
-            if (FilterProject is not { Remote: null } project) return null;
-            var open = StudioFlow.OpenStudiosOf(project).ToList();
-            if (_roomOf.TryGetValue(project.Id, out var kind))
-            {
-                if (kind == null && StudioFlow.HasOffice(project)) return null;
-                if (open.FirstOrDefault(s => s.Kind == kind) is { } shown) return shown;
-            }
-            return open.FirstOrDefault();
-        }
-    }
+    private Studio? ShownStudio => FilterProject is { } project ? _rooms.Shown(project) : null;
 
     /// <summary>One of your projects is shown and has no studio open: set up (or open again) a game or film studio.</summary>
-    public bool CanSetUpStudio => OwnProject is { } project && !StudioFlow.OpenStudiosOf(project).Any();
+    public bool CanSetUpStudio => FilterProject is { } project && ProjectRooms.CanSetUpStudio(project);
 
     /// <summary>The room shown is one of the project's studios.</summary>
     public bool ShowsStudio => ShownStudio != null;
-
-    private static string RoomName(StudioKind kind) => kind == StudioKind.Film ? "Film studio" : "Game studio";
 
     /// <summary>The project's open rooms, as tabs above the room: its office, then its studios.</summary>
     public IReadOnlyList<RoomTab> RoomTabs
@@ -715,14 +655,8 @@ public sealed partial class AgentActivityViewModel : ObservableObject
         get
         {
             if (FilterProject is not { Remote: null } project) return [];
-            var shown = ShownStudio;
-            var tabs = new List<RoomTab>();
-            if (StudioFlow.HasOffice(project))
-                tabs.Add(new RoomTab("Office", shown == null, "Agents not hired in the project's studios work here",
-                    new RelayCommand(() => ShowRoom(project, null))));
-            foreach (var studio in StudioFlow.OpenStudiosOf(project).OrderBy(s => s.Kind))
-                tabs.Add(new RoomTab(RoomName(studio.Kind), studio == shown, $"The {StudioFlow.KindName(studio.Kind)}: a station per role",
-                    new RelayCommand(() => ShowRoom(project, studio.Kind))));
+            var tabs = ProjectRooms.Tabs(project, ShownStudio)
+                .Select(t => new RoomTab(t.Name, t.Selected, t.ToolTip, new RelayCommand(() => ShowRoom(project, t.Kind)))).ToList();
             // The room shown can be closed while there's another.
             return tabs.Count < 2 ? tabs : [.. tabs.Select(t => t.IsSelected ? t with { Close = CloseRoomCommand, CloseToolTip = CloseRoomToolTip } : t)];
         }
@@ -732,38 +666,17 @@ public sealed partial class AgentActivityViewModel : ObservableObject
     public bool ShowRoomTabs => RoomTabs.Count > 1;
 
     /// <summary>The rooms the project could open: its office (while closed), and a studio of each kind it hasn't open.</summary>
-    public IReadOnlyList<RoomChoice> RoomsToOpen
-    {
-        get
-        {
-            if (OwnProject is not { } project) return [];
-            var rooms = new List<RoomChoice>();
-            if (!StudioFlow.HasOffice(project))
-                rooms.Add(new RoomChoice("Office", "Open the office again: agents not hired in the studios work there", OpenRoomCommand, "Office"));
-            foreach (var kind in new[] { StudioKind.Game, StudioKind.Film })
-            {
-                var studio = StudioFlow.StudioOf(project, kind);
-                if (studio is { Closed: false }) continue;
-                rooms.Add(new RoomChoice(CanSetUpStudio ? kind.ToString() : RoomName(kind),
-                    studio != null
-                        ? $"Open the {StudioFlow.KindName(kind)} again, with its roles and hires"
-                        : kind == StudioKind.Film
-                            ? "A film studio for this project: a station per role (director, writer, capture, editor, sound, thumbnails, publisher, producer); you hire agents to them"
-                            : "A game studio for this project: a station per role (designers, programmer, artist, sound, QA…); you hire agents to them",
-                    OpenRoomCommand, kind.ToString()));
-            }
-            return rooms;
-        }
-    }
+    public IReadOnlyList<RoomChoice> RoomsToOpen =>
+        OwnProject is { } project ? [.. ProjectRooms.ToOpen(project).Select(r => new RoomChoice(r.Name, r.ToolTip, OpenRoomCommand, r.Room))] : [];
 
-    /// <summary>"Set up a studio:" while the project has none open, else "Open:".</summary>
-    public string OpenRoomsLabel => CanSetUpStudio && OwnProject is { } project && !StudioFlow.StudiosOf(project).Any() ? "Set up a studio:" : "Open:";
+    /// <summary>"Set up a studio:" while the project has never had one, else "Open:".</summary>
+    public string OpenRoomsLabel => OwnProject is { } project ? ProjectRooms.OpenLabel(project) : "Open:";
 
     public bool HasRoomsToOpen => RoomsToOpen.Count > 0;
 
     private void ShowRoom(Project project, StudioKind? kind)
     {
-        _roomOf[project.Id] = kind;
+        _rooms.Show(project, kind);
         RefreshStudio();
     }
 
@@ -779,7 +692,7 @@ public sealed partial class AgentActivityViewModel : ObservableObject
         if (room == "Office")
         {
             StudioFlow.SetOfficeOpen(project, true);
-            _roomOf[project.Id] = null;
+            _rooms.Show(project, null);
             _state.StatusText = $"{project.Name}'s office is open again: agents not hired in its studios work there.";
         }
         else
@@ -788,7 +701,7 @@ public sealed partial class AgentActivityViewModel : ObservableObject
             var reopened = StudioFlow.StudioOf(project, kind) != null;
             var studio = StudioFlow.OpenStudio(project, kind);
             StudioChannel(project, studio);
-            _roomOf[project.Id] = kind;
+            _rooms.Show(project, kind);
             _state.StatusText = reopened
                 ? $"{project.Name}'s {StudioFlow.KindName(kind)} is open again, with its roles and hires."
                 : $"{project.Name} has a {StudioFlow.KindName(kind)}: agents working here " +
@@ -800,9 +713,7 @@ public sealed partial class AgentActivityViewModel : ObservableObject
         RefreshStudio();
     }
 
-    public string CloseRoomToolTip => ShownStudio is { } studio
-        ? $"Close the {StudioFlow.KindName(studio.Kind)}: its roles and hires are kept for when you open it again"
-        : "Close the office: agents not hired in the studios wait in a studio's lobby instead";
+    public string CloseRoomToolTip => ProjectRooms.CloseToolTip(ShownStudio);
 
     /// <summary>Closes the room shown (while the project has another): a studio keeps its roles and hires.</summary>
     [RelayCommand]
@@ -819,7 +730,7 @@ public sealed partial class AgentActivityViewModel : ObservableObject
             StudioFlow.SetOfficeOpen(project, false);
             _state.StatusText = $"Closed {project.Name}'s office: agents not hired yet wait in a studio's lobby.";
         }
-        _roomOf.Remove(project.Id);
+        _rooms.Forget(project);
         _state.MarkDirty(project);
         _main.GetProjectViewModel(project).RefreshStudio();
         RefreshStudio();
@@ -844,11 +755,9 @@ public sealed partial class AgentActivityViewModel : ObservableObject
     /// </summary>
     private MilestoneBoard MilestonesOf(Project project)
     {
-        var categories = project.Categories.Select(c => (Category: c, Total: c.Walk().Count(), Done: c.Walk().Count(l => l.Item.IsDone)))
-            .Where(x => x.Total > 0).ToList();
-        var rows = categories.Where(x => x.Done < x.Total).Concat(categories.Where(x => x.Done == x.Total)).Take(5)
-            .Select(x => new MilestoneRow(x.Category.Name, x.Done, x.Total, new RelayCommand(() => _main.OpenProject(project).FocusOn(x.Category)))).ToList();
-        return new MilestoneBoard(rows, categories.Sum(x => x.Done), categories.Sum(x => x.Total));
+        var (rows, done, total) = ProjectRooms.Milestones(project);
+        return new MilestoneBoard([.. rows.Select(m => new MilestoneRow(m.Category.Name, m.Done, m.Total, new RelayCommand(() => _main.OpenProject(project).FocusOn(m.Category))))],
+            done, total);
     }
 
     /// <summary>Hiring, firing and swapping in one of the project's studios, from a robot's menu.</summary>
@@ -934,24 +843,6 @@ public sealed partial class AgentActivityViewModel : ObservableObject
         FilterProject is not { Remote: null } project ? null
         : (ShownStudio ?? StudioFlow.HiredIn(project, session.AgentName)) is { } studio ? StudioFlow.RoleOf(studio, session.AgentName)?.Name : null;
 
-    /// <summary>The agent's latest message in Chat since it connected (for its speech bubble at the cooler).</summary>
-    private string? LastSaid(McpSession session)
-    {
-        ChatMessage? last = null;
-        foreach (var channel in _state.Chat.Channels)
-            for (var i = channel.Messages.Count - 1; i >= 0; i--)
-            {
-                var m = channel.Messages[i];
-                if (m.At < session.ConnectedAt || (last != null && m.At <= last.At)) break;
-                if (m.Agent && !m.Deleted && !m.Notice && string.Equals(m.By, session.AgentName, StringComparison.OrdinalIgnoreCase))
-                {
-                    last = m;
-                    break;
-                }
-            }
-        return last?.Text;
-    }
-
     internal void RequestReveal(AgentCardViewModel card) => RevealRequested?.Invoke(card);
 
     private void BuildHistory()
@@ -1005,12 +896,7 @@ public sealed partial class AgentActivityViewModel : ObservableObject
         _main.Agents.ProjectsOf(session).Select(id => ProjectName(id)).Where(n => n.Length > 0).ToList();
 
     /// <summary>Items the agent has checked out right now.</summary>
-    internal IReadOnlyList<(Project Project, TodoItem Item)> CheckedOut(McpSession session, Project? only) =>
-        _state.Projects.Where(p => p.Remote == null && (only == null || p == only))
-            .SelectMany(p => p.Walk().Select(l => (Project: p, l.Item)))
-            .Where(x => x.Item.State == ItemState.InProgress && session.Claimed.Contains(x.Item.Id) &&
-                        string.Equals(x.Item.ClaimedBy, session.AgentName, StringComparison.OrdinalIgnoreCase))
-            .ToList();
+    internal IReadOnlyList<(Project Project, TodoItem Item)> CheckedOut(McpSession session, Project? only) => AgentRoster.CheckedOut(_state.Projects, session, only);
 
     internal void MessagePrivately(McpSession session) => MessagePrivately(session.AgentName);
 
@@ -1024,17 +910,10 @@ public sealed partial class AgentActivityViewModel : ObservableObject
     }
 
     /// <summary>The last few messages between you and the agent, oldest first.</summary>
-    internal IReadOnlyList<PrivateLine> PrivateLinesWith(string agent)
-    {
-        if (_state.Chat.FindDirect(_state.UserName, agent) is not { } channel) return [];
-        return [.. channel.Messages.Where(m => !m.Notice && !m.Deleted).TakeLast(4).Select(m =>
-        {
-            var mine = string.Equals(m.By, _state.UserName, StringComparison.OrdinalIgnoreCase);
-            var text = string.Join(' ', m.Text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)).Trim();
-            return new PrivateLine(mine ? "You" : m.By, text.Length > 300 ? text[..299].TrimEnd() + "…" : text,
-                m.At.ToString(m.At.Date == DateTime.Today ? "HH:mm" : "d MMM HH:mm", CultureInfo.CurrentCulture), mine);
-        })];
-    }
+    internal IReadOnlyList<ChatTimeline.Brief> PrivateLinesWith(string agent) =>
+        _state.Chat.FindDirect(_state.UserName, agent) is { } channel
+            ? ChatTimeline.Briefly(channel.Messages, 4, m => string.Equals(m.By, _state.UserName, StringComparison.OrdinalIgnoreCase), DateTime.Today, CultureInfo.CurrentCulture)
+            : [];
 
     /// <summary>Writes to the agent privately (as in Chat, without going there); the problem if it can't.</summary>
     internal string? SendPrivately(string agent, string text)
@@ -1070,30 +949,11 @@ public sealed partial class AgentActivityViewModel : ObservableObject
     }
 
     /// <summary>"now", "12 s ago", "3 min ago", "10:42".</summary>
-    internal static string Age(DateTime at, DateTime now)
-    {
-        var age = now - at;
-        if (age < TimeSpan.FromSeconds(5)) return "now";
-        if (age < TimeSpan.FromMinutes(1)) return $"{(int)age.TotalSeconds} s ago";
-        if (age < TimeSpan.FromHours(1)) return $"{(int)age.TotalMinutes} min ago";
-        return at.Date == now.Date ? at.ToString("HH:mm", CultureInfo.CurrentCulture) : at.ToString("d MMM HH:mm", CultureInfo.CurrentCulture);
-    }
+    internal static string Age(DateTime at, DateTime now) => AgentRoster.Age(at, now, CultureInfo.CurrentCulture);
 
     /// <summary>For a project's badges in the sidebar: who is there and what each did last.</summary>
-    public string ToolTipFor(Project project)
-    {
-        var sessions = _main.Agents.Sessions.Where(s => _main.Agents.ProjectsOf(s).Contains(project.Id)).ToList();
-        if (sessions.Count == 0) return "";
-        var now = DateTime.Now;
-        var lines = sessions.Select(s =>
-        {
-            var last = s.Recent.LastOrDefault(a => a.ProjectId == project.Id) ?? s.Recent.LastOrDefault();
-            var doing = s.Status is { } status && s.StatusAt is { } since && now - since < TimeSpan.FromMinutes(15) ? status
-                : last != null ? $"{last.Text} ({Age(last.At, now)})" : "connected, nothing done yet";
-            return $"{s.FullName}: {doing}";
-        });
-        return string.Join("\n", lines) + "\nRight-click › Agents shows more.";
-    }
+    public string ToolTipFor(Project project) =>
+        AgentRoster.ProjectToolTip([.. _main.Agents.Sessions.Where(s => _main.Agents.ProjectsOf(s).Contains(project.Id))], project.Id, DateTime.Now, CultureInfo.CurrentCulture);
 }
 
 /// <summary>"minutes", "hours" or "days" after the number in the Settings panel ("1 hour", "3 hours").</summary>
@@ -1150,7 +1010,7 @@ public sealed partial class AgentCardViewModel : ObservableObject
         if (value) RefreshConversation();
     }
 
-    public IReadOnlyList<PrivateLine> Conversation { get; private set; } = [];
+    public IReadOnlyList<ChatTimeline.Brief> Conversation { get; private set; } = [];
     public bool HasConversation => Conversation.Count > 0;
     public string ConversationTitle => $"You and {Name}, privately";
 
@@ -1193,14 +1053,8 @@ public sealed partial class AgentCardViewModel : ObservableObject
 
     public void Refresh()
     {
-        var names = _owner.ProjectNames(Session);
-        var since = Session.ConnectedAt.ToString(Session.ConnectedAt.Date == DateTime.Today ? "HH:mm" : "d MMM HH:mm", CultureInfo.CurrentCulture);
-        // "Claude Code · login fix · In GRID2VR · since 22:41": what it runs in (when it has a name of its own) and what it works on.
-        var about = new[] { _owner.StudioRoleOf(Session), Session.Name != null ? Session.Client : null, Session.Label, _owner.IsWatching(Session) ? "watching Chat" : null }
-            .Where(s => s != null);
-        Where = string.Join(" · ", about.Append((names.Count == 0 ? "Connected" : "In " + string.Join(", ", names)) + " · since " + since));
-        var actions = Session.Recent.Where(a => _only == null || a.ProjectId == null || a.ProjectId == _only.Id).ToList();
-        Recent = actions.AsEnumerable().Reverse().Take(6).Select((a, i) => new AgentActionRow(a, i == 0, _owner)).ToList();
+        Where = AgentRoster.About(Session, _owner.StudioRoleOf(Session), _owner.IsWatching(Session), _owner.ProjectNames(Session), DateTime.Today, CultureInfo.CurrentCulture);
+        Recent = AgentRoster.ActionsIn(Session, _only?.Id).Reverse().Take(6).Select((a, i) => new AgentActionRow(a, i == 0, _owner)).ToList();
         CheckedOut = _owner.CheckedOut(Session, _only).Select(x => new CheckoutRow(x.Project, x.Item, _owner)).ToList();
         foreach (var name in new[] { nameof(Name), nameof(Badge), nameof(Where), nameof(Recent), nameof(CheckedOut), nameof(HasCheckedOut), nameof(HasRecent) })
             OnPropertyChanged(name);
@@ -1210,15 +1064,11 @@ public sealed partial class AgentCardViewModel : ObservableObject
     public void Tick()
     {
         var now = DateTime.Now;
-        var last = Session.Recent.LastOrDefault(a => _only == null || a.ProjectId == null || a.ProjectId == _only.Id);
-        var statusFresh = Session.Status != null && Session.StatusAt is { } since && now - since < TimeSpan.FromMinutes(15);
         // Its own words while they're fresh, else what it last did.
-        (StatusText, var at) = statusFresh ? (Session.Status!, Session.StatusAt!.Value)
-            : last != null ? (last.Times > 1 ? $"{last.Text} ×{last.Times}" : last.Text, last.At)
-            : ("Connected, nothing done yet", Session.ConnectedAt);
-        IsBusy = now - (Session.LastActive ?? Session.ConnectedAt) < AgentActivityViewModel.BusyFor ||
-                 (statusFresh && now - Session.StatusAt!.Value < AgentActivityViewModel.BusyFor);
-        StatusAge = IsBusy ? Age(at, now) : $"idle · {Age(at, now)}";
+        var doing = AgentRoster.DoingNow(Session, _only?.Id, now);
+        StatusText = doing.Text;
+        IsBusy = doing.Busy;
+        StatusAge = IsBusy ? Age(doing.At, now) : $"idle · {Age(doing.At, now)}";
         var watching = _owner.IsWatching(Session);
         HearsChat = watching || Session.Listening;
         HearsChatToolTip = watching
@@ -1235,9 +1085,6 @@ public sealed partial class AgentCardViewModel : ObservableObject
 
     private static string Age(DateTime at, DateTime now) => AgentActivityViewModel.Age(at, now);
 }
-
-/// <summary>A line of your private conversation with an agent, on its card.</summary>
-public sealed record PrivateLine(string Who, string Text, string Time, bool Mine);
 
 /// <summary>
 /// One of an agent's latest actions; the newest stands out, the rest are quieter. Done several times in a row, it says

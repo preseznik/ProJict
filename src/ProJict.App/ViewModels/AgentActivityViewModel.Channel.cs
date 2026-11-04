@@ -55,7 +55,7 @@ public sealed partial class AgentActivityViewModel
     public string ChannelHint => FilterProject is { } project
         ? $"{project.Name} has no channel yet. Start one with its Chat button, or from its right-click menu › Start a chat channel…"
         : "You have no channels yet. Start one in Chat.";
-    public IReadOnlyList<PrivateLine> ChannelLines { get; private set; } = [];
+    public IReadOnlyList<ChatTimeline.Brief> ChannelLines { get; private set; } = [];
     public bool HasChannelLines => ChannelLines.Count > 0;
 
     /// <summary>The panel changed (shown, another project, a new message): rebuilds what it shows.</summary>
@@ -63,15 +63,9 @@ public sealed partial class AgentActivityViewModel
     {
         _officeChannel = ShowChannel ? FindOfficeChannel() : null;
         // Not the messages of those you ignore in Chat (unless they mention you).
-        ChannelLines = _officeChannel is not { } shown ? [] : [.. shown.Messages
-            .Where(m => !m.Notice && !m.Deleted && !ChatIgnoring.Hides(shown, m, _state.UserName, _state.Settings.IgnoredInChat)).TakeLast(ChannelLinesShown).Select(m =>
-        {
-            var mine = !m.Agent && string.Equals(m.By, _state.UserName, StringComparison.OrdinalIgnoreCase);
-            var text = string.Join(' ', m.Text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)).Trim();
-            if (text.Length == 0 && m.Attachments is { Count: > 0 } files) text = files.Count == 1 ? "[1 file]" : $"[{files.Count} files]";
-            return new PrivateLine(mine ? "You" : m.By, text.Length > 300 ? text[..299].TrimEnd() + "…" : text,
-                m.At.ToString(m.At.Date == DateTime.Today ? "HH:mm" : "d MMM HH:mm", CultureInfo.CurrentCulture), mine);
-        })];
+        ChannelLines = _officeChannel is not { } shown ? [] : ChatTimeline.Briefly(
+            [.. shown.Messages.Where(m => !ChatIgnoring.Hides(shown, m, _state.UserName, _state.Settings.IgnoredInChat))], ChannelLinesShown,
+            m => !m.Agent && string.Equals(m.By, _state.UserName, StringComparison.OrdinalIgnoreCase), DateTime.Today, CultureInfo.CurrentCulture);
         foreach (var name in new[] { nameof(HasOfficeChannel), nameof(ChannelTitle), nameof(ChannelTopic), nameof(ChannelHint), nameof(ChannelLines),
                      nameof(HasChannelLines), nameof(ShowChannelToolTip) })
             OnPropertyChanged(name);
