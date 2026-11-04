@@ -43,6 +43,28 @@ public sealed partial class AttachmentViewModel : ObservableObject, IPlayable
         Model = model;
         Path = owner.AttachmentPath(model);
         owner.EnsureFile(model);
+        if (!Arrived) Waiting(this);
+    }
+
+    /// <summary>
+    /// What shows each file that's still coming (from another ProJict), weakly (rows are rebuilt often), so it shows the
+    /// moment it's here without redrawing the board (#8e940920).
+    /// </summary>
+    private static readonly Dictionary<Guid, List<WeakReference<AttachmentViewModel>>> Coming = [];
+
+    private static void Waiting(AttachmentViewModel shown)
+    {
+        if (!Coming.TryGetValue(shown.Model.Id, out var those)) Coming[shown.Model.Id] = those = [];
+        those.RemoveAll(r => !r.TryGetTarget(out _));
+        those.Add(new WeakReference<AttachmentViewModel>(shown));
+    }
+
+    /// <summary>A file that was coming is here: whatever shows it (a row's picture, a comment's, a note's) shows it now.</summary>
+    public static void FileArrived(Guid id)
+    {
+        if (!Coming.Remove(id, out var those)) return;
+        foreach (var reference in those)
+            if (reference.TryGetTarget(out var shown)) shown.OnPropertyChanged(string.Empty);
     }
 
     /// <summary>A picture ProJict can show (and mark up) itself; other files open in their usual app.</summary>

@@ -159,7 +159,7 @@ public sealed partial class ChatFileViewModel : ObservableObject
         // A video's frame comes a moment later.
         attachment.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName != nameof(AttachmentViewModel.Poster)) return;
+            if (e.PropertyName is not (nameof(AttachmentViewModel.Poster) or "" or null)) return;
             OnPropertyChanged(nameof(Picture));
             OnPropertyChanged(nameof(HasPicture));
         };

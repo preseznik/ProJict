@@ -2,6 +2,7 @@
 
 ## 0.1.44
 
+- **No more freezes while a shared board's pictures come in.** On a ProJict connected to another, opening or searching a shared board fetches its pictures, and each one that arrived redrew the whole board: with 60 pictures that froze the screen for most of a minute, so searching seemed to hang. Now only the picture that arrived is redrawn, and Chat and the wiki redraw once a burst of files is in.
 - **Switch between your own ProJict and the ones you're connected to.** A ProJict connected to others mixed their projects and channels in with its own. Now a **Showing** box at the top of the sidebar picks what you see: **Everything** (as before), **This ProJict** (only your own projects, channels and wiki), or one connected ProJict (only what it shares with you). The sidebar, the dashboard, the feed, Chat's list, the wiki and **Search** (Ctrl+K) all follow it, and a project that's no longer shown closes for the dashboard. The choice is kept on this computer, and if that connection is removed, everything shows again. The box only appears while you're connected to another ProJict.
 
 ## 0.1.43 (2026-11-04)

@@ -613,19 +613,24 @@ public sealed partial class GuestService
             path = _state.AttachmentPath(copy.Project, copy.Project.Attachments().First(a => a.Id == id));
             arrived = () =>
             {
-                _main.GetProjectViewModel(copy.Project).RebuildAll();
+                // Only what shows the file shows it now: redrawing the whole board for each of a search's pictures froze the screen (#8e940920).
+                AttachmentViewModel.FileArrived(id);
                 if (copy.Project.Icon?.Id == id) _main.IconArrived(copy.Project);
             };
         }
         else if (ChatAttachment(connection, id) is { } chat)
         {
             path = ChatFilePath(connection, chat);
-            arrived = () => ChatChanged?.Invoke(connection);
+            arrived = () =>
+            {
+                AttachmentViewModel.FileArrived(id);
+                AfterArrivals("chat:" + connection.Address, () => ChatChanged?.Invoke(connection));
+            };
         }
         else if (WikiAttachment(connection, id) is { } wiki)
         {
             path = WikiFilePath(connection, wiki);
-            arrived = () => WikiChanged?.Invoke(connection);
+            arrived = () => AfterArrivals("wiki:" + connection.Address, () => WikiChanged?.Invoke(connection));
         }
         else return;
         try
@@ -640,6 +645,38 @@ public sealed partial class GuestService
         {
             connection.Requested.Remove(id);
         }
+    }
+
+    /// <summary>What to redraw once files stop arriving (by what it's about), and since when the first waits.</summary>
+    private readonly Dictionary<string, Action> _afterArrivals = [];
+    private DateTime _arrivalsSince;
+    private DispatcherTimer? _arrivals;
+    /// <summary>Files arriving this close together count as one burst; one waits at most <see cref="ArrivalsAtMost"/> to show.</summary>
+    internal static TimeSpan ArrivalsQuiet = TimeSpan.FromMilliseconds(150), ArrivalsAtMost = TimeSpan.FromSeconds(1);
+
+    /// <summary>
+    /// Redraws what a file arrived for once the burst it came in is over (or a second after its first file), instead of
+    /// once a file: redrawing a big board for each of 60 pictures froze the screen for most of a minute (#8e940920).
+    /// </summary>
+    private void AfterArrivals(string key, Action redraw)
+    {
+        if (_afterArrivals.Count == 0) _arrivalsSince = DateTime.Now;
+        _afterArrivals[key] = redraw;
+        if (_arrivals == null)
+        {
+            _arrivals = new DispatcherTimer(DispatcherPriority.Background, _dispatcher);
+            _arrivals.Tick += (_, _) =>
+            {
+                _arrivals!.Stop();
+                var due = _afterArrivals.Values.ToList();
+                _afterArrivals.Clear();
+                foreach (var action in due) action();
+            };
+        }
+        _arrivals.Stop();
+        var waited = DateTime.Now - _arrivalsSince;
+        _arrivals.Interval = waited >= ArrivalsAtMost ? TimeSpan.Zero : waited + ArrivalsQuiet > ArrivalsAtMost ? ArrivalsAtMost - waited : ArrivalsQuiet;
+        _arrivals.Start();
     }
 
     /// <summary>Tells each host which of its projects you have open (it shows you there, like an agent's badge).</summary>
