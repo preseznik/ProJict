@@ -22,6 +22,9 @@ public sealed class TodoItem
     /// <summary>Left out of the JSON while not set.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public Priority Priority { get; set; }
+    /// <summary>The priority it had before its project was paused (it's on hold meanwhile, #e17bd61c); null otherwise.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Priority? PriorityBeforePause { get; set; }
     public List<TodoItem> Children { get; set; } = [];
     public DateTime CreatedAt { get; set; } = DateTime.Now;
     public DateTime? DoneAt { get; set; }
