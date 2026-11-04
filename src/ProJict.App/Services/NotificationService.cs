@@ -141,7 +141,7 @@ public sealed class NotificationService
             foreach (var (comment, _) in category.Comments.Walk().Where(e => !e.Comment.Deleted && !IsMe(e.Comment.By)))
                 events.Add(CommentEvent(comment, mine, project.Id, where, category.Name, () => OpenDiscussion(project, category.Id, comment.Id)));
         }
-        if (project.OpenShip is { State: ShipState.Planned } ship)
+        if (ShipFlow.WaitsForYou(project) && project.OpenShip is { } ship)
             events.Add(new Event(NotificationKind.ShipPlan, $"ship:{ship.Id}", project.Id, where, "A ship plan waits for your approval",
                 $"{ship.PlannedBy ?? "An AI agent"} planned shipping {where}{(ship.Version is { } v ? " " + v : "")}.", () => _main.OpenProject(project).RevealShip(ship)));
         // Like a ship plan: something goes out once you approve it.

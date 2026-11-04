@@ -1190,8 +1190,8 @@
                                        Text="Put at the top of every “Copy prompt”: engine version, conventions, how to test, what to commit…" />
                         </StackPanel>
 
-                        <TextBlock Grid.Row="6" Text="Shipping" Visibility="{Binding CanShip, Converter={StaticResource BoolToVis}}" />
-                        <StackPanel Grid.Row="6" Grid.Column="1" Margin="0,4" Visibility="{Binding CanShip, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Grid.Row="6" Text="Shipping" Visibility="{Binding CanChangeShipping, Converter={StaticResource BoolToVis}}" />
+                        <StackPanel Grid.Row="6" Grid.Column="1" Margin="0,4" Visibility="{Binding CanChangeShipping, Converter={StaticResource BoolToVis}}">
                             <ItemsControl ItemsSource="{Binding ShipSteps}" Focusable="False" AutomationProperties.Name="Steps this project has">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>

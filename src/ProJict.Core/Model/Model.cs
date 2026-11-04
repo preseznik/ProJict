@@ -219,6 +219,8 @@ public sealed class RemoteOrigin
     public Sharing.GuestRole Role { get; set; }
     /// <summary>False while the connection is down: the project is then read only.</summary>
     public bool Connected { get; set; } = true;
+    /// <summary>The host is your own ProJict on another computer ("this is me"): you ship its projects from here too.</summary>
+    public bool Self { get; set; }
 }
 
 /// <summary>A file attached to an item. ProJict keeps its own copy in the data folder (see ProjectStore.AttachmentPath).</summary>

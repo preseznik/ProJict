@@ -508,6 +508,8 @@ public sealed partial class HostService
             case "getTestBuild":
                 SendTestBuild(session, message);
                 return null;
+            case "shipOp":
+                return ShipOp(session, message);
             case "callRing" or "callAnswer" or "callHangUp" or "callAudio":
                 HandleCall(session, message);
                 return null;
