@@ -185,6 +185,7 @@ public sealed partial class AgentTools : IMcpToolHost
         AddWikiTools();
         AddToolTools();
         AddBrowserTools();
+        AddCallTools();
         AddWorkTools();
         AddUsageTools();
         AddComfyTools();

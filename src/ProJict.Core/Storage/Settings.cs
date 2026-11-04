@@ -77,6 +77,10 @@ public sealed class AppSettings
     public int BigChannelFileMb { get; set; } = 50;
     /// <summary>Past this size (GB) the cache cleans out its least recently used files (0: no limit).</summary>
     public int ChatCacheMaxGb { get; set; } = 10;
+    /// <summary>How Chat's list is sorted (its sort button), on this computer.</summary>
+    public Chat.ChatOrder ChatOrder { get; set; }
+    /// <summary>Whose voices read agents' answers in calls (Settings › Chat).</summary>
+    public Chat.CallVoices CallVoices { get; set; }
     /// <summary>Whether a file of this size, posted in such a channel, goes to the Chat cache.</summary>
     public bool GoesToChatCache(bool direct, long size) => direct || (BigChannelFileMb > 0 && size > (long)BigChannelFileMb * 1024 * 1024);
     /// <summary>Read-only API tokens may still use Chat fully: post, start channels, invite (Settings › API).</summary>

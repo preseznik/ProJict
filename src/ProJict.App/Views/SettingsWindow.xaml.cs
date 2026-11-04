@@ -56,6 +56,11 @@ public partial class SettingsWindow : Window
         PrivateFilesDays.Text = state.AppSettings.PrivateFilesDays.ToString();
         BigChannelFile.Text = state.AppSettings.BigChannelFileMb.ToString();
         ChatCacheMax.Text = state.AppSettings.ChatCacheMaxGb.ToString();
+        WindowsVoices.IsChecked = state.AppSettings.CallVoices == ProJict.Core.Chat.CallVoices.Windows;
+        ElevenLabsVoices.IsChecked = state.AppSettings.CallVoices == ProJict.Core.Chat.CallVoices.ElevenLabs;
+        ElevenLabsVoicesNote.Text = App.Current.MainVm.Calls.HasElevenLabsKey
+            ? "With your ElevenLabs key (Settings › Tools): each agent gets one of your ElevenLabs voices. It uses its credits, a little per answer."
+            : "It needs ElevenLabs' API key in Settings › Tools first; until then Windows' voices read them.";
         PrivateFilesFolder.Text = state.PrivateFilesRoot;
         ShowPrivateFiles();
         var notifications = state.AppSettings.Notifications;
@@ -517,6 +522,7 @@ public partial class SettingsWindow : Window
         _state.AppSettings.PrivateFilesDays = privateDays;
         _state.AppSettings.BigChannelFileMb = bigChannelFile;
         _state.AppSettings.ChatCacheMaxGb = cacheMax;
+        _state.AppSettings.CallVoices = ElevenLabsVoices.IsChecked == true ? ProJict.Core.Chat.CallVoices.ElevenLabs : ProJict.Core.Chat.CallVoices.Windows;
         var privateFolder = PrivateFilesFolder.Text.Trim();
         if (!string.Equals(privateFolder, _state.PrivateFilesRoot, StringComparison.OrdinalIgnoreCase))
             _state.MovePrivateFiles(string.Equals(privateFolder, _state.DefaultPrivateFilesRoot, StringComparison.OrdinalIgnoreCase) ? null : privateFolder);
