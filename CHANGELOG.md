@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.45
+
+- **What you type in Add item… isn't lost any more.** When another ProJict changed a shared board (or you were connected to one and its agents worked there), the board was rebuilt and a category's **Add item…** box came back empty, with the keyboard gone from it. Now it keeps what you typed, and the keyboard goes back to it where you were. Items you're editing and comments you're writing were already kept.
+
 ## 0.1.44 (2026-11-04)
 
 - **Sort a channel's Media and Files.** A sort button by the tabs' search box cycles **Newest**, **Oldest**, **A–Z** (by name) and **Largest**; it sorts both tabs in every channel, the viewer's ← → follow it, and it stays as you left it.

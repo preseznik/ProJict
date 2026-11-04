@@ -96,6 +96,10 @@ public sealed partial class ProjectViewModel : ObservableObject
     /// <summary>Asks the view to focus an item's text box; caret -1 means end of text.</summary>
     public event Action<Guid, int>? FocusRequested;
     public event Action<CategoryViewModel>? FocusAddItemRequested;
+    /// <summary>The view: the category whose Add item… box has the keyboard, and where its caret is (null when none has).</summary>
+    public Func<(Guid Category, int Caret)?>? TypingNewItem { get; set; }
+    /// <summary>Puts the keyboard back in a category's Add item… box, at this caret.</summary>
+    public event Action<CategoryViewModel, int>? FocusAddItemAtRequested;
     /// <summary>Set by the board: the caret position in an item's text box, so agent edits can put it back.</summary>
     public Func<Guid, int?>? CaretOf { get; set; }
 
@@ -605,10 +609,29 @@ public sealed partial class ProjectViewModel : ObservableObject
         OnPropertyChanged(nameof(ToggleAllGlyph));
     }
 
-    public void RebuildAll()
+    public void RebuildAll() => RebuildAll(Typing());
+
+    /// <summary>
+    /// What's being typed in the categories' Add item… boxes, and where the keyboard is: a category the board gets anew
+    /// (another ProJict's change, undo) keeps them (#ec8d9e6f).
+    /// </summary>
+    private sealed record TypedNewItems(Dictionary<Guid, string> Texts, (Guid Category, int Caret)? Focus);
+
+    private TypedNewItems Typing() =>
+        new(Categories.Where(c => c.NewItemText.Length > 0).ToDictionary(c => c.Model.Id, c => c.NewItemText), TypingNewItem?.Invoke());
+
+    private void RebuildAll(TypedNewItems typed)
     {
         var existing = Categories.ToDictionary(c => c.Model);
-        var list = Project.Categories.Sorted(CategorySort).Select(c => existing.TryGetValue(c, out var vm) ? vm : new CategoryViewModel(this, c)).ToList();
+        var renewed = new List<CategoryViewModel>();
+        var list = Project.Categories.Sorted(CategorySort).Select(c =>
+        {
+            if (existing.TryGetValue(c, out var vm)) return vm;
+            vm = new CategoryViewModel(this, c);
+            if (typed.Texts.TryGetValue(c.Id, out var text)) vm.NewItemText = text;
+            renewed.Add(vm);
+            return vm;
+        }).ToList();
         foreach (var vm in list.Where(v => existing.ContainsKey(v.Model))) vm.Refresh();
         if (!Categories.SequenceEqual(list))
         {
@@ -620,6 +643,9 @@ public sealed partial class ProjectViewModel : ObservableObject
         ApplyFilter();
         OnCategoryExpandedChanged();
         OnSelectionChanged();
+        // The box you were typing in was made anew: the keyboard goes back to it, where you were.
+        if (typed.Focus is { } focus && renewed.FirstOrDefault(c => c.Model.Id == focus.Category) is { } again)
+            FocusAddItemAtRequested?.Invoke(again, focus.Caret);
     }
 
     public void ApplyFilter()
@@ -751,9 +777,10 @@ public sealed partial class ProjectViewModel : ObservableObject
     private void Restore(string json)
     {
         var focus = _focusedItemId;
+        var typed = Typing();
         Project.RestoreFrom(Json.Deserialize<Project>(json)!);
         Categories.Clear();
-        RebuildAll();
+        RebuildAll(typed);
         ReloadSideLists();
         NotifyDetails();
         Touch();

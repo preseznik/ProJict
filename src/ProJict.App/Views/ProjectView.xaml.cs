@@ -34,16 +34,21 @@ public partial class ProjectView : UserControl
         {
             _vm.FocusRequested -= OnFocusRequested;
             _vm.FocusAddItemRequested -= OnFocusAddItem;
+            _vm.FocusAddItemAtRequested -= OnFocusAddItemAt;
             _vm.PropertyChanged -= OnVmPropertyChanged;
             _vm.CaretOf = null;
+            _vm.TypingNewItem = null;
         }
         _vm = DataContext as ProjectViewModel;
         if (_vm != null)
         {
             _vm.FocusRequested += OnFocusRequested;
             _vm.FocusAddItemRequested += OnFocusAddItem;
+            _vm.FocusAddItemAtRequested += OnFocusAddItemAt;
             _vm.PropertyChanged += OnVmPropertyChanged;
             _vm.CaretOf = id => FindRowTextBox(id) is { IsKeyboardFocused: true } box ? box.CaretIndex : null;
+            _vm.TypingNewItem = () => Keyboard.FocusedElement is TextBox { Uid: "AddItem", DataContext: CategoryViewModel category } box && box.IsDescendantOf(this)
+                ? (category.Model.Id, box.CaretIndex) : null;
         }
         ArrangeHeaderButtons();
     }
@@ -292,6 +297,18 @@ public partial class ProjectView : UserControl
             if (box == null) return;
             box.Focus();
             box.BringIntoView();
+        }, DispatcherPriority.Loaded);
+    }
+
+    /// <summary>Back in a category's Add item… box after the board made it anew, the caret where it was.</summary>
+    private void OnFocusAddItemAt(CategoryViewModel category, int caret)
+    {
+        Dispatcher.BeginInvoke(() =>
+        {
+            var box = FindVisual<TextBox>(Board, t => t.Uid == "AddItem" && t.DataContext == category);
+            if (box == null) return;
+            box.Focus();
+            box.CaretIndex = Math.Min(caret, box.Text.Length);
         }, DispatcherPriority.Loaded);
     }
 
