@@ -18,8 +18,8 @@ public interface ISpeechIn : IDisposable
 /// <summary>Reading an agent's answer aloud, in a voice of its own.</summary>
 public interface ISpeechOut : IDisposable
 {
-    /// <summary>The voices there are to give agents.</summary>
-    IReadOnlyList<string> Voices { get; }
+    /// <summary>The voices there are to give agents (asked for once); throws InvalidOperationException with the problem.</summary>
+    Task<IReadOnlyList<string>> VoicesAsync(CancellationToken stop);
     /// <summary>Says it, in the voice named (or the first); done when it's said or stopped.</summary>
     Task SpeakAsync(string voice, string text, CancellationToken stop);
 }
@@ -79,6 +79,8 @@ public sealed class WindowsSpeechOut : ISpeechOut
     public WindowsSpeechOut() => _synth.SetOutputToDefaultAudioDevice();
 
     public IReadOnlyList<string> Voices => [.. _synth.GetInstalledVoices().Where(v => v.Enabled).Select(v => v.VoiceInfo.Name)];
+
+    public Task<IReadOnlyList<string>> VoicesAsync(CancellationToken stop) => Task.FromResult(Voices);
 
     public Task SpeakAsync(string voice, string text, CancellationToken stop)
     {

@@ -2,6 +2,9 @@ using System.Text.RegularExpressions;
 
 namespace ProJict.Core.Chat;
 
+/// <summary>Whose voices read agents' answers in a call: Windows' own (offline), or ElevenLabs' (with its key in Settings › Tools).</summary>
+public enum CallVoices { Windows, ElevenLabs }
+
 /// <summary>Where an agent is in a call: ringing, in it, said no, didn't answer, left, or couldn't be rung (it doesn't hear Chat now).</summary>
 public enum CallState { Ringing, Joined, Declined, Missed, Left, CantNow }
 

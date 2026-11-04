@@ -319,6 +319,15 @@
                 </DockPanel>
                 <TextBlock Style="{StaticResource MutedText}" Margin="2,6,0,0" TextWrapping="Wrap"
                            Text="The Chat cache holds private conversations' files and channels' big ones, in this folder on this computer, not in the data folder, so they aren't backed up or mirrored. Opening a file keeps it longer; right-click one › Keep it to keep it for good. Once cleaned out, its message says so. Files on items, wiki pages and comments are never in it." />
+                <!-- Calls: whose voices read the agents' answers aloud -->
+                <DockPanel Margin="0,14,0,0">
+                    <TextBlock Text="Voices in calls" Width="170" VerticalAlignment="Top" Margin="0,2,0,0" />
+                    <StackPanel>
+                        <RadioButton x:Name="WindowsVoices" GroupName="CallVoices" Content="Windows' voices (on this computer, free)" />
+                        <RadioButton x:Name="ElevenLabsVoices" GroupName="CallVoices" Content="ElevenLabs' voices" Margin="0,4,0,0" />
+                        <TextBlock x:Name="ElevenLabsVoicesNote" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="28,0,0,0" />
+                    </StackPanel>
+                </DockPanel>
             </StackPanel>
         </Expander>
 

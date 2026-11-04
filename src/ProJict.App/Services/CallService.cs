@@ -25,8 +25,26 @@ public sealed class CallService(AppState state, MainViewModel main, Dispatcher d
 
     /// <summary>Hears you (Windows speech recognition, unless off-screen tests put in their own).</summary>
     public Func<ISpeechIn> SpeechIn { get; set; } = () => new WindowsSpeechIn();
-    /// <summary>Reads agents' answers aloud (Windows' voices, likewise).</summary>
-    public Func<ISpeechOut> SpeechOut { get; set; } = () => new WindowsSpeechOut();
+    /// <summary>Reads agents' answers aloud; unset, the voices Settings › Chat picked (Windows' or ElevenLabs'). Tests put in their own.</summary>
+    public Func<ISpeechOut>? SpeechOut { get; set; }
+
+    /// <summary>ElevenLabs has its key in Settings › Tools.</summary>
+    public bool HasElevenLabsKey => ElevenLabsKey() != null;
+
+    /// <summary>Where ElevenLabs' API is (off-screen tests point it at a stand-in, so nothing reaches ElevenLabs).</summary>
+    public static string ElevenLabsApi { get; set; } = "https://api.elevenlabs.io";
+
+    /// <summary>Windows' voices when ElevenLabs fails (tests put in their own).</summary>
+    public Func<ISpeechOut> Fallback { get; set; } = () => new WindowsSpeechOut();
+
+    private string? ElevenLabsKey() => main.Tools.Data.Find("ElevenLabs") is { } tool ? main.Tools.KeyOf(tool) : null;
+
+    /// <summary>The voices Settings › Chat picked: ElevenLabs' when it has its key, else Windows'.</summary>
+    private ISpeechOut NewSpeechOut() =>
+        state.AppSettings.CallVoices == CallVoices.ElevenLabs && ElevenLabsKey() is { } key ? new ElevenLabsSpeechOut(key, api: ElevenLabsApi) : new WindowsSpeechOut();
+
+    /// <summary>Windows' voices, when ElevenLabs fails in a call.</summary>
+    private ISpeechOut? _fallback;
 
     public ChatCall? Current { get; private set; }
     public ChatChannel? Channel => _channel;
@@ -166,6 +184,8 @@ public sealed class CallService(AppState state, MainViewModel main, Dispatcher d
         _toSay.Clear();
         _out?.Dispose();
         _out = null;
+        _fallback?.Dispose();
+        _fallback = null;
         _saying = false;
         Speaking = null;
         Changed?.Invoke();
@@ -230,9 +250,18 @@ public sealed class CallService(AppState state, MainViewModel main, Dispatcher d
         _saying = true;
         Speaking = agent;
         Changed?.Invoke();
-        _out ??= SpeechOut();
+        _out ??= (SpeechOut ?? NewSpeechOut)();
         _stopSaying = new CancellationTokenSource();
-        try { await _out.SpeakAsync(VoiceOf(agent), text, _stopSaying.Token); }
+        try { await _out.SpeakAsync(await VoiceOfAsync(agent), text, _stopSaying.Token); }
+        catch (InvalidOperationException ex) when (_out is ElevenLabsSpeechOut && IsOn)
+        {
+            // ElevenLabs failed (its key, credits, the network): this one in a Windows voice, and the window says why.
+            Problem = ex.Message + " Its answers are read in a Windows voice for now.";
+            Changed?.Invoke();
+            _fallback ??= Fallback();
+            try { await _fallback.SpeakAsync(await VoiceOfAsync(agent, _fallback), text, _stopSaying.Token); }
+            catch (Exception again) when (again is InvalidOperationException or ObjectDisposedException or OperationCanceledException) { }
+        }
         catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException or OperationCanceledException) { }
         _saying = false;
         if (Speaking == agent) Speaking = null;
@@ -240,11 +269,11 @@ public sealed class CallService(AppState state, MainViewModel main, Dispatcher d
         await SayNext();
     }
 
-    /// <summary>Each agent's own voice, the same every call.</summary>
-    public string VoiceOf(string agent)
+    /// <summary>Each agent's own voice, the same every call (of the voices it reads with: Settings' choice, unless <paramref name="from"/> says).</summary>
+    public async Task<string> VoiceOfAsync(string agent, ISpeechOut? from = null)
     {
-        _out ??= SpeechOut();
-        var voices = _out.Voices;
+        _out ??= (SpeechOut ?? NewSpeechOut)();
+        var voices = await (from ?? _out).VoicesAsync(CancellationToken.None);
         return voices.Count == 0 ? "" : voices[agent.ToLowerInvariant().Sum(c => c) % voices.Count];
     }
 }
