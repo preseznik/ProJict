@@ -92,8 +92,26 @@ public sealed partial class ChatViewModel
 }
 
 /// <summary>A file in a channel's Media or Files tab: the file itself (to open, play or keep), who posted it and when.</summary>
-public sealed partial class ChatFileViewModel(ChatFile file, AttachmentViewModel attachment, ChatViewModel owner)
+public sealed partial class ChatFileViewModel : ObservableObject
 {
+    private readonly ChatFile file;
+    private readonly AttachmentViewModel attachment;
+    private readonly ChatViewModel owner;
+
+    public ChatFileViewModel(ChatFile file, AttachmentViewModel attachment, ChatViewModel owner)
+    {
+        this.file = file;
+        this.attachment = attachment;
+        this.owner = owner;
+        // A video's frame comes a moment later.
+        attachment.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName != nameof(AttachmentViewModel.Poster)) return;
+            OnPropertyChanged(nameof(Picture));
+            OnPropertyChanged(nameof(HasPicture));
+        };
+    }
+
     public AttachmentViewModel File => attachment;
     public ChatMessage Message => file.Message;
     public string FileName => attachment.FileName;

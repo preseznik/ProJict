@@ -3,6 +3,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ProJict.App.Services;
 using ProJict.Core.Features;
@@ -17,13 +18,16 @@ public interface IPlayable
 }
 
 /// <summary>A file attached to an item or note: a thumbnail for images, otherwise a chip with the file name.</summary>
-public sealed partial class AttachmentViewModel : IPlayable
+public sealed partial class AttachmentViewModel : ObservableObject, IPlayable
 {
-    // Rows are rebuilt on every edit; stored attachments never change, so each thumbnail is decoded once.
+    // Rows are rebuilt on every edit; stored attachments never change, so each thumbnail is decoded once (once the
+    // file is all here: one still coming from another ProJict, or being written, is tried again next time).
     private static readonly Dictionary<Guid, ImageSource?> Thumbnails = [];
     private const int ThumbnailPixels = 480;
-    /// <summary>A frame from each video, for its player; also made once.</summary>
+    /// <summary>A frame from each video, for its player and its Media tile; also made once, off the UI thread.</summary>
     private static readonly Dictionary<Guid, ImageSource?> Posters = [];
+    /// <summary>Frames being made: everyone showing the video waits for the same one.</summary>
+    private static readonly Dictionary<Guid, Task<ImageSource?>> PostersComing = [];
     private const int PosterPixels = 340;
 
     private readonly ProjectViewModel _owner;
@@ -76,16 +80,43 @@ public sealed partial class AttachmentViewModel : IPlayable
     public MediaKind MediaKind => MediaLinks.KindOf(FileName);
     public bool Plays => MediaKind is MediaKind.Audio or MediaKind.Video;
     public string PlayPath => Path;
-    /// <summary>A frame from a video, shown on its player until it plays.</summary>
+    /// <summary>
+    /// A frame from a video, shown on its player until it plays and on its Media tile. Windows takes a moment for a big
+    /// video, so it's made off the UI thread: null until then, and Poster changes when it's here.
+    /// </summary>
     public ImageSource? Poster
     {
         get
         {
             if (MediaKind != MediaKind.Video) return null;
-            if (!Posters.TryGetValue(Model.Id, out var poster)) Posters[Model.Id] = poster = ShellThumbnails.Get(Path, PosterPixels);
-            return poster;
+            if (Posters.TryGetValue(Model.Id, out var poster)) return poster;
+            if (!Arrived) return null;
+            if (!PostersComing.TryGetValue(Model.Id, out var coming)) PostersComing[Model.Id] = coming = MakePoster(Path);
+            _ = ShowWhenMade(coming);
+            return null;
         }
     }
+
+    private async Task ShowWhenMade(Task<ImageSource?> coming)
+    {
+        var poster = await coming;
+        Posters[Model.Id] = poster;
+        PostersComing.Remove(Model.Id);
+        if (poster != null) OnPropertyChanged(nameof(Poster));
+    }
+
+    /// <summary>Windows' frame of the video, on a thread of its own (the shell wants one that's STA); frozen, for the UI thread.</summary>
+    private static Task<ImageSource?> MakePoster(string path)
+    {
+        var made = new TaskCompletionSource<ImageSource?>();
+        var thread = new Thread(() => made.SetResult(ShellThumbnails.Get(path, PosterPixels))) { IsBackground = true, Name = "Video frame" };
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        return made.Task;
+    }
+
+    /// <summary>The file is all here: not still coming from another ProJict, or being written.</summary>
+    private bool Arrived => new FileInfo(Path) is { Exists: true } file && (Model.Size <= 0 || file.Length >= Model.Size);
     public string ToolTip => CleanedOut
         ? $"{FileName} · {FormatSize(Model.Size)}\nCleaned out: the Chat cache deletes files nobody opened for a while (Settings › Chat)"
         : $"{FileName} · {SizeText}\nClick to open · right-click for more";
@@ -107,6 +138,7 @@ public sealed partial class AttachmentViewModel : IPlayable
     private ImageSource? LoadThumbnail()
     {
         if (Thumbnails.TryGetValue(Model.Id, out var cached)) return cached;
+        if (!Arrived) return null;
         ImageSource? image = null;
         try
         {
