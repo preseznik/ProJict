@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.45
+## 0.1.45 (2026-11-04)
 
 - **Fold a connected ProJict's private messages on their own.** In Chat, another ProJict's private conversations were listed under its channels in one section. They now have a **Private messages** heading of their own there, which you fold and unfold separately (folding that ProJict still folds everything in it). It's kept on this computer, like the other headings.
 - **What you type in Add item… isn't lost any more.** When another ProJict changed a shared board (or you were connected to one and its agents worked there), the board was rebuilt and a category's **Add item…** box came back empty, with the keyboard gone from it. Now it keeps what you typed, and the keyboard goes back to it where you were. Items you're editing and comments you're writing were already kept.
