@@ -11,6 +11,7 @@ using ProJict.Core.Agents;
 using ProJict.Core.Export;
 using ProJict.Core.Features;
 using ProJict.Core.Model;
+using WhisperModel = ProJict.Core.Chat.WhisperModel;
 using ProJict.Core.Storage;
 
 namespace ProJict.App.Views;
@@ -60,6 +61,7 @@ public partial class SettingsWindow : Window
         BigChannelFile.Text = state.AppSettings.BigChannelFileMb.ToString();
         ChatCacheMax.Text = state.AppSettings.ChatCacheMaxGb.ToString();
         ShowMicrophones(state.AppSettings.CallMicrophone);
+        ShowRecognizers(state.AppSettings.CallRecognizer, state.AppSettings.WhisperModel);
         WindowsVoices.IsChecked = state.AppSettings.CallVoices == ProJict.Core.Chat.CallVoices.Windows;
         ElevenLabsVoices.IsChecked = state.AppSettings.CallVoices == ProJict.Core.Chat.CallVoices.ElevenLabs;
         ElevenLabsVoicesNote.Text = App.Current.MainVm.Calls.HasElevenLabsKey
@@ -132,6 +134,90 @@ public partial class SettingsWindow : Window
             CallMicrophone.Items.Add(new ComboBoxItem { Content = picked + " (not connected now)", Tag = picked });
         CallMicrophone.SelectedItem = CallMicrophone.Items.Cast<ComboBoxItem>().FirstOrDefault(i => string.Equals(i.Tag as string, picked, StringComparison.OrdinalIgnoreCase))
                                       ?? CallMicrophone.Items[0];
+    }
+
+    // ───────────── Understanding you in calls (#4980bbee) ─────────────
+
+    private static readonly (ProJict.Core.Chat.CallRecognizer Recognizer, string Name)[] Recognizers =
+    [
+        (ProJict.Core.Chat.CallRecognizer.Windows, "Windows' offline recognizer (basic)"),
+        (ProJict.Core.Chat.CallRecognizer.WindowsOnline, "Windows' online dictation (better)"),
+        (ProJict.Core.Chat.CallRecognizer.ElevenLabs, "ElevenLabs' speech to text (very good)"),
+        (ProJict.Core.Chat.CallRecognizer.Whisper, "Whisper on this computer (very good, offline)"),
+    ];
+
+    private ProJict.Core.Chat.CallRecognizer PickedRecognizer => (CallRecognizerPicker.SelectedItem as ComboBoxItem)?.Tag is ProJict.Core.Chat.CallRecognizer r ? r : ProJict.Core.Chat.CallRecognizer.Windows;
+
+    private WhisperModel PickedWhisperModel => (WhisperModelPicker.SelectedItem as ComboBoxItem)?.Tag as WhisperModel ?? WhisperModel.For(null);
+
+    private void ShowRecognizers(ProJict.Core.Chat.CallRecognizer picked, string? model)
+    {
+        foreach (var (recognizer, name) in Recognizers) CallRecognizerPicker.Items.Add(new ComboBoxItem { Content = name, Tag = recognizer });
+        CallRecognizerPicker.SelectedItem = CallRecognizerPicker.Items.Cast<ComboBoxItem>().First(i => (ProJict.Core.Chat.CallRecognizer)i.Tag == picked);
+        foreach (var m in WhisperModel.All) WhisperModelPicker.Items.Add(new ComboBoxItem { Content = m.Describe, Tag = m });
+        var current = WhisperModel.For(model);
+        WhisperModelPicker.SelectedItem = WhisperModelPicker.Items.Cast<ComboBoxItem>().First(i => (WhisperModel)i.Tag == current);
+        // A download goes on while Settings is closed; open, it shows how far it got.
+        Action changed = () => Dispatcher.InvokeAsync(ShowWhisper);
+        WhisperModels.Changed += changed;
+        Closed += (_, _) => WhisperModels.Changed -= changed;
+        ShowRecognizerNote();
+    }
+
+    private void CallRecognizer_Changed(object sender, SelectionChangedEventArgs e) => ShowRecognizerNote();
+
+    private void WhisperModel_Changed(object sender, SelectionChangedEventArgs e) => ShowWhisper();
+
+    /// <summary>What the pick needs, and for Whisper, its model.</summary>
+    private void ShowRecognizerNote()
+    {
+        if (CallRecognizerNote == null || WhisperPanel == null) return; // still loading
+        var picked = PickedRecognizer;
+        CallRecognizerNote.Text = picked switch
+        {
+            ProJict.Core.Chat.CallRecognizer.WindowsOnline =>
+                "Your voice goes to Microsoft for it, so it needs Online speech recognition on (Windows Settings › Privacy & security › Speech). It always listens to Windows' default microphone.",
+            ProJict.Core.Chat.CallRecognizer.ElevenLabs => App.Current.MainVm.Calls.HasElevenLabsKey
+                ? "Each phrase you say goes to ElevenLabs, and costs credits for the time spoken."
+                : "Needs ElevenLabs' key in Settings › Tools; until then, Windows' offline recognizer hears you.",
+            ProJict.Core.Chat.CallRecognizer.Whisper =>
+                "Runs on this computer, on the graphics card when it can: nothing you say leaves it. Download a model once (bigger is better, and slower without a strong graphics card).",
+            _ => "Understands clear speech, often poorly. Used whenever the one you pick can't.",
+        };
+        WhisperPanel.Visibility = picked == ProJict.Core.Chat.CallRecognizer.Whisper ? Visibility.Visible : Visibility.Collapsed;
+        ShowWhisper();
+    }
+
+    /// <summary>The Whisper model picked: downloaded, downloading (how far), or not yet; and the buttons for that.</summary>
+    private void ShowWhisper()
+    {
+        if (WhisperStatus == null) return;
+        var model = PickedWhisperModel;
+        var downloading = WhisperModels.Downloading;
+        var has = WhisperModels.Has(model);
+        WhisperDownload.Visibility = !has && downloading == null ? Visibility.Visible : Visibility.Collapsed;
+        WhisperCancel.Visibility = downloading != null ? Visibility.Visible : Visibility.Collapsed;
+        WhisperDelete.Visibility = has && downloading == null ? Visibility.Visible : Visibility.Collapsed;
+        WhisperDownload.Content = $"Download ({(model.SizeMb >= 1000 ? $"{model.SizeMb / 1000.0:0.0} GB" : $"{model.SizeMb} MB")})";
+        WhisperStatus.Text = downloading is { } d
+            ? $"Downloading {d.Model.Name}… {d.Done:P0} (it goes on if you close Settings)"
+            : WhisperModels.Problem ?? (has ? $"{model.Name} is on this computer, ready for calls." : $"{model.Name} isn't downloaded yet.");
+    }
+
+    private void WhisperDownload_Click(object sender, RoutedEventArgs e)
+    {
+        _ = WhisperModels.DownloadAsync(PickedWhisperModel);
+        ShowWhisper();
+    }
+
+    private void WhisperCancel_Click(object sender, RoutedEventArgs e) => WhisperModels.Cancel();
+
+    private void WhisperDelete_Click(object sender, RoutedEventArgs e)
+    {
+        var model = PickedWhisperModel;
+        if (!Confirm.Ask($"Delete Whisper's {model.Name} model from this computer?\n\nYou can download it again any time.", "Delete Whisper model")) return;
+        WhisperModels.Delete(model);
+        ShowWhisper();
     }
 
     // ───────────── Colors (#ed53e5d4) ─────────────
@@ -651,6 +737,8 @@ public partial class SettingsWindow : Window
         _state.AppSettings.ChatCacheMaxGb = cacheMax;
         _state.AppSettings.CallVoices = ElevenLabsVoices.IsChecked == true ? ProJict.Core.Chat.CallVoices.ElevenLabs : ProJict.Core.Chat.CallVoices.Windows;
         _state.AppSettings.CallMicrophone = (CallMicrophone.SelectedItem as ComboBoxItem)?.Tag as string;
+        _state.AppSettings.CallRecognizer = PickedRecognizer;
+        _state.AppSettings.WhisperModel = PickedWhisperModel.Id == WhisperModel.DefaultId ? null : PickedWhisperModel.Id;
         var privateFolder = PrivateFilesFolder.Text.Trim();
         if (!string.Equals(privateFolder, _state.PrivateFilesRoot, StringComparison.OrdinalIgnoreCase))
             _state.MovePrivateFiles(string.Equals(privateFolder, _state.DefaultPrivateFilesRoot, StringComparison.OrdinalIgnoreCase) ? null : privateFolder);

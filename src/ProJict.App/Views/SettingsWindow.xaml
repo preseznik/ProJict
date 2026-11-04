@@ -355,6 +355,27 @@
                     <ComboBox x:Name="CallMicrophone" Width="320" HorizontalAlignment="Left" AutomationProperties.Name="Microphone for calls"
                               ToolTip="The microphone you talk into in calls, on this computer" />
                 </DockPanel>
+                <!-- Calls: what understands you, on this computer (#4980bbee) -->
+                <DockPanel Margin="0,8,0,0">
+                    <TextBlock Text="Understanding you" Width="170" VerticalAlignment="Top" Margin="0,6,0,0" />
+                    <StackPanel>
+                        <ComboBox x:Name="CallRecognizerPicker" MaxWidth="420" HorizontalAlignment="Stretch" AutomationProperties.Name="What understands you in calls"
+                                  SelectionChanged="CallRecognizer_Changed" />
+                        <TextBlock x:Name="CallRecognizerNote" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="2,4,0,0" />
+                        <!-- Whisper: which model, downloaded once to this computer -->
+                        <StackPanel x:Name="WhisperPanel" Margin="0,6,0,0" Visibility="Collapsed">
+                            <ComboBox x:Name="WhisperModelPicker" MaxWidth="420" HorizontalAlignment="Stretch" AutomationProperties.Name="Whisper model"
+                                      SelectionChanged="WhisperModel_Changed" />
+                            <DockPanel Margin="0,6,0,0">
+                                <Button x:Name="WhisperDownload" DockPanel.Dock="Left" Content="Download" Click="WhisperDownload_Click" />
+                                <Button x:Name="WhisperCancel" DockPanel.Dock="Left" Content="Stop downloading" Click="WhisperCancel_Click" Visibility="Collapsed" />
+                                <Button x:Name="WhisperDelete" DockPanel.Dock="Left" Content="Delete" Click="WhisperDelete_Click" Visibility="Collapsed"
+                                        ToolTip="Deletes the downloaded model from this computer" />
+                                <TextBlock x:Name="WhisperStatus" Style="{StaticResource MutedText}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="10,0,0,0" />
+                            </DockPanel>
+                        </StackPanel>
+                    </StackPanel>
+                </DockPanel>
                 <!-- Calls: whose voices read the agents' answers aloud -->
                 <DockPanel Margin="0,8,0,0">
                     <TextBlock Text="Voices in calls" Width="170" VerticalAlignment="Top" Margin="0,2,0,0" />
