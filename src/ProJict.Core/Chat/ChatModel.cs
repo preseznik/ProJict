@@ -61,6 +61,14 @@ public sealed class ChatMessage
     public string? Approval { get; set; }
     /// <summary>Who approved or declined what the message asks, and when; null while nobody has.</summary>
     public ChatDecision? Decision { get; set; }
+    /// <summary>
+    /// On a person's message: the agent answering it (claim_reply, or its first reply), so the others leave it (#1581da50);
+    /// null while none has said it is.
+    /// </summary>
+    public string? ClaimedBy { get; set; }
+    public DateTime? ClaimedAt { get; set; }
+    /// <summary>When the agent answering it replied.</summary>
+    public DateTime? AnsweredAt { get; set; }
 }
 
 /// <summary>A person's answer to what a message asks them to approve.</summary>

@@ -14,7 +14,8 @@ namespace ProJict.Bridge;
 internal sealed class McpRelay(Options options)
 {
     /// <summary>The bridge's protocol, in its hello; ProJict tells agents still on the old ProJict.exe --mcp to move.</summary>
-    public const string Version = "2";
+    /// <summary>The bridge's protocol: 3 leaves when ProJict says the user disconnected the agent (#7559d088).</summary>
+    public const string Version = "3";
     private static string Gone => ProJictPipe.SetupRunning()
         ? "ProJict is being updated. Try again in a minute; you stay connected, and the bridge reconnects by itself when it's back."
         : "ProJict went away: it's restarting, perhaps for an update. Try again in a moment; you stay connected, and the bridge reconnects by itself.";
@@ -153,6 +154,12 @@ internal sealed class McpRelay(Options options)
                 JsonObject? message = null;
                 try { message = JsonNode.Parse(line) as JsonObject; }
                 catch (JsonException) { }
+                // The user disconnected the agent: what it waits for fails with why, and the bridge leaves (it doesn't reconnect).
+                if (message?["projictBridge"]?.GetValueKind() == JsonValueKind.String && (string?)message["projictBridge"] == "disconnect")
+                {
+                    await DisconnectedAsync((string?)message["message"] ?? "The user disconnected you from ProJict.");
+                    return;
+                }
                 if (message != null && message.ContainsKey("id") && !message.ContainsKey("method"))
                 {
                     var key = Key(message["id"]);
@@ -173,6 +180,21 @@ internal sealed class McpRelay(Options options)
         }
         catch (Exception) { }
         Lost(pipe);
+    }
+
+    /// <summary>The user disconnected the agent: what the client waits for fails with why, then the bridge (and its MCP server) ends.</summary>
+    private async Task DisconnectedAsync(string why)
+    {
+        List<JsonNode?> waiting;
+        lock (_gate)
+        {
+            _reconnecting = true;
+            waiting = [.. _pending.Values];
+            _pending.Clear();
+        }
+        foreach (var id in waiting) await ToClientAsync(Error(id, why));
+        Console.Error.WriteLine("ProJict: " + why);
+        Environment.Exit(0);
     }
 
     /// <summary>ProJict went away: what the client waits for fails (to try again), and the bridge waits for ProJict to come back.</summary>

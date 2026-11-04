@@ -17,7 +17,7 @@ public sealed partial class AgentTools
 {
     private const int MaxWaitSeconds = 60;
     private static readonly HashSet<string> ChatTools =
-        ["list_channels", "create_channel", "read_channel", "post_message", "ask_approval", "edit_message", "join_channel", "invite_to_channel", "moderate_channel", "wait_for_messages"];
+        ["list_channels", "create_channel", "read_channel", "post_message", "ask_approval", "claim_reply", "edit_message", "join_channel", "invite_to_channel", "moderate_channel", "wait_for_messages"];
     /// <summary>Chat's tools, for an API token that may only use Chat.</summary>
     public static IReadOnlySet<string> ChatToolNames => ChatTools;
 
@@ -66,6 +66,13 @@ public sealed partial class AgentTools
                 ("text", "string", "The message, if you want to say more than the request (it's shown above it).", false),
                 ("reply_to", "string", "Id of the message you answer; it's quoted.", false)),
             AskApproval);
+        Add("claim_reply", "Say you're answering a message",
+            "Before you answer a person's message that other agents could answer too (it @mentions nobody, several of you, or @everyone), claim it: " +
+            "if it's yours, answer it (post_message with reply_to it); if another agent has it, you're told who, so leave it to them. The others are " +
+            "told you're answering, and their replies to it are refused. A message that @mentions only you is yours already, and your first reply " +
+            "to a message claims it too. A claim nobody answers lapses after 10 minutes.",
+            Schema(ChannelArg, ("id", "string", "The message's id.", true)),
+            ClaimReply);
         Add("edit_message", "Edit or delete a chat message",
             "Changes the text of your own message, or deletes it (moderators can delete anyone's).",
             Schema(ChannelArg, ("id", "string", "The message id.", true), ("text", "string", "The new text.", false),
@@ -254,6 +261,48 @@ public sealed partial class AgentTools
             result["note"] = "That was long for a chat channel. Keep messages short and conversational: a few sentences, one point at a time. " +
                              "Put details in the item's discussion (add_comment) or a note (write_doc) and link it, or go on privately with post_message to @name.";
         return Json(result);
+    }
+
+    /// <summary>An agent says it answers a person's message (#1581da50): the first one gets it, the others are told who does.</summary>
+    private string ClaimReply(McpSession session, Args args, List<Attachment> files)
+    {
+        RequireChat();
+        RequireOwnName(session, "claim it");
+        if (SharedChannelFor(session, args) is not null)
+            throw new McpToolException("Messages in another ProJict's channels can't be claimed yet: answer only what's meant for you there.");
+        var channel = ChannelFor(session, args, start: false);
+        var id = args.Required("id").Trim();
+        var message = ChatRoom.FindMessage(channel, id) ?? throw new McpToolException($"No message {id} in {Display(channel, session)}.", ToolProblem.NotFound);
+        var (yours, answerer) = Chatting(() => Chat.ClaimReply(channel, ActorOf(session), message.Id));
+        session.Noticed.Add($"claim:{message.Id}:{answerer}");
+        return Json(new JsonObject
+        {
+            ["message"] = ShortId(message.Id),
+            ["yours"] = yours,
+            ["answering"] = answerer,
+            ["next"] = yours
+                ? $"It's yours: answer it with post_message reply_to {ShortId(message.Id)}. The others are told you're answering. If you can't after all, say so: the claim lapses in 10 minutes."
+                : $"{answerer} is answering it: leave it to them. If you have something they don't, tell them privately.",
+        });
+    }
+
+    /// <summary>
+    /// The person's messages another agent is answering, each once, to the agents who were told about them: leave them to it.
+    /// </summary>
+    private List<string> ClaimLines(McpSession session, bool watcher = false)
+    {
+        var lines = new List<string>();
+        var now = DateTime.Now;
+        foreach (var channel in Chat.Visible(ActorOf(session)))
+            foreach (var m in channel.Messages.TakeLast(50))
+            {
+                if (m.ClaimedBy is not { } answerer || string.Equals(answerer, session.AgentName, StringComparison.OrdinalIgnoreCase) ||
+                    !session.Noticed.Contains($"chat:{m.Id}") || ChatRoom.AnswererOf(channel, m, now) != answerer || !session.Noticed.Add($"claim:{m.Id}:{answerer}"))
+                    continue;
+                var text = $"{answerer} is answering {m.By}'s message “{Short(OneLine(m.Text))}” (id {ShortId(m.Id)}): leave it to them.";
+                lines.Add(watcher ? $"[{(channel.Direct ? "private" : Display(channel, session))}] {text}" : $"In {Display(channel, session)}, {text}");
+            }
+        return lines;
     }
 
     /// <summary>A message asking a person to approve one named change (#848d7643): Approve and Decline buttons, and only its answer counts.</summary>
@@ -540,6 +589,7 @@ public sealed partial class AgentTools
     {
         var answers = AnswerLines(session);
         var lines = LocalNewsLines(session);
+        lines.AddRange(ClaimLines(session));
         return answers.Count == 0 ? lines : [.. lines, "Chat answers: " + string.Join(" ", answers)];
     }
 
@@ -618,6 +668,8 @@ public sealed partial class AgentTools
             ["at"] = Time(m.At),
             ["text"] = m.Deleted ? null : m.Text,
             ["deleted"] = m.Deleted ? true : null,
+            ["answering"] = !m.Agent && ChatRoom.AnswererOf(channel, m, DateTime.Now) is { } answerer ? answerer : null,
+            ["answered"] = m.AnsweredAt != null ? true : null,
             ["replyTo"] = m.ReplyTo is { } r ? ShortId(r) : null,
             ["edited"] = m.EditedAt != null && !m.Deleted ? true : null,
             ["mentionsYou"] = ChatRoom.Mentions(channel, m, you) ? true : null,

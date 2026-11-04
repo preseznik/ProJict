@@ -207,6 +207,11 @@ public sealed class WorkspaceSettings
     /// <summary>GitHub user or organization whose repositories are matched to projects by name.</summary>
     public string? GitHubAccount { get; set; }
     public string Theme { get; set; } = "System";
+    /// <summary>Colors over the theme (#ed53e5d4): Windows (your accent), a premade scheme's name, or Custom (<see cref="CustomColors"/>).</summary>
+    public string ColorScheme { get; set; } = Model.ColorScheme.WindowsName;
+    /// <summary>Your own colors, for the Custom scheme.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public CustomColors? CustomColors { get; set; }
     public bool SideBySide { get; set; }
     /// <summary>The board leaves out categories with nothing left to do (Hide empty).</summary>
     public bool HideEmptyCategories { get; set; }

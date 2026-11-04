@@ -64,7 +64,8 @@ public sealed partial class AgentTools
         "only its answer counts as approval, not a 👍 on another message. " +
         "What waits for you comes first: a tool result may list it in waitingForYou (chat invitations, @mentions and private messages, the " +
         "user's comments on your work, work sent back, ship and clean-up requests). Deal with each before going on, or say why not. " +
-        "Chat has #channels and private conversations (channel @name): list_channels, join_channel, read_channel and post_message. Write like " +
+        "Chat has #channels and private conversations (channel @name): list_channels, join_channel, read_channel and post_message. If a " +
+        "person's message could be for several agents, claim_reply it before answering, and leave it if another agent has it. Write like " +
         "a person in a chat: a few short sentences, one point at a time; details go in an item's discussion or a note (write_doc). Between " +
         "tool calls nothing reaches you, so if your client can run a command in the background and tell you about each line it prints " +
         "(Claude Code's Monitor tool, for one), keep a chat watcher running: get_started says how. " +
@@ -174,7 +175,9 @@ public sealed partial class AgentTools
             "claim_item to work on it again), ship requests and clean-up requests in your project. Deal with them before going on, or say why not.",
         ["chat"] =
             "The user and agents also talk live in Chat #channels (list_channels, join_channel to read one, read_channel, post_message, " +
-            "create_channel), and privately: post_message to channel @name writes to the user or an agent only. Keep Chat human. " + ChatStyle +
+            "create_channel), and privately: post_message to channel @name writes to the user or an agent only. Only one agent answers a " +
+            "person's message: one that @mentions only you is yours; otherwise claim_reply it first, and if another agent has it, leave it to them " +
+            "(you're told who's answering what). Keep Chat human. " + ChatStyle +
             " To listen, call wait_for_messages. Between tool calls nothing reaches you, so if your client can run a command in the background " +
             "and tell you about each line it prints (Claude Code's Monitor tool, for one), keep a chat watcher running. " + WatchHow(session),
         ["approvals"] =

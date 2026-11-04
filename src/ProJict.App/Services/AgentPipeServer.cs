@@ -12,7 +12,7 @@ namespace ProJict.App.Services;
 /// Chat. Nothing listens on the network.
 /// </summary>
 public sealed class AgentPipeServer(string pipeName, IMcpToolHost host, string version,
-    Func<string, Stream, TextReader, CancellationToken, Task>? watch = null,
+    Func<string, int, Stream, TextReader, CancellationToken, Task>? watch = null,
     Func<System.Text.Json.Nodes.JsonObject, string?, Stream, TextReader, CancellationToken, Task>? approve = null) : IDisposable
 {
     private CancellationTokenSource? _stop;
@@ -76,7 +76,7 @@ public sealed class AgentPipeServer(string pipeName, IMcpToolHost host, string v
                 using var reader = new StreamReader(pipe, new UTF8Encoding(false), false, 4096, leaveOpen: true);
                 var first = await reader.ReadLineAsync(stop);
                 if (first == null) return;
-                if (watch != null && McpServer.WatchRequest(first) is { } agent) await watch(agent, pipe, reader, stop);
+                if (watch != null && McpServer.WatchRequest(first) is { } agent) await watch(agent, McpServer.WatchBridgeProtocol(first), pipe, reader, stop);
                 else if (PermissionAsk.Request(first) is { } request)
                 {
                     if (approve != null) await approve(request.Hook, request.Agent, pipe, reader, stop);

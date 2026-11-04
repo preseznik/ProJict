@@ -106,6 +106,14 @@ public sealed partial class AgentTools
     public async Task WatchChatAsync(McpSession identity, Func<string, Task> write, CancellationToken stop)
     {
         var agent = identity.AgentName;
+        // An agent you disconnected (#7559d088): its watcher is turned away until it connects again later. A bridge that
+        // knows how stops on the line; an older one would print it on every retry, so it's just turned away.
+        if (CutOffAt(agent) != null)
+        {
+            if (identity.BridgeProtocol >= McpServer.DisconnectProtocol) await write(CutOffWatchLine);
+            return;
+        }
+        var startedAt = DateTime.Now;
         // What it was told before ProJict restarted (or by its sessions) isn't printed again.
         Recall(identity);
         WatchFeed feed;
@@ -119,7 +127,13 @@ public sealed partial class AgentTools
         }
         long next;
         lock (feed) next = feed.Next;
-        await _dispatcher.InvokeAsync(() => _main.Agents.Renamed());
+        await _dispatcher.InvokeAsync(() =>
+        {
+            _main.Agents.Renamed();
+            // It hears Chat now: connected ProJicts can call it (#546dab2b).
+            _main.Host.SendPresence();
+            _main.Guest.SendPresence();
+        });
         try
         {
             await write($"Watching ProJict Chat for {agent}: a line for each message for you (reply with post_message, the line says where), " +
@@ -146,6 +160,8 @@ public sealed partial class AgentTools
                     SleepChanged += sleepy;
                     // A shared thing freed or taken over too (a lease running out is found by the regular recheck).
                     ResourcesChanged += sleepy;
+                    // Disconnected by you: it ends at once.
+                    AgentsCutOff += sleepy;
                     // Other ProJicts' channels too: a message there wakes it as well.
                     rooms.AddRange(SharedRooms(identity));
                     foreach (var room in rooms) room.Changed += listener;
@@ -168,6 +184,7 @@ public sealed partial class AgentTools
                         found.AddRange(SharedWatchLines(identity));
                         found.AddRange(SharedRefusalLines(identity).Select(l => "[ProJict] " + l));
                         found.AddRange(WatchAnswerLines(identity));
+                        found.AddRange(WatchClaimLines(identity));
                     }
                     found.AddRange(WatchWorkLines(identity));
                     feed.Noticed.UnionWith(identity.Noticed);
@@ -180,6 +197,11 @@ public sealed partial class AgentTools
                     var (mine, after) = Take(feed, next);
                     next = after;
                     foreach (var line in mine) await write(line);
+                    if (CutOffAt(agent) is { } cut && cut >= startedAt)
+                    {
+                        await write(CutOffWatchLine);
+                        return;
+                    }
                     if (mine.Count == 0) await Task.WhenAny(changed.Task, fed, Task.Delay(WatchRecheck, stop));
                 }
                 finally
@@ -190,6 +212,7 @@ public sealed partial class AgentTools
                         _state.ProjectChanged -= touched;
                         SleepChanged -= sleepy;
                         ResourcesChanged -= sleepy;
+                        AgentsCutOff -= sleepy;
                         foreach (var room in rooms) room.Changed -= listener;
                     });
                 }
@@ -204,7 +227,13 @@ public sealed partial class AgentTools
                     _watchStopped[agent] = DateTime.Now;
                     lock (_feeds) _feeds.Remove(agent);
                 }
-            if (!_dispatcher.HasShutdownStarted) await _dispatcher.InvokeAsync(() => _main.Agents.Renamed());
+            if (!_dispatcher.HasShutdownStarted)
+                await _dispatcher.InvokeAsync(() =>
+                {
+                    _main.Agents.Renamed();
+                    _main.Host.SendPresence();
+                    _main.Guest.SendPresence();
+                });
         }
     }
 
@@ -238,6 +267,18 @@ public sealed partial class AgentTools
         return lines;
     }
 
+    /// <summary>Messages another agent is answering, as "[#channel] Lark is answering …" lines; told once, by the watcher or a tool result.</summary>
+    private List<string> WatchClaimLines(McpSession identity)
+    {
+        List<McpSession> same;
+        lock (_live) same = _live.Where(s => string.Equals(s.AgentName, identity.AgentName, StringComparison.OrdinalIgnoreCase)).ToList();
+        foreach (var session in same) identity.Noticed.UnionWith(session.Noticed);
+        var lines = ClaimLines(identity, watcher: true);
+        foreach (var session in same) session.Noticed.UnionWith(identity.Noticed);
+        Keep(identity);
+        return lines;
+    }
+
     /// <summary>👍 and 👎 on the agent's messages, as "[answer] …" lines; told once, by the watcher or a tool result.</summary>
     private List<string> WatchAnswerLines(McpSession identity)
     {
@@ -250,8 +291,11 @@ public sealed partial class AgentTools
         return lines;
     }
 
-    /// <summary>A watcher on the agent pipe: lines go back down the pipe until the watcher closes its end.</summary>
-    public async Task WatchOverPipeAsync(string agent, Stream pipe, TextReader input, CancellationToken stop)
+    /// <summary>
+    /// A watcher on the agent pipe: lines go back down the pipe until the watcher closes its end. <paramref name="bridge"/>
+    /// is its bridge's protocol (0 for an older one).
+    /// </summary>
+    public async Task WatchOverPipeAsync(string agent, int bridge, Stream pipe, TextReader input, CancellationToken stop)
     {
         using var gone = CancellationTokenSource.CreateLinkedTokenSource(stop);
         // The watcher never writes: its end closing is how we hear it stopped.
@@ -260,7 +304,7 @@ public sealed partial class AgentTools
             try { while (await input.ReadLineAsync(gone.Token) != null) { } }
             catch (Exception) { }
         });
-        var identity = new McpSession { Name = agent, ClientName = "watch-chat" };
+        var identity = new McpSession { Name = agent, ClientName = "watch-chat", BridgeProtocol = bridge };
         var watching = WatchChatAsync(identity, async line =>
         {
             await pipe.WriteAsync(Encoding.UTF8.GetBytes(line + "\n"), gone.Token);

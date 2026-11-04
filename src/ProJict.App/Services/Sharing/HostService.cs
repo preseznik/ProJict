@@ -52,6 +52,8 @@ public sealed class GuestSession(GuestAccount account, Wire wire, string address
     internal string? RulesSent { get; set; }
     /// <summary>Who's online or away, as the guest last heard it.</summary>
     internal string? PresenceSent { get; set; }
+    /// <summary>The guest's agents that hear Chat right away there (by their names there), so they can take calls from here.</summary>
+    internal HashSet<string> ListeningAgents { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     /// <summary>The guest's own channels, when it shares them back.</summary>
     public BackChat? Back { get; internal set; }
     /// <summary>The guest takes files in pieces, so bigger than 15 MB (its hello says; ProJict 0.1.40 and newer).</summary>
@@ -528,6 +530,8 @@ public sealed partial class HostService
                 var agents = Presence.FromJson(message["agents"]).Take(100)
                     .ToDictionary(a => session.Account.Self ? a.Key : AgentNaming.Via(a.Key, NameOf(session.Account)), a => a.Value, StringComparer.OrdinalIgnoreCase);
                 _main.Agents.PersonPresence(session, (bool?)message["away"] == true, agents);
+                session.ListeningAgents = (message["listening"] as JsonArray ?? []).Select(n => (string?)n ?? "").Where(n => n.Trim().Length is > 0 and <= 40)
+                    .Take(100).ToHashSet(StringComparer.OrdinalIgnoreCase);
                 BackPresence(session, (bool?)message["away"] == true, Presence.FromJson(message["agents"]));
                 if (session.Back is { } back) BackChatChanged?.Invoke(back);
                 return null;

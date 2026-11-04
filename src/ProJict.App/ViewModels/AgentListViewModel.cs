@@ -24,6 +24,10 @@ public sealed partial class AgentListRow : ObservableObject
 
     public string Name { get; }
     public McpSession? Session { get; }
+
+    /// <summary>Connected now: right-click › Disconnect… (#7559d088).</summary>
+    public bool CanDisconnect => Session != null;
+    [RelayCommand] private void Disconnect() => _owner.DisconnectAgents([Name], Name);
     /// <summary>What it runs in ("Claude Code"), when known.</summary>
     public string? Client { get; private set; }
     public DateTime? LastSeen { get; private set; }

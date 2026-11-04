@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Media;
 using ProJict.App.Services;
 using ProJict.App.ViewModels;
 using ProJict.Core.Agents;
@@ -37,6 +38,7 @@ public partial class SettingsWindow : Window
         CloseToTray.IsChecked = s.CloseToTray;
         MarkInProgress.IsChecked = s.MarkCopiedInProgress;
         Theme.SelectedIndex = s.Theme switch { "Light" => 1, "Dark" => 2, _ => 0 };
+        ShowColors(s);
         StaleDays.Text = s.StaleDays.ToString();
         Groups.Text = string.Join(", ", s.Groups);
         VsCodePath.Text = s.VsCodePath ?? "";
@@ -109,6 +111,115 @@ public partial class SettingsWindow : Window
             if (Top + ActualHeight > area.Bottom) Top = Math.Max(area.Top, area.Bottom - ActualHeight);
         };
         Closed += (_, _) => RememberSections();
+        // Colors show as you pick them; closed without saving, the saved ones come back.
+        Closed += (_, _) =>
+        {
+            if (_lookPreviewed && DialogResult != true) App.ApplyLook(_state.Settings);
+        };
+        _lookReady = true;
+    }
+
+    // ───────────── Colors (#ed53e5d4) ─────────────
+
+    /// <summary>Your own colors as you pick them (saved with Save).</summary>
+    private CustomColors _customDraft = new();
+    private readonly Dictionary<string, ColorField> _customFields = [];
+    private bool _lookReady;
+    private bool _lookPreviewed;
+
+    /// <summary>The Custom scheme's colors: what each one changes.</summary>
+    private static readonly (string Property, string Label, string Hint)[] CustomColorRows =
+    [
+        (nameof(CustomColors.Accent), "Accent", "Buttons, links, selections, check boxes and toggles"),
+        (nameof(CustomColors.Background), "Background", "Mixed into the windows' background and title bars"),
+        (nameof(CustomColors.Notice), "Notice bars", "The bars above the board: an agent asking, a tool key, the browser"),
+        (nameof(CustomColors.Warning), "Warnings", "Waiting counts, high priority, items to change"),
+        (nameof(CustomColors.Error), "Errors", "Problems, urgent items and bugs"),
+        (nameof(CustomColors.Success), "Success", "Active projects and new features"),
+        (nameof(CustomColors.AgentActivity), "Agents at work", "Agents' marks in the Agents view, the Feed and the board"),
+    ];
+
+    private void ShowColors(WorkspaceSettings s)
+    {
+        foreach (var name in ColorScheme.Names)
+        {
+            var scheme = ColorScheme.For(name, s.CustomColors);
+            var row = new StackPanel { Orientation = Orientation.Horizontal };
+            // Its accent and its background, as swatches (Windows: your accent; Custom: what you picked).
+            row.Children.Add(Swatch());
+            row.Children.Add(Swatch());
+            ShowSwatches(row, scheme);
+            row.Children.Add(new TextBlock { Text = name, Margin = new Thickness(4, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
+            ColorSchemePicker.Items.Add(new ComboBoxItem { Content = row, Tag = name, ToolTip = scheme.Description });
+        }
+        var current = ColorScheme.For(s.ColorScheme, s.CustomColors).Name;
+        ColorSchemePicker.SelectedItem = ColorSchemePicker.Items.Cast<ComboBoxItem>().First(i => (string)i.Tag == current);
+        _customDraft = s.CustomColors?.Copy() ?? new CustomColors();
+        var rows = (Grid)CustomColorsPanel.Children[1];
+        for (var i = 0; i < CustomColorRows.Length; i++)
+        {
+            var (property, label, hint) = CustomColorRows[i];
+            rows.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            var caption = new TextBlock { Text = label, ToolTip = hint, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 4, 0, 0) };
+            var field = new ColorField { Label = label, Margin = new Thickness(0, 4, 0, 0), HorizontalAlignment = HorizontalAlignment.Left };
+            field.Value = (string?)typeof(CustomColors).GetProperty(property)!.GetValue(_customDraft);
+            field.Changed += (_, _) =>
+            {
+                typeof(CustomColors).GetProperty(property)!.SetValue(_customDraft, field.Value);
+                PreviewLook();
+            };
+            Grid.SetRow(caption, i);
+            Grid.SetRow(field, i);
+            Grid.SetColumn(field, 1);
+            rows.Children.Add(caption);
+            rows.Children.Add(field);
+            _customFields[property] = field;
+        }
+        CustomColorsPanel.Visibility = current == ColorScheme.CustomName ? Visibility.Visible : Visibility.Collapsed;
+
+        static Border Swatch() => new() { Width = 14, Height = 14, CornerRadius = new CornerRadius(3), Margin = new Thickness(0, 0, 4, 0) };
+    }
+
+    /// <summary>A scheme's swatches in the list: its accent (Windows: yours), and its background tint when it has one.</summary>
+    private static void ShowSwatches(StackPanel row, ColorScheme scheme)
+    {
+        var accent = scheme.Accent is { } a ? Color.FromRgb(a.R, a.G, a.B) : SystemColors.AccentColor;
+        ((Border)row.Children[0]).Background = new SolidColorBrush(accent);
+        ((Border)row.Children[1]).Background = scheme.Tint is { } t ? new SolidColorBrush(Color.FromRgb(t.R, t.G, t.B)) : null;
+    }
+
+    private string ThemeName => (Theme.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "System";
+
+    private string SchemeName => (ColorSchemePicker.SelectedItem as ComboBoxItem)?.Tag as string ?? ColorScheme.WindowsName;
+
+    /// <summary>The theme or the colors changed: they show at once (Cancel puts the saved ones back).</summary>
+    private void Look_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_lookReady) return;
+        var custom = SchemeName == ColorScheme.CustomName;
+        // Custom for the first time: it starts from the scheme you had picked, so you change what you want of it.
+        if (custom && sender == ColorSchemePicker && IsEmpty(_customDraft) &&
+            e.RemovedItems.OfType<ComboBoxItem>().FirstOrDefault()?.Tag is string previous)
+        {
+            var from = ColorScheme.For(previous, null);
+            var accent = from.Accent ?? new Rgb(SystemColors.AccentColor.R, SystemColors.AccentColor.G, SystemColors.AccentColor.B);
+            _customDraft.Accent = accent.ToString();
+            _customDraft.Background = from.Tint?.ToString();
+            foreach (var (property, field) in _customFields) field.Value = (string?)typeof(CustomColors).GetProperty(property)!.GetValue(_customDraft);
+        }
+        CustomColorsPanel.Visibility = custom ? Visibility.Visible : Visibility.Collapsed;
+        PreviewLook();
+    }
+
+    private static bool IsEmpty(CustomColors c) => CustomColorRows.All(r => typeof(CustomColors).GetProperty(r.Property)!.GetValue(c) == null);
+
+    private void PreviewLook()
+    {
+        _lookPreviewed = true;
+        Look.Apply(ThemeName, ColorScheme.For(SchemeName, _customDraft));
+        // Custom's swatches follow what you pick.
+        if (ColorSchemePicker.Items.Cast<ComboBoxItem>().FirstOrDefault(i => (string)i.Tag == ColorScheme.CustomName)?.Content is StackPanel row)
+            ShowSwatches(row, ColorScheme.FromCustom(_customDraft));
     }
 
     // ───────────── Sections ─────────────
@@ -126,7 +237,7 @@ public partial class SettingsWindow : Window
         ToolsSummary.Text = ToolsSummaryOf(App.Current.MainVm.Tools.Tools);
         var kinds = NotifyKinds.Children.OfType<CheckBox>().Where(b => b.IsChecked == true).Select(b => (string)b.Content).ToList();
         NotificationsSummary.Text = NotifyEnabled.IsChecked != true ? "Off" : kinds.Count == 0 ? "On, but nothing is chosen" : "On · " + string.Join(", ", kinds);
-        BoardSummary.Text = $"{(Theme.SelectedItem as ComboBoxItem)?.Content} theme · stale after {StaleDays.Text.Trim()} days" +
+        BoardSummary.Text = $"{(Theme.SelectedItem as ComboBoxItem)?.Content} theme, {SchemeName} colors · stale after {StaleDays.Text.Trim()} days" +
                             (MarkInProgress.IsChecked == true ? " · copying a prompt marks items in progress" : "");
         CommentsSummary.Text = "You sign as " + (string.IsNullOrWhiteSpace(UserName.Text) ? Environment.UserName : UserName.Text.Trim()) +
                                $" · files in comments up to {CommentFileLimit.Text.Trim()} MB";
@@ -533,6 +644,8 @@ public partial class SettingsWindow : Window
         foreach (var box in NotifyKinds.Children.OfType<CheckBox>())
             typeof(NotificationSettings).GetProperty((string)box.Tag)!.SetValue(notify, box.IsChecked == true);
         s.Theme = ((ComboBoxItem)Theme.SelectedItem).Content.ToString()!;
+        s.ColorScheme = SchemeName;
+        s.CustomColors = IsEmpty(_customDraft) ? null : _customDraft.Copy();
         s.VsCodePath = string.IsNullOrWhiteSpace(VsCodePath.Text) ? null : VsCodePath.Text.Trim();
         var groups = Groups.Text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
@@ -542,7 +655,7 @@ public partial class SettingsWindow : Window
             .Select(b => Enum.Parse<Priority>((string)b.Tag)).ToList();
         s.AgentInstructions = string.IsNullOrWhiteSpace(AgentInstructions.Text) ? null : AgentInstructions.Text.Replace("\r\n", "\n").Trim();
 
-        App.ApplyTheme(s.Theme);
+        App.ApplyLook(s);
         _state.AppSettings.CheckForUpdates = CheckUpdates.IsChecked == true;
         _state.AppSettings.AllowAgents = AllowAgents.IsChecked == true;
         _state.AppSettings.AgentsUseChat = AgentsUseChat.IsChecked == true;

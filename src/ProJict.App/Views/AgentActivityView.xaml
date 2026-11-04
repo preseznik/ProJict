@@ -47,6 +47,9 @@
                         <MenuItem Header="Usage…" Command="{Binding SetUsageCommand}" ToolTip="How much of its usage it has used (it can report it itself with report_usage)" />
                         <MenuItem Header="Change picture…" Command="{Binding ChangePictureCommand}" ToolTip="Agents make their own (set_picture); you can choose another" />
                         <MenuItem Header="Remove picture" Command="{Binding RemovePictureCommand}" Visibility="{Binding HasPicture, Converter={StaticResource BoolToVis}}" />
+                        <Separator />
+                        <MenuItem Header="Disconnect…" Command="{Binding DisconnectCommand}"
+                                  ToolTip="Its ProJict tools stop working and its chat watcher ends; it's told you disconnected it" />
                     </ContextMenu>
                 </Border.ContextMenu>
                 <StackPanel>
@@ -232,6 +235,9 @@
                         <Separator />
                         <MenuItem Header="Show its card" Command="{Binding ShowCardCommand}" />
                         <MenuItem Header="Show its work in the Feed" Command="{Binding ShowWorkCommand}" />
+                        <Separator Visibility="{Binding CanDisconnect, Converter={StaticResource BoolToVis}}" />
+                        <MenuItem Header="Disconnect…" Command="{Binding DisconnectCommand}" Visibility="{Binding CanDisconnect, Converter={StaticResource BoolToVis}}"
+                                  ToolTip="Its ProJict tools stop working and its chat watcher ends; it's told you disconnected it" />
                     </ContextMenu>
                 </Border.ContextMenu>
                 <DockPanel>
@@ -405,7 +411,14 @@
                             <TextBlock Text="Channel" FontSize="12" VerticalAlignment="Center" />
                         </StackPanel>
                     </ToggleButton>
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <StackPanel x:Name="RoomHeader" Orientation="Horizontal" VerticalAlignment="Center" Background="Transparent">
+                        <!-- Right-click the room: disconnect everyone in it (#7559d088) -->
+                        <StackPanel.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem Header="Disconnect the agents in this room…" Command="{Binding DisconnectRoomCommand}" IsEnabled="{Binding CanDisconnectRoom}"
+                                          ToolTip="Their ProJict tools stop working and their chat watchers end; they're told you disconnected them" />
+                            </ContextMenu>
+                        </StackPanel.ContextMenu>
                         <TextBlock Text="{Binding OfficeTitle}" FontWeight="SemiBold" VerticalAlignment="Center"
                                    Visibility="{Binding ShowRoomTabs, Converter={StaticResource InvBoolToVis}}" />
                         <!-- The project's rooms (its office and studios), when it has more than one open: the one shown can be closed. -->

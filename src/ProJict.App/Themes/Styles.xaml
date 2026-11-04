@@ -242,6 +242,8 @@
 
     <!-- Timelines grouped by period (Feed, Agents). People's activity is drawn in the accent color, AI agents' in this. -->
     <SolidColorBrush x:Key="AgentActivityBrush" Color="#D97757" />
+    <!-- Text on a warning-colored chip; a color scheme with its own warning color makes it black or white, whichever reads. -->
+    <SolidColorBrush x:Key="TextOnCautionBrush" Color="Black" />
 
     <!-- A #channel chip on what the channel is about; a click opens it in Chat. -->
     <DataTemplate x:Key="ChannelChipTemplate" DataType="{x:Type vm:ChannelChip}">
@@ -309,7 +311,7 @@
                     <ColumnDefinition Width="{Binding Rest}" />
                 </Grid.ColumnDefinitions>
                 <Border Background="{DynamicResource AccentFillColorDefaultBrush}" CornerRadius="2" />
-                <Border Grid.Column="1" Background="{StaticResource AgentActivityBrush}" CornerRadius="2" />
+                <Border Grid.Column="1" Background="{DynamicResource AgentActivityBrush}" CornerRadius="2" />
             </Grid>
             <TextBlock Grid.Column="2" Text="{Binding Count}" Style="{StaticResource MutedText}" HorizontalAlignment="Right" />
         </Grid>
@@ -354,7 +356,7 @@
                                         Visibility="{Binding AgentsOnly, Converter={StaticResource InvBoolToVis}}" />
                                 <TextBlock Text="People" Style="{StaticResource MutedText}" Margin="0,0,12,0"
                                            Visibility="{Binding AgentsOnly, Converter={StaticResource InvBoolToVis}}" />
-                                <Border Width="8" Height="8" CornerRadius="2" Background="{StaticResource AgentActivityBrush}" Margin="0,0,5,0" />
+                                <Border Width="8" Height="8" CornerRadius="2" Background="{DynamicResource AgentActivityBrush}" Margin="0,0,5,0" />
                                 <TextBlock Text="AI agents" Style="{StaticResource MutedText}" />
                             </StackPanel>
                             <TextBlock Text="{Binding ChartTitle}" Style="{StaticResource SectionTitle}" Margin="0" />
@@ -373,7 +375,7 @@
                                             <RowDefinition Height="{Binding Agents}" />
                                             <RowDefinition Height="{Binding People}" />
                                         </Grid.RowDefinitions>
-                                        <Border Grid.Row="1" Background="{StaticResource AgentActivityBrush}" CornerRadius="1" />
+                                        <Border Grid.Row="1" Background="{DynamicResource AgentActivityBrush}" CornerRadius="1" />
                                         <Border Grid.Row="2" Background="{DynamicResource AccentFillColorDefaultBrush}" CornerRadius="1" />
                                     </Grid>
                                 </DataTemplate>

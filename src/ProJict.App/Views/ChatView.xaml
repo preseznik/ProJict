@@ -322,6 +322,8 @@
                             <local:ChatMessageText x:Name="Text" Segments="{Binding Segments}" Margin="0,0,0,2" />
                             <TextBlock Text="{Binding EditedText}" FontSize="11" Foreground="{DynamicResource TextFillColorTertiaryBrush}"
                                        Visibility="{Binding EditedText, Converter={StaticResource EmptyToVis}}" />
+                            <TextBlock x:Name="AnsweringLine" Text="{Binding AnsweringText}" FontSize="11" FontStyle="Italic" Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                       Visibility="{Binding AnsweringText, Converter={StaticResource EmptyToVis}}" />
                             <ItemsControl ItemsSource="{Binding Attachments}" ItemTemplateSelector="{StaticResource ChatFile}" ItemsPanel="{StaticResource Wrap}"
                                           Focusable="False" Margin="0,4,0,0" Visibility="{Binding HasAttachments, Converter={StaticResource BoolToVis}}" />
                             <!-- What it asks to approve (ask_approval): Approve and Decline until someone answers, then who did -->
