@@ -124,7 +124,7 @@
         <!-- A sidebar section: its heading folds the channels under it away (the open one and those with something new stay). -->
         <!-- A section inside another (a connected ProJict's private conversations), folded on its own. -->
         <DataTemplate x:Key="ChatSubSectionView" DataType="{x:Type vm:ChatSection}">
-            <StackPanel x:Name="Section" Margin="10,0,0,0">
+            <StackPanel x:Name="Section" Margin="10,0,0,0" Visibility="Collapsed">
                 <Button x:Name="Heading" Style="{StaticResource SubtleButton}" Command="{Binding ToggleCommand}" HorizontalAlignment="Stretch" Padding="0,3" Margin="-4,6,0,2"
                         ToolTip="{Binding ToolTip}" AutomationProperties.Name="{Binding Title}">
                     <DockPanel HorizontalAlignment="Stretch" Width="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=Button}}">
@@ -141,8 +141,9 @@
                 <DataTrigger Binding="{Binding IsShownOpen}" Value="False">
                     <Setter TargetName="Chevron" Property="Text" Value="&#xE76C;" />
                 </DataTrigger>
-                <DataTrigger Binding="{Binding HasRows}" Value="False">
-                    <Setter TargetName="Section" Property="Visibility" Value="Collapsed" />
+                <!-- Hidden unless there's a section with something in it (a ContentControl draws this even without one). -->
+                <DataTrigger Binding="{Binding HasRows}" Value="True">
+                    <Setter TargetName="Section" Property="Visibility" Value="Visible" />
                 </DataTrigger>
             </DataTemplate.Triggers>
         </DataTemplate>

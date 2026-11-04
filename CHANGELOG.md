@@ -2,6 +2,7 @@
 
 ## 0.1.46
 
+- **No stray arrows in Chat's list.** 0.1.45's own heading for a connected ProJict's private messages also drew an empty heading, just an arrow, under your own Channels, Private messages and Archive. It's only there now when there is something to fold.
 - **Pick the microphone for calls, and see that it hears you.** Calls listened only to Windows' default microphone, and when that wasn't the one you talk into (a VR headset's, say), nothing you said came through, and nothing said why. Now **Settings → Chat → Microphone for calls** picks it, on each computer. A bar under your name in the call window moves when ProJict hears sound. If it hears nothing for a while, the window says which microphone it's listening to and where to change it, including Windows' microphone privacy setting.
 
 ## 0.1.45 (2026-11-04)
