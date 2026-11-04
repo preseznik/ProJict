@@ -175,12 +175,16 @@
         <!-- A message's file: audio and video play in place, other files show as their chip. -->
         <local:PlayableTemplateSelector x:Key="ChatFile" Chip="{StaticResource ChatFileChip}" Player="{StaticResource PlayerTemplate}" />
 
-        <!-- The Media tab's grid: a tile per picture, video (a frame of it, with a play mark) or sound; a click opens it. -->
+        <!-- The Media tab's grid: a tile per picture, video (a frame of it, with a play mark) or sound; a click views it over the tab. -->
         <DataTemplate x:Key="MediaTile" DataType="{x:Type vm:ChatFileViewModel}">
-            <Button Style="{StaticResource SubtleButton}" Padding="0" Margin="0,0,8,8" Command="{Binding File.OpenCommand}" ToolTip="{Binding ToolTip}"
+            <Button Style="{StaticResource SubtleButton}" Padding="0" Margin="0,0,8,8" Command="{Binding ViewCommand}" ToolTip="{Binding ToolTip}"
                     AutomationProperties.Name="{Binding FileName}">
                 <Button.ContextMenu>
                     <ContextMenu>
+                        <MenuItem Header="View" Command="{Binding ViewCommand}" FontWeight="SemiBold" />
+                        <MenuItem Header="Open in its default app" Command="{Binding File.OpenExternallyCommand}"
+                                  ToolTip="Opens it in the app Windows uses for this kind of file" />
+                        <Separator />
                         <MenuItem Header="Show it in the chat" Command="{Binding ShowInChatCommand}" />
                         <MenuItem Header="Show in folder" Command="{Binding File.ShowInFolderCommand}" />
                         <MenuItem Header="Keep it" IsCheckable="True" IsChecked="{Binding File.IsKept}" Visibility="{Binding File.CanKeep, Converter={StaticResource BoolToVis}}"
@@ -817,6 +821,55 @@
                     <ItemsControl x:Name="MessageList" ItemsSource="{Binding Messages}" ItemTemplate="{StaticResource ChatMessage}" Focusable="False" />
                 </StackPanel>
             </ScrollViewer>
+            <!--
+                The Media tab's viewer (#9113ea6a): the picture as big as it fits, or the video or sound playing, over the tab.
+                A click beside it (or anywhere else), Esc or the cross closes it; the arrows show the one before or after.
+            -->
+            <Grid x:Name="Viewer" Background="#141414" Visibility="{Binding IsViewing, Converter={StaticResource BoolToVis}}"
+                  MouseLeftButtonUp="Viewer_MouseLeftButtonUp" AutomationProperties.Name="Viewer">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <DockPanel Margin="14,8,8,4">
+                    <Button x:Name="ViewerClose" DockPanel.Dock="Right" Style="{StaticResource SubtleIconButton}" Content="&#xE711;" Foreground="White" Padding="8"
+                            Command="{Binding CloseViewerCommand}" ToolTip="Close (Esc)" AutomationProperties.Name="Close the viewer" VerticalAlignment="Top" />
+                    <Button x:Name="ViewerOpen" DockPanel.Dock="Right" Style="{StaticResource SubtleButton}" Padding="10,5" Margin="6,0,4,0" VerticalAlignment="Top"
+                            Command="{Binding Viewing.File.OpenExternallyCommand}" ToolTip="Opens it in the app Windows uses for this kind of file">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE8A7;" FontSize="12" Foreground="White" VerticalAlignment="Center" />
+                            <TextBlock Text="Open in its default app" Foreground="White" Margin="7,0,0,0" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <Button DockPanel.Dock="Right" Style="{StaticResource SubtleButton}" Padding="10,5" VerticalAlignment="Top"
+                            Command="{Binding Viewing.ShowInChatCommand}" ToolTip="Show the message it was posted in">
+                        <TextBlock Text="In the chat" Foreground="White" />
+                    </Button>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Viewing.FileName}" Foreground="White" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Foreground="#B8FFFFFF" FontSize="12" TextTrimming="CharacterEllipsis">
+                            <Run Text="{Binding Viewing.Details, Mode=OneWay}" /><Run Text="  ·  " /><Run Text="{Binding ViewingPosition, Mode=OneWay}" />
+                        </TextBlock>
+                    </StackPanel>
+                </DockPanel>
+                <Grid Grid.Row="1" Margin="58,6,58,18">
+                    <Image x:Name="ViewerPicture" Source="{Binding Viewing.FullPicture}" Stretch="Uniform" StretchDirection="DownOnly"
+                           RenderOptions.BitmapScalingMode="HighQuality" HorizontalAlignment="Center" VerticalAlignment="Center"
+                           Visibility="{Binding Viewing.IsPicture, Converter={StaticResource BoolToVis}, FallbackValue=Collapsed}" />
+                    <TextBlock Text="This picture can't be shown here: open it in its default app." Foreground="#B8FFFFFF" HorizontalAlignment="Center"
+                               VerticalAlignment="Center" Visibility="{Binding Viewing.PictureFailed, Converter={StaticResource BoolToVis}, FallbackValue=Collapsed}" />
+                    <local:InlinePlayer x:Name="ViewerPlayer" Fill="True" Path="{Binding Viewing.File.PlayPath}" Kind="{Binding Viewing.File.MediaKind}"
+                                        FileName="{Binding Viewing.FileName}" Poster="{Binding Viewing.File.Poster}" OpenCommand="{Binding Viewing.File.OpenExternallyCommand}"
+                                        MaxWidth="{Binding Viewing.PlayerMaxWidth, FallbackValue=560}" VerticalAlignment="Center"
+                                        Visibility="{Binding Viewing.Plays, Converter={StaticResource BoolToVis}, FallbackValue=Collapsed}" />
+                </Grid>
+                <Button x:Name="ViewerPrevious" Grid.Row="1" Style="{StaticResource SubtleIconButton}" Content="&#xE76B;" FontSize="20" Foreground="White" Padding="10,14"
+                        HorizontalAlignment="Left" VerticalAlignment="Center" Margin="8,0,0,0" Command="{Binding ViewPreviousCommand}"
+                        Visibility="{Binding CanViewPrevious, Converter={StaticResource BoolToVis}}" ToolTip="The one before (left arrow)" AutomationProperties.Name="Previous" />
+                <Button x:Name="ViewerNext" Grid.Row="1" Style="{StaticResource SubtleIconButton}" Content="&#xE76C;" FontSize="20" Foreground="White" Padding="10,14"
+                        HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,8,0" Command="{Binding ViewNextCommand}"
+                        Visibility="{Binding CanViewNext, Converter={StaticResource BoolToVis}}" ToolTip="The one after (right arrow)" AutomationProperties.Name="Next" />
+            </Grid>
             </Grid>
         </DockPanel>
 

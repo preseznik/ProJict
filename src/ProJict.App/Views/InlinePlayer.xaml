@@ -8,19 +8,11 @@
     -->
     <Border x:Name="Frame" Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
             BorderThickness="1" CornerRadius="6" Padding="6,5" Width="300">
-        <StackPanel>
-            <Grid x:Name="Screen" Background="Black" Margin="-2,-1,-2,6" MinHeight="120" MaxHeight="260" Cursor="Hand" ClipToBounds="True"
-                  MouseLeftButtonUp="Screen_MouseLeftButtonUp" ToolTip="Play or pause">
-                <Image x:Name="PosterImage" Stretch="Uniform" />
-                <MediaElement x:Name="Media" LoadedBehavior="Manual" UnloadedBehavior="Close" Stretch="Uniform" ScrubbingEnabled="True"
-                              MediaOpened="Media_MediaOpened" MediaEnded="Media_MediaEnded" MediaFailed="Media_MediaFailed" />
-                <Border x:Name="BigPlay" Width="46" Height="46" CornerRadius="23" Background="#A0000000" HorizontalAlignment="Center" VerticalAlignment="Center"
-                        IsHitTestVisible="False">
-                    <TextBlock Style="{StaticResource Icon}" Text="&#xE768;" FontSize="18" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"
-                               Margin="3,0,0,0" />
-                </Border>
-            </Grid>
-            <DockPanel x:Name="Controls">
+        <!-- Docked from the bottom up, so in a viewer that fills its space (Fill) the screen takes what the controls leave. -->
+        <DockPanel>
+            <TextBlock x:Name="ProblemText" DockPanel.Dock="Bottom" Visibility="Collapsed" FontSize="11" TextWrapping="Wrap" Margin="2,4,2,0"
+                       Foreground="{DynamicResource SystemFillColorCautionBrush}" />
+            <DockPanel x:Name="Controls" DockPanel.Dock="Bottom">
                 <Button x:Name="PlayButton" DockPanel.Dock="Left" Style="{StaticResource SubtleIconButton}" Content="&#xE768;" FontSize="14" Padding="7,5"
                         VerticalAlignment="Center" Click="PlayButton_Click" ToolTip="Play" AutomationProperties.Name="Play" />
                 <Button x:Name="OpenButton" DockPanel.Dock="Right" Style="{StaticResource SubtleIconButton}" Content="&#xE8A7;" FontSize="12" Padding="6,5"
@@ -39,8 +31,17 @@
                             ValueChanged="SeekSlider_ValueChanged" AutomationProperties.Name="Position" Focusable="False" />
                 </StackPanel>
             </DockPanel>
-            <TextBlock x:Name="ProblemText" Visibility="Collapsed" FontSize="11" TextWrapping="Wrap" Margin="2,4,2,0"
-                       Foreground="{DynamicResource SystemFillColorCautionBrush}" />
-        </StackPanel>
+            <Grid x:Name="Screen" Background="Black" Margin="-2,-1,-2,6" MinHeight="120" MaxHeight="260" Cursor="Hand" ClipToBounds="True"
+                  MouseLeftButtonUp="Screen_MouseLeftButtonUp" ToolTip="Play or pause">
+                <Image x:Name="PosterImage" Stretch="Uniform" />
+                <MediaElement x:Name="Media" LoadedBehavior="Manual" UnloadedBehavior="Close" Stretch="Uniform" ScrubbingEnabled="True"
+                              MediaOpened="Media_MediaOpened" MediaEnded="Media_MediaEnded" MediaFailed="Media_MediaFailed" />
+                <Border x:Name="BigPlay" Width="46" Height="46" CornerRadius="23" Background="#A0000000" HorizontalAlignment="Center" VerticalAlignment="Center"
+                        IsHitTestVisible="False">
+                    <TextBlock Style="{StaticResource Icon}" Text="&#xE768;" FontSize="18" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"
+                               Margin="3,0,0,0" />
+                </Border>
+            </Grid>
+        </DockPanel>
     </Border>
 </UserControl>

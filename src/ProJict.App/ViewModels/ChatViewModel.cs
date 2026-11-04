@@ -269,6 +269,7 @@ public sealed partial class ChatViewModel : ObservableObject
         Draft = value != null && _drafts.Remove(value.Id, out var draft) ? draft : "";
         Pending.Clear();
         // Another channel opens on its messages.
+        Viewing = null;
         FileSearch = "";
         Tab = ChannelTab.Messages;
         // The "New" line goes above what you hadn't read when you opened the channel.
