@@ -79,6 +79,10 @@ public sealed class AppSettings
     public int ChatCacheMaxGb { get; set; } = 10;
     /// <summary>How Chat's list is sorted (its sort button), on this computer.</summary>
     public Chat.ChatOrder ChatOrder { get; set; }
+    /// <summary>How a channel's Media and Files tabs are sorted (their sort button), on this computer.</summary>
+    public Chat.ChatFileOrder ChatFileOrder { get; set; }
+    /// <summary>Chat shows the channel's member list beside the messages (the members button hides it, and the messages take the room).</summary>
+    public bool ChatShowsMembers { get; set; } = true;
     /// <summary>
     /// What a ProJict connected to others shows (the sidebar's Showing box): null for everything, "this" for only its own,
     /// or a connected ProJict's address for only its (see <see cref="Sharing.ShowingFrom"/>).

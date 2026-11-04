@@ -36,6 +36,23 @@ public static class ChatTimeline
         return lines;
     }
 
+    /// <summary>A message in brief: who wrote it ("You" for yours), its text on one line, and when.</summary>
+    public sealed record Brief(string Who, string Text, string Time, bool Mine);
+
+    /// <summary>
+    /// The last <paramref name="most"/> messages in brief (not notices or deleted ones), oldest first: for an agent's card
+    /// and the channel under the office. The text is cut at 300 characters, and files alone say "[2 files]".
+    /// </summary>
+    public static IReadOnlyList<Brief> Briefly(IReadOnlyList<ChatMessage> messages, int most, Func<ChatMessage, bool> isMine, DateTime today, CultureInfo culture) =>
+        [.. messages.Where(m => !m.Notice && !m.Deleted).TakeLast(most).Select(m =>
+        {
+            var mine = isMine(m);
+            var text = string.Join(' ', m.Text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)).Trim();
+            if (text.Length == 0 && m.Attachments is { Count: > 0 } files) text = files.Count == 1 ? "[1 file]" : $"[{files.Count} files]";
+            return new Brief(mine ? "You" : m.By, text.Length > 300 ? text[..299].TrimEnd() + "…" : text,
+                m.At.ToString(m.At.Date == today ? "HH:mm" : "d MMM HH:mm", culture), mine);
+        })];
+
     /// <summary>A message's first line, cut at <paramref name="most"/> characters (for the one a reply quotes).</summary>
     public static string Snippet(string text, int most = 90)
     {
