@@ -366,8 +366,12 @@ public sealed partial class AgentTools : IMcpToolHost
     public async Task<string> CallAsync(McpSession session, string name, JsonElement arguments)
     {
         if (session.Frozen) throw new McpToolException(FrozenMessage, ToolProblem.Forbidden);
-        // What it was told lives on the UI thread, like everything else about sessions.
-        await _dispatcher.InvokeAsync(() => Recall(session));
+        // What it was told lives on the UI thread, like everything else about sessions; so does its name.
+        await _dispatcher.InvokeAsync(() =>
+        {
+            GiveNameBack(session, name);
+            Recall(session);
+        });
         if (name == "wait_for_messages")
         {
             var heard = await WaitForMessagesAsync(session, arguments);
@@ -440,6 +444,39 @@ public sealed partial class AgentTools : IMcpToolHost
     }
 
     private static bool HasOwnName(McpSession session) => session.Name != null || !string.IsNullOrWhiteSpace(session.SignAs);
+
+    /// <summary>
+    /// (UI thread.) A session without a name of its own gets the one its client went by in this folder before, on its
+    /// first call (#67422d19): an agent whose bridge started afresh (say after an update) doesn't post as "Claude Code"
+    /// meanwhile. Not when that call picks a name anyway, nor when another connected agent has the name now.
+    /// </summary>
+    private void GiveNameBack(McpSession session, string tool)
+    {
+        if (session.FolderNameChecked) return;
+        session.FolderNameChecked = true;
+        if (tool == "set_name" || HasOwnName(session) || session.TokenId != null) return;
+        if (AgentFolderNames.NameFor(_state.Settings, session.Client, session.WorkingDirectory) is not { } name ||
+            AgentNaming.Problem(name) != null || string.Equals(name, _state.UserName, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(name, session.Client, StringComparison.OrdinalIgnoreCase)) return;
+        lock (_live)
+            if (_live.Any(s => s != session && string.Equals(s.AgentName, name, StringComparison.OrdinalIgnoreCase))) return;
+        TakeName(session, name);
+        session.NameGivenBack = session.AgentName;
+    }
+
+    /// <summary>The name the session's client went by in its folder before, if any (for get_started).</summary>
+    internal string? FormerNameOf(McpSession session) => AgentFolderNames.NameFor(_state.Settings, session.Client, session.WorkingDirectory);
+
+    /// <summary>
+    /// Posts and comments are signed: a session without a name of its own picks one first (#67422d19), so nobody answers
+    /// "Claude Code 2", which isn't anyone in particular.
+    /// </summary>
+    private static void RequireOwnName(McpSession session, string what)
+    {
+        if (HasOwnName(session)) return;
+        throw new McpToolException($"Pick your name first with set_name (one short word, e.g. Ada; if you had a name here before, take it again), then {what}: " +
+                                   $"it's signed with your name, and \"{session.AgentName}\" isn't anyone in particular.", ToolProblem.Forbidden);
+    }
 
     /// <summary>Whether the session may make the call: a read-only API token only reads, apart from Chat when Settings › API lets it.</summary>
     public bool Allows(McpSession session, string name, JsonElement arguments) =>
@@ -796,6 +833,8 @@ public sealed partial class AgentTools : IMcpToolHost
             _main.ApiStore.Save();
         }
         foreach (var (project, item) in held) Edit(project, item.Id, i => i.ClaimedBy = session.AgentName);
+        // The name it goes by in its folder, for when it comes back without one (#67422d19); an API token remembers its own.
+        if (session.TokenId == null) AgentFolderNames.Remember(_state.Settings, session.Client, session.WorkingDirectory, session.AgentName, DateTime.Now);
         // A name of its own goes with all its channels; the client's default name ("Claude Code") only with those it joined
         // in this session: other sessions went by that name before (#97eefe11).
         Chat.RenameMember(old, session.AgentName, former == null ? session.ConnectedAt : null);
@@ -977,6 +1016,7 @@ public sealed partial class AgentTools : IMcpToolHost
         var text = args.String("text");
         var tag = args.String("tag");
         var comment = args.String("comment");
+        if (!string.IsNullOrWhiteSpace(comment)) RequireOwnName(session, "comment");
         var priority = PriorityArgument(args);
         ItemState? state = args.String("state") switch
         {
@@ -1182,6 +1222,7 @@ public sealed partial class AgentTools : IMcpToolHost
 
     private string AddComment(McpSession session, Args args, List<Attachment> files)
     {
+        RequireOwnName(session, "comment");
         var text = args.Required("text").Trim();
         var target = TargetFor(session, args) ?? throw new McpToolException("Say what to comment on: item, category or group.");
         Guid? replyTo = null;

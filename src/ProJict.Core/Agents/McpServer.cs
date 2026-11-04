@@ -31,6 +31,10 @@ public sealed class McpSession
     public string? RenamedBy { get; set; }
     /// <summary>Names it had earlier in this session, before it (or the user) picked another.</summary>
     public HashSet<string> FormerNames { get; } = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>Its first call looked for the name it had in its folder before (AgentFolderNames).</summary>
+    public bool FolderNameChecked { get; set; }
+    /// <summary>The name it had in its folder before, given back on its first call; its next tool result tells it.</summary>
+    public string? NameGivenBack { get; set; }
 
     /// <summary>The name it signs with, whatever the client calls itself, until it picks one: an API token's name.</summary>
     public string? SignAs { get; init; }

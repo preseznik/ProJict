@@ -225,6 +225,7 @@ public sealed partial class AgentTools
     private string PostMessage(McpSession session, Args args, List<Attachment> files)
     {
         RequireChat();
+        RequireOwnName(session, "post");
         if (SharedChannelFor(session, args) is { } shared) return SharedPost(session, shared.Host, shared.Channel, args, files);
         var channel = ChannelFor(session, args, start: true);
         Guid? replyTo = args.String("reply_to") is { } r
