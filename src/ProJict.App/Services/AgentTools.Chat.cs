@@ -47,7 +47,7 @@ public sealed partial class AgentTools
             "Items are linked as # and the first 8 characters of their id (#4e84570c), channels as #name, people and agents as @name.",
             Schema(ChannelArg, ("limit", "integer", "Most messages (default 30, at most 200).", false),
                 ("before", "string", "Only messages before this message id, to read further back.", false)),
-            ReadChannel, readOnly: true);
+            ReadChannel, readOnly: true, output: ReadChannelOutput);
         Add("post_message", "Post in a chat channel",
             "Posts a message; in an Open channel you join it by posting. With channel @name it goes privately to the user or an agent (the " +
             "conversation starts with your first message). @name in the text mentions someone (they're notified), @everyone everyone in the channel, #name links a channel, " +

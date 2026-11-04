@@ -4,8 +4,11 @@ using System.Text.Json.Nodes;
 
 namespace ProJict.Core.Agents;
 
-/// <summary>A tool offered to AI agents; read-only tools are marked so clients can allow them without asking.</summary>
-public sealed record McpTool(string Name, string Title, string Description, JsonObject InputSchema, bool ReadOnly);
+/// <summary>
+/// A tool offered to AI agents; read-only tools are marked so clients can allow them without asking. Its output schema,
+/// if it has one, says what its results have (as structured content, for clients on MCP 2025-06-18 and newer).
+/// </summary>
+public sealed record McpTool(string Name, string Title, string Description, JsonObject InputSchema, bool ReadOnly, JsonObject? OutputSchema = null);
 
 /// <summary>One connected agent.</summary>
 public sealed class McpSession
@@ -15,6 +18,10 @@ public sealed class McpSession
     public int Id { get; } = Interlocked.Increment(ref _next);
     public string? ClientName { get; set; }
     public string? ClientTitle { get; set; }
+    /// <summary>The MCP version agreed with its client at initialize.</summary>
+    public string? ProtocolVersion { get; set; }
+    /// <summary>Its client takes structured results (structuredContent, outputSchema): MCP 2025-06-18 and newer.</summary>
+    public bool TakesStructuredResults => ProtocolVersion is { } version && string.CompareOrdinal(version, McpServer.StructuredSince) >= 0;
     /// <summary>The agent's working directory, passed on by the ProJict bridge.</summary>
     public string? WorkingDirectory { get; set; }
     /// <summary>Connected through the old bridge (ProJict.exe --mcp), which an update of ProJict closes, not ProJictBridge.exe.</summary>
@@ -147,6 +154,8 @@ public static class McpServer
     /// <summary>Protocol versions this server can speak; it answers with the client's if listed, else the first stable one below.</summary>
     public static readonly string[] SupportedVersions = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
     private const string FallbackVersion = "2025-06-18";
+    /// <summary>The version that brought structured tool results.</summary>
+    public const string StructuredSince = "2025-06-18";
 
     /// <summary>
     /// First line the bridge sends (not JSON-RPC): <c>{"projictBridge":2,"bridge":"2","cwd":"…"}</c> from ProJictBridge.exe,
@@ -232,7 +241,7 @@ public static class McpServer
             {
                 "initialize" => Initialize(parameters, host, session, serverVersion),
                 "ping" => new JsonObject(),
-                "tools/list" => ListTools(host),
+                "tools/list" => ListTools(host, session),
                 "tools/call" => await CallToolAsync(parameters, host, session, replay: Text(id) is { } replayed && replayed.StartsWith(ReplayIdPrefix, StringComparison.Ordinal)),
                 _ when method.StartsWith("notifications/", StringComparison.Ordinal) => null,
                 _ => throw new ProtocolError(-32601, $"Method not found: {method}"),
@@ -253,31 +262,37 @@ public static class McpServer
             session.ClientName = Text(client["name"]);
             session.ClientTitle = Text(client["title"]);
         }
+        session.ProtocolVersion = requested != null && SupportedVersions.Contains(requested) ? requested : FallbackVersion;
         host.SessionStarted(session);
         return new JsonObject
         {
-            ["protocolVersion"] = requested != null && SupportedVersions.Contains(requested) ? requested : FallbackVersion,
+            ["protocolVersion"] = session.ProtocolVersion,
             ["capabilities"] = new JsonObject { ["tools"] = new JsonObject { ["listChanged"] = true } },
             ["serverInfo"] = new JsonObject { ["name"] = "projict", ["title"] = "ProJict", ["version"] = serverVersion },
             ["instructions"] = host.Instructions,
         };
     }
 
-    private static JsonObject ListTools(IMcpToolHost host) => new()
+    private static JsonObject ListTools(IMcpToolHost host, McpSession session) => new()
     {
-        ["tools"] = new JsonArray(host.Tools.Select(t => (JsonNode)new JsonObject
+        ["tools"] = new JsonArray(host.Tools.Select(t =>
         {
-            ["name"] = t.Name,
-            ["title"] = t.Title,
-            ["description"] = t.Description,
-            ["inputSchema"] = t.InputSchema.DeepClone(),
-            ["annotations"] = new JsonObject
+            var tool = new JsonObject
             {
+                ["name"] = t.Name,
                 ["title"] = t.Title,
-                ["readOnlyHint"] = t.ReadOnly,
-                ["destructiveHint"] = false,
-                ["openWorldHint"] = false,
-            },
+                ["description"] = t.Description,
+                ["inputSchema"] = t.InputSchema.DeepClone(),
+                ["annotations"] = new JsonObject
+                {
+                    ["title"] = t.Title,
+                    ["readOnlyHint"] = t.ReadOnly,
+                    ["destructiveHint"] = false,
+                    ["openWorldHint"] = false,
+                },
+            };
+            if (t.OutputSchema != null && session.TakesStructuredResults) tool["outputSchema"] = t.OutputSchema.DeepClone();
+            return (JsonNode)tool;
         }).ToArray()),
     };
 
@@ -287,7 +302,7 @@ public static class McpServer
     private static async Task<JsonObject> CallToolAsync(JsonObject? parameters, IMcpToolHost host, McpSession session, bool replay = false)
     {
         var name = Text(parameters?["name"]) ?? throw new ProtocolError(-32602, "Missing tool name");
-        if (host.Tools.All(t => t.Name != name)) throw new ProtocolError(-32602, $"Unknown tool: {name}");
+        var tool = host.Tools.FirstOrDefault(t => t.Name == name) ?? throw new ProtocolError(-32602, $"Unknown tool: {name}");
         var arguments = parameters?["arguments"] is JsonObject args
             ? JsonSerializer.SerializeToElement(args)
             : JsonSerializer.SerializeToElement(new JsonObject());
@@ -310,11 +325,28 @@ public static class McpServer
         {
             session.Replaying = false;
         }
-        return new JsonObject
+        var result = new JsonObject { ["content"] = new JsonArray(new JsonObject { ["type"] = "text", ["text"] = text }) };
+        // The same JSON as structured content too, so clients needn't parse the text; the text stays for those that don't read it.
+        if (!isError && session.TakesStructuredResults && Structured(text, tool) is { } structured) result["structuredContent"] = structured;
+        result["isError"] = isError;
+        return result;
+    }
+
+    /// <summary>
+    /// A result as structured content: the JSON object it is, or for a tool that promised structured results (it has an
+    /// output schema) its text as {"text": …}; null for a plain text result of any other tool.
+    /// </summary>
+    private static JsonObject? Structured(string text, McpTool tool)
+    {
+        if (text.AsSpan().TrimStart().StartsWith("{"))
         {
-            ["content"] = new JsonArray(new JsonObject { ["type"] = "text", ["text"] = text }),
-            ["isError"] = isError,
-        };
+            try
+            {
+                if (JsonNode.Parse(text) is JsonObject json) return json;
+            }
+            catch (JsonException) { }
+        }
+        return tool.OutputSchema != null ? new JsonObject { ["text"] = text } : null;
     }
 
     private static JsonObject Error(JsonNode? id, int code, string message) => new()

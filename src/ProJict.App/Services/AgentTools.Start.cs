@@ -30,7 +30,7 @@ public sealed partial class AgentTools
             "how to keep hearing Chat, and the whole guide to ProJict by topic (items, chat, wiki, shipping, studios, publishing, outside " +
             "tools, clean-ups, sharing). What waits for you comes with it, as with every call.",
             Schema(("project", "string", "Project name or key; defaults to the project matching your working directory.", false)),
-            GetStarted, readOnly: true);
+            GetStarted, readOnly: true, output: GetStartedOutput);
     }
 
     public string Instructions => InstructionsFor(remote: false);

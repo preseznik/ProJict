@@ -98,10 +98,10 @@ public sealed partial class AgentTools : IMcpToolHost
                 ("sort", "enum:board|priority", "board (default) = the order on the board; priority = most pressing first.", false),
                 ("include_off_limits", "boolean", "Also list items you may not work on, marked offLimits (default false).", false),
                 ("limit", "integer", "Most items to return (default 50).", false)),
-            ListItems, readOnly: true);
+            ListItems, readOnly: true, output: ListItemsOutput);
         Add("get_item", "Get item",
             "One item with its sub-items, attachments (file paths you can open), history and discussion, plus the project's repo folder and instructions.",
-            Schema(IdArg), GetItem, readOnly: true);
+            Schema(IdArg), GetItem, readOnly: true, output: GetItemOutput);
         Add("claim_item", "Check out item",
             "Call before you start on an item: marks it in progress with your name. While you have it checked out, other agents can't change it. Returns the item.",
             Schema(IdArg, ("note", "string", "Optional: what you plan to do.", false), ForceArg), ClaimItem);
@@ -1670,9 +1670,10 @@ public sealed partial class AgentTools : IMcpToolHost
     private static readonly (string, string, string, bool) ForceArg =
         ("force", "boolean", "Take the item over from another agent that has it checked out (recorded in its history).", false);
 
-    private void Add(string name, string title, string description, JsonObject schema, Handler run, bool readOnly = false, string? filesArgument = null)
+    private void Add(string name, string title, string description, JsonObject schema, Handler run, bool readOnly = false, string? filesArgument = null,
+        JsonObject? output = null)
     {
-        _tools.Add(new McpTool(name, title, description, schema, readOnly));
+        _tools.Add(new McpTool(name, title, description, schema, readOnly, output));
         _handlers[name] = (run, filesArgument);
     }
 
