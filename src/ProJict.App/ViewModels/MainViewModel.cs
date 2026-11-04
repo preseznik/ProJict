@@ -176,6 +176,9 @@ public sealed partial class MainViewModel : ObservableObject
             Agents.Me = State.UserName;
             Agents.Tick(Services.UserIdle.Time);
             Browsers.CloseIdle(DateTime.Now);
+            // Agents waiting for messages start and stop hearing Chat without anything else changing: pass it on when it did.
+            Host.SendPresence();
+            Guest.SendPresence();
         };
         _presenceTimer.Start();
         Wiki = new WikiViewModel(state, this);

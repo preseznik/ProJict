@@ -420,6 +420,10 @@ public sealed partial class GuestService
             case "callRing" or "callAnswer" or "callHangUp" or "callAudio":
                 HandleCall(connection, message);
                 break;
+            case "agentCallAnswer":
+                // The host's agent answers your call in its channel (#546dab2b).
+                _main.Calls.AnswerFromHost(connection, message);
+                break;
             case "file":
                 StoreFile(connection, message);
                 break;

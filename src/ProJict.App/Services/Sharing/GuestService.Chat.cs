@@ -21,6 +21,8 @@ public sealed partial class HostConnection : IChatRemote
     public string? MyName { get; internal set; }
     /// <summary>What the host refused that an agent here sent it (by the agent's name), until the agent hears it.</summary>
     internal List<(string Agent, string Why)> AgentRefusals { get; } = [];
+    /// <summary>The host's agents that hear Chat right away there, so you can call them (#546dab2b).</summary>
+    public IReadOnlySet<string> ListeningThere { get; internal set; } = new HashSet<string>();
     /// <summary>Who's online or away in the host's ProJict, as it last said; everyone else there is offline.</summary>
     public IReadOnlyDictionary<string, PresenceState> Presence { get; internal set; } = new Dictionary<string, PresenceState>();
     /// <summary>Which of those are AI agents (the host's own, and those of everyone connected to it).</summary>
@@ -97,6 +99,8 @@ public sealed partial class GuestService
         connection.Presence = Presence.FromJson(message["people"]);
         connection.AgentsThere = (message["agents"] as JsonArray ?? []).Select(n => n is JsonValue v && v.TryGetValue<string>(out var s) ? s.Trim() : "")
             .Where(s => s.Length is > 0 and <= 200).Take(200).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        connection.ListeningThere = (message["listening"] as JsonArray ?? []).Select(n => n is JsonValue v && v.TryGetValue<string>(out var s) ? s.Trim() : "")
+            .Where(s => s.Length is > 0 and <= 200).Take(200).ToHashSet(StringComparer.OrdinalIgnoreCase);
         PresenceChanged?.Invoke(connection);
     }
 
@@ -108,11 +112,14 @@ public sealed partial class GuestService
     {
         var agents = _main.Agents.AgentsHere();
         var away = _main.Agents.MyState == PresenceState.Away;
-        var signature = $"{away}|{Presence.Signature(agents)}";
+        // Which of them hear Chat right away, so the host can call them (#546dab2b).
+        var listening = agents.Keys.Where(_main.AgentTools.HearsChat).Order(StringComparer.OrdinalIgnoreCase).ToList();
+        var signature = $"{away}|{Presence.Signature(agents)}|{string.Join("|", listening)}";
         foreach (var connection in Connections.Where(c => c.State == ConnectionState.Connected && c.PresenceSent != signature))
         {
             connection.PresenceSent = signature;
-            connection.Send(Wire.Message("presence", ("away", away), ("agents", Presence.ToJson(agents))));
+            connection.Send(Wire.Message("presence", ("away", away), ("agents", Presence.ToJson(agents)),
+                ("listening", new JsonArray(listening.Select(a => (JsonNode)a).ToArray()))));
         }
     }
 

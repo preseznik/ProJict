@@ -85,11 +85,14 @@ public sealed partial class HostService
         // Which of them are agents (yours, and those of everyone connected), so guests can show and invite them as agents.
         var agents = _main.Agents.AgentsHere().Keys.Concat(_main.Agents.RemoteAgents().Select(a => a.Name))
             .Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase).ToList();
-        var signature = Presence.Signature(everyone) + "|" + string.Join("|", agents);
+        // Which of your own agents hear Chat right away, so a guest can call them (#546dab2b).
+        var listening = _main.Agents.AgentsHere().Keys.Where(_main.AgentTools.HearsChat).Order(StringComparer.OrdinalIgnoreCase).ToList();
+        var signature = Presence.Signature(everyone) + "|" + string.Join("|", agents) + "|" + string.Join("|", listening);
         foreach (var session in _sessions.Where(s => s.PresenceSent != signature))
         {
             session.PresenceSent = signature;
-            session.Send(Wire.Message("presence", ("people", Presence.ToJson(everyone)), ("agents", new JsonArray(agents.Select(a => (JsonNode)a).ToArray()))));
+            session.Send(Wire.Message("presence", ("people", Presence.ToJson(everyone)), ("agents", new JsonArray(agents.Select(a => (JsonNode)a).ToArray())),
+                ("listening", new JsonArray(listening.Select(a => (JsonNode)a).ToArray()))));
         }
     }
 
@@ -132,7 +135,7 @@ public sealed partial class HostService
         if (Text("as") is { } agentName && agentName.Trim().Length > 0)
         {
             if (!account.Self && !Data.GuestAgents) return Refuse("This ProJict doesn't let guests' AI agents take part.");
-            if (op is not ("post" or "read" or "edit" or "delete" or "join" or "leave")) return Refuse("Guests' AI agents read and write in channels; the rest is for people.");
+            if (op is not ("post" or "read" or "edit" or "delete" or "join" or "leave" or "callAnswer")) return Refuse("Guests' AI agents read and write in channels; the rest is for people.");
             var agent = (AgentNaming.WithoutVia(agentName.Trim(), account.Name) ?? agentName).Trim();
             if (agent.Length is 0 or > 40 || agent.Contains(" (via ", StringComparison.Ordinal) ||
                 (account.Self && string.Equals(agent, _state.UserName, StringComparison.OrdinalIgnoreCase))) return Refuse("That isn't an agent's name.");
@@ -167,6 +170,8 @@ public sealed partial class HostService
 
             if (!Guid.TryParse(Text("channel"), out var id) || room.Channels.FirstOrDefault(c => c.Id == id) is not { } channel || !ChatRoom.CanSee(channel, seeing))
                 return Refuse("That channel isn't there any more.");
+            // Calls across the connection (#546dab2b): a guest's agent answers a call from here; a guest's call rings agents here.
+            if (op is "callAnswer" or "callLine") return CallOp(session, channel, actor, op, message, Refuse);
             RemoteChatOps.OnChannel(room, channel, actor, message, GuestAccess.CanComment(RoleOf(account)),
                 who => _main.AgentTools.KnownAgentNames().Contains(who, StringComparer.OrdinalIgnoreCase), () =>
                 {

@@ -63,7 +63,25 @@ public sealed partial class CallService(AppState state, MainViewModel main, Disp
     /// <summary>A call started: its window opens.</summary>
     public event Action<CallService>? Started;
 
-    private ChatRoom Room => state.Chat;
+    /// <summary>The room the call's conversation is in: yours, or the host's copy when you call its agents in its channel (#546dab2b).</summary>
+    private ChatRoom _room = state.Chat;
+    private ChatRoom Room => _room;
+
+    /// <summary>The host's connection when the call is in one of its channels; null in your own.</summary>
+    private Sharing.HostConnection? _host;
+
+    /// <summary>
+    /// Whether the agent in the channel can take a call now: one of yours that hears Chat right away, a guest's agent that
+    /// does there, or, in a host's channel, one of the host's agents that does there (#546dab2b).
+    /// </summary>
+    public bool CanTakeCall(ChatChannel channel, string agent) =>
+        main.Guest.ConnectionOf(channel) is { } host ? host.ListeningThere.Contains(agent)
+            : main.AgentTools.HearsChat(agent) || main.Host.AgentListening(agent);
+
+    /// <summary>A guest's agent: it reads your channels as "#name (yours)", so its ring names the channel that way.</summary>
+    private string WhereFor(string agent) =>
+        _host == null && _channel is { Direct: false } channel && !main.AgentTools.HearsChat(agent) && main.Host.AgentListening(agent)
+            ? $"\"#{channel.Name} ({Me}'s)\"" : Where;
 
     /// <summary>Where the call is, as an agent names it in post_message: "@Tester" or "#general".</summary>
     private string Where => _channel is { Direct: true } ? "@" + Me : "#" + _channel?.Name;
@@ -73,15 +91,19 @@ public sealed partial class CallService(AppState state, MainViewModel main, Disp
     {
         if (IsOn) return "You're in a call already: hang up first.";
         if (agents.Count == 0) return "Pick at least one agent to call.";
+        _host = null;
+        _room = state.Chat;
         // A person in another ProJict: their voice comes over the sharing connection.
         if (agents.Count == 1 && channel.Members.FirstOrDefault(m => string.Equals(m.Name, agents[0], StringComparison.OrdinalIgnoreCase)) is { Agent: false })
             return StartWithPerson(channel, agents[0]);
-        var call = new ChatCall(channel.Id, Me, agents.Select(a => (a, main.AgentTools.HearsChat(a))), DateTime.Now);
+        var call = new ChatCall(channel.Id, Me, agents.Select(a => (a, CanTakeCall(channel, a))), DateTime.Now);
         if (!call.HasSomeone)
             return (agents.Count == 1 ? $"{agents[0]} can't" : "None of them can") +
                    " take a call now: an agent takes calls only while it hears Chat right away (a chat watcher runs for it, or it's waiting for messages).";
         Current = call;
         _channel = channel;
+        _host = main.Guest.ConnectionOf(channel);
+        _room = _host?.Chat ?? state.Chat;
         Captions.Clear();
         Muted = false;
         Problem = null;
@@ -92,9 +114,9 @@ public sealed partial class CallService(AppState state, MainViewModel main, Disp
         foreach (var agent in call.Agents)
             if (agent.State == CallState.Ringing)
                 Line($"📞 {Me} is calling {agent.Name}…", agent.Name,
-                    $"{Me} is calling you: a voice call in {Where}. Pick up with answer_call answer=yes (or answer=no). In the call, what {Me} says comes to " +
-                    $"you as messages in {Where}; answer there with post_message, a sentence or two at a time in plain spoken words (no lists, code or " +
-                    "links), and ProJict reads it aloud. answer_call answer=hang_up leaves the call.");
+                    $"{Me} is calling you: a voice call in {WhereFor(agent.Name)}. Pick up with answer_call answer=yes (or answer=no). In the call, what {Me} says " +
+                    $"comes to you as messages in {WhereFor(agent.Name)}; answer there with post_message, a sentence or two at a time in plain spoken words " +
+                    "(no lists, code or links), and ProJict reads it aloud. answer_call answer=hang_up leaves the call.");
             else Captions.Add(("ProJict", $"{agent.Name} {ChatCall.Describe(agent.State)} (it doesn't hear Chat right away)."));
         StartClock();
         Started?.Invoke(this);
@@ -110,6 +132,14 @@ public sealed partial class CallService(AppState state, MainViewModel main, Disp
             _clockSet = true;
         }
         _clock.Start();
+    }
+
+    /// <summary>The host's agent answered your call in its channel (#546dab2b).</summary>
+    public void AnswerFromHost(Sharing.HostConnection host, System.Text.Json.Nodes.JsonObject message)
+    {
+        if (_host != host || _channel?.Id.ToString() != (string?)message["channelId"] || (string?)message["agent"] is not { } agent) return;
+        try { Answer(agent, (string?)message["answer"] ?? ""); }
+        catch (InvalidOperationException) { }
     }
 
     /// <summary>An agent answers (yes, no or hang_up); what to tell it, or throws with the problem.</summary>
@@ -196,6 +226,8 @@ public sealed partial class CallService(AppState state, MainViewModel main, Disp
         call.End(DateTime.Now);
         Line($"📞 Call ended · {ChatCall.Duration(call.EndedAt!.Value - call.StartedAt)}");
         Room.Changed -= OnChat;
+        _host = null;
+        _room = state.Chat;
         _clock.Stop();
         _in?.Dispose();
         _in = null;
@@ -216,9 +248,15 @@ public sealed partial class CallService(AppState state, MainViewModel main, Disp
     {
         if (_channel is not { } channel) return;
         Captions.Add(("ProJict", text));
+        // Your call with the host's agents in its channel: the host writes your call's lines there, and rings them with them.
+        if (_host != null && Current is { Person: null })
+        {
+            main.Guest.ChatOp(_host, "callLine", ("channel", channel.Id.ToString()), ("text", text), ("about", about), ("aboutText", aboutText));
+            return;
+        }
         // A conversation in another ProJict: its host writes the lines about the call there.
-        if (!Room.Channels.Contains(channel)) return;
-        var message = Room.PostNotice(channel, state.ChatMe, text, about, aboutText);
+        if (!state.Chat.Channels.Contains(channel)) return;
+        var message = state.Chat.PostNotice(channel, state.ChatMe, text, about, aboutText);
         _seen.Add(message.Id);
     }
 
@@ -242,7 +280,9 @@ public sealed partial class CallService(AppState state, MainViewModel main, Disp
     private void OnHeard(string text)
     {
         if (!IsOn || Muted || _saying || _channel is not { } channel) return;
-        Room.Post(channel, state.ChatMe, text);
+        // In the host's channel, as you write there; in yours, as you.
+        if (_host != null) main.Guest.ChatPost(_host, channel, text, null, [], null);
+        else Room.Post(channel, state.ChatMe, text);
     }
 
     /// <summary>What's new in the call's conversation: yours in the captions, an agent's in it read aloud.</summary>
@@ -253,7 +293,8 @@ public sealed partial class CallService(AppState state, MainViewModel main, Disp
         {
             _seen.Add(message.Id);
             if (message.Notice || message.Deleted) continue;
-            if (!message.Agent && string.Equals(message.By, Me, StringComparison.OrdinalIgnoreCase)) Captions.Add((Me, message.Text));
+            if (!message.Agent && (string.Equals(message.By, Me, StringComparison.OrdinalIgnoreCase) || string.Equals(message.By, _host?.MyName, StringComparison.OrdinalIgnoreCase)))
+                Captions.Add((Me, message.Text));
             else if (message.Agent && call.Of(message.By) is { State: CallState.Joined } && ChatCall.ForVoice(message.Text) is { Length: > 0 } said)
             {
                 Captions.Add((message.By, said));

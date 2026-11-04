@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using ProJict.Core.Agents;
+using ProJict.Core.Chat;
 using ProJict.Core.Model;
 
 namespace ProJict.App.Services;
@@ -20,11 +21,48 @@ public sealed partial class AgentTools
             Schema(("answer", "string", "yes, no or hang_up.", true)), AnswerCall);
     }
 
+    /// <summary>
+    /// A call in a host's channel that rings the agent there (its newest call line about it, not ended since): the answer
+    /// goes to the host. What to tell the agent, or null when no host's call rings it.
+    /// </summary>
+    private string? AnswerHostCall(McpSession session, string answer)
+    {
+        var word = answer.Trim().ToLowerInvariant();
+        foreach (var host in ReachableHosts(session, ChatHosts))
+        {
+            var me = ViaIn(session, host);
+            foreach (var channel in host.Chat!.Channels.Where(c => !c.Direct && ChatRoom.Member(c, me) != null))
+            {
+                var ring = channel.Messages.LastOrDefault(m => m.Notice && string.Equals(m.About, me, StringComparison.OrdinalIgnoreCase) && m.Text.Contains(" is calling ", StringComparison.Ordinal));
+                if (ring == null || channel.Messages.Any(m => m.Notice && m.At > ring.At && m.Text.StartsWith("📞 Call ended", StringComparison.Ordinal))) continue;
+                if (word is not ("yes" or "pick_up" or "pickup" or "no" or "hang_up" or "hangup" or "leave")) throw new McpToolException("answer is yes (pick up), no, or hang_up.");
+                _main.Guest.ChatOp(host, "callAnswer", ("channel", channel.Id.ToString()), ("answer", word), ("as", session.AgentName));
+                var where = SharedName(host, channel);
+                return word switch
+                {
+                    "no" => $"You said no to {host.HostName}'s call.",
+                    "yes" or "pick_up" or "pickup" => $"You're in {host.HostName}'s call, in \"{where}\". What they say comes to you as messages there; answer with " +
+                                                      $"post_message channel=\"{where}\", a sentence or two at a time in plain spoken words: it's read aloud. " +
+                                                      "answer_call answer=hang_up leaves the call.",
+                    _ => "You left the call.",
+                };
+            }
+        }
+        return null;
+    }
+
     private string AnswerCall(McpSession session, Args args, List<Attachment> files)
     {
         string told;
-        try { told = _main.Calls.Answer(session.AgentName, args.Required("answer")); }
-        catch (InvalidOperationException ex) { throw new McpToolException(ex.Message); }
+        var answer = args.Required("answer");
+        try { told = _main.Calls.Answer(session.AgentName, answer); }
+        catch (InvalidOperationException ex)
+        {
+            // Not a call of this ProJict's: one in a host's channel that rings you there, or a guest's call that rings you here (#546dab2b).
+            try { told = AnswerHostCall(session, answer) ?? _main.Host.ForwardAnswer(session.AgentName, answer) ?? throw new McpToolException(ex.Message); }
+            catch (InvalidOperationException again) { throw new McpToolException(again.Message); }
+            return Json(new JsonObject { ["note"] = told });
+        }
         var call = _main.Calls.Current;
         return Json(new JsonObject
         {

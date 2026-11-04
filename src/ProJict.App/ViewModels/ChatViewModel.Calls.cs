@@ -15,7 +15,8 @@ public sealed partial class ChatViewModel
     /// conversation while their ProJict is connected to yours.
     /// </summary>
     public bool CanCall => Channel is { } channel && CanWrite &&
-                           ((Here.Host == null && AgentsIn(channel).Any()) || (PersonIn(channel) is { } person && _main.Calls.LinkFor(channel, person) != null));
+                           (((Here.Host == null || Here.Host is Services.Sharing.HostConnection) && AgentsIn(channel).Any()) ||
+                            (PersonIn(channel) is { } person && _main.Calls.LinkFor(channel, person) != null));
 
     /// <summary>The other one in a private conversation, when it's a person.</summary>
     private string? PersonIn(ChatChannel channel) =>
@@ -41,7 +42,7 @@ public sealed partial class ChatViewModel
             StartCallWith(channel, PersonIn(channel) is { } person ? [person] : [.. AgentsIn(channel).Select(m => m.Name)]);
             return;
         }
-        CallChoices = [.. AgentsIn(channel).OrderBy(m => m.Name, StringComparer.CurrentCultureIgnoreCase).Select(m => new CallChoice(m.Name, _main.AgentTools.HearsChat(m.Name)))];
+        CallChoices = [.. AgentsIn(channel).OrderBy(m => m.Name, StringComparer.CurrentCultureIgnoreCase).Select(m => new CallChoice(m.Name, _main.Calls.CanTakeCall(channel, m.Name)))];
         OnPropertyChanged(nameof(CallChoices));
         IsPickingCall = true;
     }

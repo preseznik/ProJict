@@ -119,7 +119,13 @@ public sealed partial class AgentTools
         }
         long next;
         lock (feed) next = feed.Next;
-        await _dispatcher.InvokeAsync(() => _main.Agents.Renamed());
+        await _dispatcher.InvokeAsync(() =>
+        {
+            _main.Agents.Renamed();
+            // It hears Chat now: connected ProJicts can call it (#546dab2b).
+            _main.Host.SendPresence();
+            _main.Guest.SendPresence();
+        });
         try
         {
             await write($"Watching ProJict Chat for {agent}: a line for each message for you (reply with post_message, the line says where), " +
@@ -205,7 +211,13 @@ public sealed partial class AgentTools
                     _watchStopped[agent] = DateTime.Now;
                     lock (_feeds) _feeds.Remove(agent);
                 }
-            if (!_dispatcher.HasShutdownStarted) await _dispatcher.InvokeAsync(() => _main.Agents.Renamed());
+            if (!_dispatcher.HasShutdownStarted)
+                await _dispatcher.InvokeAsync(() =>
+                {
+                    _main.Agents.Renamed();
+                    _main.Host.SendPresence();
+                    _main.Guest.SendPresence();
+                });
         }
     }
 
