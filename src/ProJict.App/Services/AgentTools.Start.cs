@@ -27,8 +27,8 @@ public sealed partial class AgentTools
         Add("get_started", "Get started",
             "Call it first, when you start or are told to join ProJict, and again whenever you want to look something up: your name here, " +
             "your project and its instructions, the user's instructions for all agents, which items you may work on, the channel to join, " +
-            "how to keep hearing Chat, and the whole guide to ProJict by topic (items, chat, wiki, shipping, studios, publishing, outside " +
-            "tools, clean-ups, sharing). What waits for you comes with it, as with every call.",
+            "how to keep hearing Chat, and the whole guide to ProJict by topic (items, chat, approvals, shared machines, helpers, wiki, " +
+            "shipping, studios, publishing, outside tools, clean-ups, sharing). What waits for you comes with it, as with every call.",
             Schema(("project", "string", "Project name or key; defaults to the project matching your working directory.", false)),
             GetStarted, readOnly: true, output: GetStartedOutput);
     }
