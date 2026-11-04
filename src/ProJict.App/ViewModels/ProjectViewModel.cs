@@ -154,8 +154,19 @@ public sealed partial class ProjectViewModel : ObservableObject
                 OnPropertyChanged();
                 return;
             }
+            // Pausing puts the open items on hold, and Active, Released or Idea gives them back (#e17bd61c): one undo step.
+            var from = Project.Status;
+            Checkpoint();
             Project.Status = value;
+            var changed = ProjectPause.StatusChanged(Project, from, value);
             Touch();
+            if (changed > 0)
+            {
+                RebuildAll();
+                _state.StatusText = value == ProjectStatus.Paused
+                    ? $"{Project.Name} is paused: {changed} item{(changed == 1 ? "" : "s")} on hold until it's active again (agents leave them alone)."
+                    : $"{Project.Name} is {(value == ProjectStatus.Idea ? "an idea" : value.ToString().ToLowerInvariant())} again: {changed} item{(changed == 1 ? "" : "s")} back from hold, with the priority they had.";
+            }
             OnPropertyChanged();
             _state.NotifyListChanged();
         }
