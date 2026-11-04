@@ -585,11 +585,43 @@ public sealed partial class AgentActivityViewModel : ObservableObject
         var shown = ShownStudio;
         // Who works in the room shown (the office, a studio), and where the others are.
         var (here, elsewhere) = ProjectRooms.Split([.. Live.Select(c => c.Session)], project, shown, StudioOf);
+        _roomAgents = [.. here.Select(s => s.AgentName)];
+        OnPropertyChanged(nameof(CanDisconnectRoom));
         IReadOnlyList<AgentCardViewModel> cards = [.. Live.Where(c => here.Contains(c.Session))];
         Office.Elsewhere = elsewhere;
         Office.Update(cards, DateTime.Now, s => s.Claimed.Count > 0 && CheckedOut(s, project).Count > 0, IsWatching, s => AgentRoster.LastSaid(_state.Chat.Channels, s),
             Studio, IsAsleep, HireInto(shown));
         Office.SetVisitors(Visitors(), MessagePrivately);
+    }
+
+    // ───────────── Disconnecting agents (#7559d088) ─────────────
+
+    /// <summary>The agents in the room shown (the office or a studio), as last put there.</summary>
+    private IReadOnlyList<string> _roomAgents = [];
+
+    public bool CanDisconnectRoom => _roomAgents.Count > 0;
+
+    /// <summary>Right-click the room › Disconnect the agents in it, after you say you're sure.</summary>
+    [RelayCommand]
+    private void DisconnectRoom()
+    {
+        if (_roomAgents.Count == 0) return;
+        var room = OfficeTitle;
+        DisconnectAgents(_roomAgents, _roomAgents.Count == 1 ? _roomAgents[0] : $"the {_roomAgents.Count} agents in {room}");
+    }
+
+    /// <summary>
+    /// Disconnects the agents after you say you're sure: their ProJict tools stop working, their chat watchers end, and
+    /// they're told why. <paramref name="who"/> names them in the question.
+    /// </summary>
+    public void DisconnectAgents(IReadOnlyList<string> names, string who)
+    {
+        if (names.Count == 0) return;
+        if (!Services.Confirm.Ask($"Disconnect {who}?\n\nTheir ProJict tools stop working and their chat watchers end; they're told you disconnected them. " +
+                                  "They can connect again when you start them later.", "Disconnect agents")) return;
+        var gone = _main.AgentTools.Disconnect(names);
+        _state.StatusText = gone == 0 ? $"{who} wasn't connected." : $"Disconnected {who}: they're told, and their chat watchers end.";
+        Refresh();
     }
 
     // ───────────── Everyone to sleep ─────────────
@@ -993,6 +1025,9 @@ public sealed partial class AgentCardViewModel : ObservableObject
 
     public McpSession Session { get; }
     public string Name => Session.AgentName;
+
+    /// <summary>Right-click › Disconnect…: its ProJict tools stop and its chat watcher ends (#7559d088).</summary>
+    [RelayCommand] private void Disconnect() => _owner.DisconnectAgents([Name], Name);
     public WorkerBadge Badge => WorkerBadge.For([Session.AgentName])[0];
     public string Where { get; private set; } = "";
     public List<AgentActionRow> Recent { get; private set; } = [];

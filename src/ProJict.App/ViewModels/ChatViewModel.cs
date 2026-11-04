@@ -538,6 +538,29 @@ public sealed partial class ChatViewModel : ObservableObject
     public bool IsMember => Channel != null && ChatRoom.Member(Channel, NameIn(Channel)) != null;
     public bool IsModerator => Channel != null && ChatRoom.IsModerator(Channel, Here.Me) && MayWrite(Channel);
     public string MembersText => Channel == null ? "" : Count(Channel.Members.Count, "member");
+
+    /// <summary>The channel's members that are your agents connected to this ProJict now (#7559d088); not in another ProJict's channels.</summary>
+    internal IReadOnlyList<string> AgentsToDisconnect
+    {
+        get
+        {
+            if (Channel is not { } channel || Here.Host != null) return [];
+            var connected = _main.AgentTools.ConnectedAgentNames();
+            return [.. channel.Members.Where(m => m.Agent && connected.Contains(m.Name, StringComparer.OrdinalIgnoreCase)).Select(m => m.Name)];
+        }
+    }
+
+    public bool CanDisconnectAgents => AgentsToDisconnect.Count > 0;
+
+    /// <summary>The channel's ⋯ menu › Disconnect its agents…, after you say you're sure.</summary>
+    [RelayCommand]
+    private void DisconnectAgents()
+    {
+        var names = AgentsToDisconnect;
+        if (names.Count == 0 || Channel is not { } channel) return;
+        _main.AgentActivity.DisconnectAgents(names, names.Count == 1 ? names[0] : $"the {names.Count} agents in #{channel.Name}");
+    }
+
     public bool CanWrite => Channel != null && (IsMember || Channel.Access == ChannelAccess.Open) && MayWrite(Channel);
 
     /// <summary>The topic; moderators (you always) change it in place.</summary>

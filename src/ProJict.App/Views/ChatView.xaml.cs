@@ -259,6 +259,12 @@ public partial class ChatView : UserControl
         if (_vm.IsDirect) { }
         else if (_vm.IsMember) menu.Items.Add(new MenuItem { Header = "Leave the channel", Command = _vm.LeaveCommand });
         else menu.Items.Add(new MenuItem { Header = "Join the channel", Command = _vm.JoinCommand });
+        if (_vm.CanDisconnectAgents)
+            menu.Items.Add(new MenuItem
+            {
+                Header = _vm.IsDirect ? "Disconnect this agent…" : "Disconnect its agents…", Command = _vm.DisconnectAgentsCommand,
+                ToolTip = "Their ProJict tools stop working and their chat watchers end; they're told you disconnected them",
+            });
         if (_vm.IsModerator && !_vm.IsDirect)
         {
             menu.Items.Add(new Separator());

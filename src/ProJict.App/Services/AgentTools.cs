@@ -324,6 +324,8 @@ public sealed partial class AgentTools : IMcpToolHost
         await _dispatcher.InvokeAsync(() =>
         {
             GiveNameBack(session, name);
+            // An agent you disconnected (#7559d088): told why, whatever it asks.
+            if (IsCutOff(session)) throw new McpToolException(CutOffMessage, ToolProblem.Forbidden);
             Recall(session);
             ResourceHolderBack(session);
         });
@@ -420,6 +422,8 @@ public sealed partial class AgentTools : IMcpToolHost
             string.Equals(name, session.Client, StringComparison.OrdinalIgnoreCase)) return;
         lock (_live)
             if (_live.Any(s => s != session && string.Equals(s.AgentName, name, StringComparison.OrdinalIgnoreCase))) return;
+        // Just disconnected: not given back (its next set_name is refused with why).
+        if (JustCutOff(name)) return;
         TakeName(session, name);
         session.NameGivenBack = session.AgentName;
     }
@@ -750,6 +754,7 @@ public sealed partial class AgentTools : IMcpToolHost
         lock (_live) others = _live.Where(s => s != session).ToList();
         if (others.Any(s => string.Equals(s.AgentName, name, StringComparison.OrdinalIgnoreCase)))
             throw new McpToolException($"{name} is taken by another agent connected now; pick another name.", ToolProblem.Conflict);
+        CheckNotCutOff(session, name);
         var before = TakeName(session, name);
         session.RenamedBy = null;
         return Json(new JsonObject

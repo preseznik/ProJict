@@ -49,6 +49,12 @@ public sealed class McpSession
     public McpSession? Parent { get; set; }
     /// <summary>A subagent session's token, hashed (the token itself is only ever in the agent's hands).</summary>
     public string? TokenHash { get; set; }
+    /// <summary>The bridge's protocol (its hello's "bridge"): 3 and newer leave when ProJict says the user disconnected the agent.</summary>
+    public int BridgeProtocol { get; set; }
+    /// <summary>The user disconnected this agent (#7559d088): every call is refused with why.</summary>
+    public bool CutOff { get; set; }
+    /// <summary>Writes a line to the client (or its bridge), between the answers; set while the session runs.</summary>
+    public Func<string, Task>? SendLine { get; set; }
 
     /// <summary>The name it signs with, whatever the client calls itself, until it picks one: an API token's name.</summary>
     public string? SignAs { get; init; }
@@ -163,6 +169,12 @@ public static class McpServer
     /// </summary>
     public const string BridgeHelloKey = "projictBridge";
 
+    /// <summary>Bridges that leave when told the user disconnected their agent (and don't reconnect).</summary>
+    public const int DisconnectProtocol = 3;
+
+    /// <summary>The line telling a bridge its agent was disconnected: it tells the client why, and leaves.</summary>
+    public static string DisconnectLine(string why) => new JsonObject { [BridgeHelloKey] = "disconnect", ["message"] = why }.ToJsonString();
+
     /// <summary>
     /// First line a chat watcher (<c>ProJict.exe --watch-chat --as Ada</c>) sends instead: <c>{"projictWatch":1,"as":"Ada"}</c>.
     /// No MCP follows; ProJict writes a line per chat message for that agent.
@@ -181,6 +193,16 @@ public static class McpServer
         catch (JsonException) { return null; }
     }
 
+    /// <summary>The protocol of the bridge a chat watcher's first line comes from (its "bridge"), 0 for an older one.</summary>
+    public static int WatchBridgeProtocol(string line)
+    {
+        try
+        {
+            return JsonNode.Parse(line.TrimStart('﻿')) is JsonObject hello && int.TryParse(Text(hello["bridge"]), out var protocol) ? protocol : 0;
+        }
+        catch (JsonException) { return 0; }
+    }
+
     public static async Task RunAsync(Stream input, Stream output, IMcpToolHost host, McpSession session, string serverVersion,
         CancellationToken cancellation = default)
     {
@@ -192,6 +214,19 @@ public static class McpServer
     public static async Task RunAsync(TextReader reader, string? firstLine, Stream output, IMcpToolHost host, McpSession session, string serverVersion,
         CancellationToken cancellation = default)
     {
+        // Answers and lines ProJict sends on its own (a disconnect) never interleave.
+        var writing = new SemaphoreSlim(1, 1);
+        async Task Write(string text)
+        {
+            await writing.WaitAsync(cancellation);
+            try
+            {
+                await output.WriteAsync(Encoding.UTF8.GetBytes(text + "\n"), cancellation);
+                await output.FlushAsync(cancellation);
+            }
+            finally { writing.Release(); }
+        }
+        session.SendLine = Write;
         try
         {
             var pending = firstLine;
@@ -203,12 +238,12 @@ public static class McpServer
                 if (string.IsNullOrWhiteSpace(line)) continue;
                 var response = await HandleAsync(line, host, session, serverVersion);
                 if (response == null) continue;
-                await output.WriteAsync(Encoding.UTF8.GetBytes(response.ToJsonString() + "\n"), cancellation);
-                await output.FlushAsync(cancellation);
+                await Write(response.ToJsonString());
             }
         }
         finally
         {
+            session.SendLine = null;
             host.SessionEnded(session);
         }
     }
@@ -225,6 +260,7 @@ public static class McpServer
         {
             session.WorkingDirectory = Text(message["cwd"]);
             session.OldBridge = !message.ContainsKey("bridge");
+            session.BridgeProtocol = int.TryParse(Text(message["bridge"]), out var protocol) ? protocol : 0;
             return null;
         }
 

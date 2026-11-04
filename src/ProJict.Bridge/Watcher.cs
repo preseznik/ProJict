@@ -70,6 +70,8 @@ internal static class Watcher
                         }
                         heard = true;
                         if (!await Print(line)) return 0;
+                        // The user disconnected the agent: the watcher stops (it doesn't wait for ProJict to come back).
+                        if (line.StartsWith("[ProJict] ", StringComparison.Ordinal) && line.Contains(" disconnected you from ProJict", StringComparison.Ordinal)) return 0;
                     }
                 }
             }
