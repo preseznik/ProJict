@@ -2,6 +2,7 @@
 
 ## 0.1.46
 
+- **Calls understand what you say much better.** Calls used Windows' old offline recognizer, which often misheard ("talking to Wren" came out as "talking so Lauren"). **Settings → Chat → Understanding you** now offers three better ones, chosen on each computer: **Windows' online dictation** (your voice goes to Microsoft; it needs Online speech recognition on in Windows' privacy settings), **ElevenLabs' speech to text** (with your ElevenLabs key; each phrase costs credits), or **Whisper on this computer** (offline, on the graphics card when it can). For Whisper, download a model once, right there: Base (142 MB), Small (466 MB) or Large v3 Turbo (1.6 GB, the best). Whisper knows your agents' names, so it writes "Wren", not "Ren". Its model loads while a call rings and then stays loaded. When the one you picked can't (no key, no model, dictation off, out of credits), the call says why and the old recognizer hears you meanwhile.
 - **Pick the microphone for calls, and see that it hears you.** Calls listened only to Windows' default microphone, and when that wasn't the one you talk into (a VR headset's, say), nothing you said came through, and nothing said why. Now **Settings → Chat → Microphone for calls** picks it, on each computer. A bar under your name in the call window moves when ProJict hears sound. If it hears nothing for a while, the window says which microphone it's listening to and where to change it, including Windows' microphone privacy setting.
 
 ## 0.1.45 (2026-11-04)

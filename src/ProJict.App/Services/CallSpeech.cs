@@ -14,6 +14,8 @@ public interface ISpeechIn : IDisposable
     event Action<bool>? Hearing;
     /// <summary>How loud the microphone is now, 0 to 1, several times a second (any thread).</summary>
     event Action<double>? Level;
+    /// <summary>It can't go on (dictation off, no credits, no network): why, in words (any thread).</summary>
+    event Action<string>? Failed;
     /// <summary>Starts listening; the problem when it can't (no microphone, no speech recognition), or null.</summary>
     string? Start();
     void Stop();
@@ -42,6 +44,8 @@ public sealed class WindowsSpeechIn(ISoundIn? sound = null) : ISpeechIn
     public event Action<string>? Heard;
     public event Action<bool>? Hearing;
     public event Action<double>? Level;
+    /// <summary>Windows' own recognizer says what's wrong when it starts, or not at all.</summary>
+    public event Action<string>? Failed { add { } remove { } }
 
     public string? Start()
     {

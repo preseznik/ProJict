@@ -23,9 +23,51 @@ public sealed partial class CallService(AppState state, MainViewModel main, Disp
     private bool _saying;
     private bool _clockSet;
 
-    /// <summary>Hears you (Windows speech recognition, from the microphone Settings › Chat picked, unless off-screen tests put in their own).</summary>
-    public Func<ISpeechIn> SpeechIn { get; set; } = () =>
-        new WindowsSpeechIn(Microphones.DeviceOf(state.AppSettings.CallMicrophone) is >= 0 and var device ? new MicrophoneIn(device) : null);
+    /// <summary>Hears you: the recognizer Settings › Chat picked, from the microphone it picked (off-screen tests put in their own).</summary>
+    public Func<ISpeechIn>? SpeechIn { get; set; }
+    /// <summary>Windows' old offline recognizer, when the one picked can't (tests put in their own).</summary>
+    public Func<ISpeechIn>? OldSpeechIn { get; set; }
+
+    /// <summary>The recognizer Settings › Chat picked (#4980bbee); Windows' old one when that one can't start (no key, no model).</summary>
+    private ISpeechIn NewSpeechIn()
+    {
+        switch (state.AppSettings.CallRecognizer)
+        {
+            case CallRecognizer.ElevenLabs when ElevenLabsKey() is { } key:
+                return new PhraseSpeechIn(SoundIn(), new ElevenLabsSpeechToText(key, api: ElevenLabsApi));
+            case CallRecognizer.Whisper when WhisperModel.For(state.AppSettings.WhisperModel) is var model && WhisperModels.Has(model):
+                return new PhraseSpeechIn(SoundIn(), new WhisperSpeechToText(WhisperModels.PathOf(model),
+                    [.. Current?.Agents.Select(a => a.Name) ?? [], .. main.AgentTools.ConnectedAgentNames(), "ProJict"]));
+            case CallRecognizer.WindowsOnline:
+                return new WindowsOnlineSpeechIn(SoundIn());
+        }
+        return NewOldSpeechIn();
+    }
+
+    private ISpeechIn NewOldSpeechIn() =>
+        OldSpeechIn?.Invoke() ?? new WindowsSpeechIn(Microphones.DeviceOf(state.AppSettings.CallMicrophone) >= 0 ? SoundIn() : null);
+
+    /// <summary>With Whisper picked, its model loads while the call rings (once, then it stays loaded): ready when you speak.</summary>
+    private void PreloadWhisper()
+    {
+        if (SpeechIn != null || state.AppSettings.CallRecognizer != CallRecognizer.Whisper) return;
+        var model = WhisperModel.For(state.AppSettings.WhisperModel);
+        if (WhisperModels.Has(model)) _ = WhisperSpeechToText.Load(WhisperModels.PathOf(model)).ContinueWith(_ => { }, TaskScheduler.Default);
+    }
+
+    /// <summary>The recognizer picked can't be used (no key, no model): it says so, and the old one hears you meanwhile.</summary>
+    private string? RecognizerNote()
+    {
+        var model = WhisperModel.For(state.AppSettings.WhisperModel);
+        return state.AppSettings.CallRecognizer switch
+        {
+            CallRecognizer.ElevenLabs when ElevenLabsKey() == null =>
+                "ElevenLabs' speech to text needs ElevenLabs' key in Settings › Tools: Windows' offline recognizer hears you for now.",
+            CallRecognizer.Whisper when !WhisperModels.Has(model) =>
+                $"Whisper's {model.Name} model isn't downloaded yet (Settings › Chat): Windows' offline recognizer hears you for now.",
+            _ => null,
+        };
+    }
     /// <summary>Reads agents' answers aloud; unset, the voices Settings › Chat picked (Windows' or ElevenLabs'). Tests put in their own.</summary>
     public Func<ISpeechOut>? SpeechOut { get; set; }
 
@@ -105,7 +147,8 @@ public sealed partial class CallService(AppState state, MainViewModel main, Disp
     private void CheckHeard()
     {
         if (_heardSound || Hint != null || Muted || _listeningSince is not { } since || DateTime.Now - since < QuietFor) return;
-        Hint = $"Not hearing you? ProJict listens to {Microphones.Describe(state.AppSettings.CallMicrophone)}, and the bar under your name moves when it " +
+        var microphone = _in is WindowsOnlineSpeechIn ? Microphones.DefaultName + " (Windows' online dictation always uses it)" : Microphones.Describe(state.AppSettings.CallMicrophone);
+        Hint = $"Not hearing you? ProJict listens to {microphone}, and the bar under your name moves when it " +
                "hears sound. Pick the one you talk into in Settings › Chat › Microphone for calls, and check that Windows lets desktop apps use the " +
                "microphone (Windows Settings › Privacy & security › Microphone).";
     }
@@ -163,6 +206,7 @@ public sealed partial class CallService(AppState state, MainViewModel main, Disp
                    " take a call now: an agent takes calls only while it hears Chat right away (a chat watcher runs for it, or it's waiting for messages).";
         Current = call;
         _channel = channel;
+        PreloadWhisper();
         _host = main.Guest.ConnectionOf(channel);
         _room = _host?.Chat ?? state.Chat;
         Captions.Clear();
@@ -328,19 +372,62 @@ public sealed partial class CallService(AppState state, MainViewModel main, Disp
     private void Listen()
     {
         if (_in != null) return;
-        var heard = SpeechIn();
-        heard.Heard += text => dispatcher.InvokeAsync(() => OnHeard(text));
+        var heard = SpeechIn?.Invoke() ?? NewSpeechIn();
+        Hear(heard);
+        Problem = heard.Start();
+        if (Problem != null && SpeechIn == null && heard is not WindowsSpeechIn) FallBack(Problem);
+        else if (Problem == null)
+        {
+            if (SpeechIn == null) Problem = RecognizerNote();
+            StartedListening();
+        }
+    }
+
+    /// <summary>
+    /// The recognizer picked can't go on (dictation off, no credits, no network): the call says why, and Windows' old
+    /// recognizer hears you for the rest of it.
+    /// </summary>
+    private void FallBack(string why)
+    {
+        if (!IsOn) return;
+        if (_in is WindowsSpeechIn || _in == null)
+        {
+            Problem = why;
+            Changed?.Invoke();
+            return;
+        }
+        _in.Dispose();
+        var old = NewOldSpeechIn();
+        Hear(old);
+        Problem = why + " Windows' offline recognizer hears you for now.";
+        if (old.Start() is { } problem) Problem = why + " " + problem;
+        else StartedListening();
+        Changed?.Invoke();
+    }
+
+    /// <summary>What the recognizer hears: your phrases, when you speak, how loud, and when it can't go on.</summary>
+    private void Hear(ISpeechIn heard)
+    {
+        heard.Heard += text => dispatcher.InvokeAsync(() =>
+        {
+            if (_in == heard) OnHeard(text);
+        });
         heard.Hearing += on => dispatcher.InvokeAsync(() =>
         {
-            if (Muted || _saying || !IsOn) return;
+            if (_in != heard || Muted || _saying || !IsOn) return;
             if (on) HeardYou();
             Speaking = on ? Me : Speaking == Me ? null : Speaking;
             Changed?.Invoke();
         });
-        heard.Level += level => dispatcher.InvokeAsync(() => OnLevel(level));
+        heard.Level += level => dispatcher.InvokeAsync(() =>
+        {
+            if (_in == heard) OnLevel(level);
+        });
+        heard.Failed += why => dispatcher.InvokeAsync(() =>
+        {
+            if (_in == heard) FallBack(why);
+        });
         _in = heard;
-        Problem = heard.Start();
-        if (Problem == null) StartedListening();
     }
 
     /// <summary>A phrase of yours: posted in the conversation (not while muted, or while an agent is read aloud).</summary>

@@ -94,6 +94,11 @@ public sealed class AppSettings
     /// <summary>The microphone calls listen to, by its name in Windows; null for Windows' default (Settings › Chat, #b39e8f23).</summary>
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public string? CallMicrophone { get; set; }
+    /// <summary>What understands you in calls, on this computer (Settings › Chat, #4980bbee).</summary>
+    public Chat.CallRecognizer CallRecognizer { get; set; }
+    /// <summary>The Whisper model calls use (<see cref="Chat.WhisperModel"/>'s id); null for Small.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? WhisperModel { get; set; }
     /// <summary>Whether a file of this size, posted in such a channel, goes to the Chat cache.</summary>
     public bool GoesToChatCache(bool direct, long size) => direct || (BigChannelFileMb > 0 && size > (long)BigChannelFileMb * 1024 * 1024);
     /// <summary>Read-only API tokens may still use Chat fully: post, start channels, invite (Settings › API).</summary>
