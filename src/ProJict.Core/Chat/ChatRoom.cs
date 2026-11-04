@@ -13,6 +13,8 @@ namespace ProJict.Core.Chat;
 public sealed class ChatRoom
 {
     public const int MaxText = 4000;
+    /// <summary>The most an approval request may say about what it asks to do ("commit #9113ea6a").</summary>
+    public const int MaxApproval = 200;
     public const int MaxNameLength = 40;
     /// <summary>An agent can post this many messages a minute, so two agents can't flood a channel talking to each other.</summary>
     public const int AgentPostsPerMinute = 20;
@@ -451,7 +453,8 @@ public sealed class ChatRoom
     // ───────────── Messages ─────────────
 
     /// <summary>Posts a message; posting in an Open channel joins it.</summary>
-    public ChatMessage Post(ChatChannel channel, ChatActor actor, string text, Guid? replyTo = null, List<Attachment>? files = null)
+    /// <param name="approval">The one change the message asks a person to approve (ask_approval), e.g. "commit #9113ea6a".</param>
+    public ChatMessage Post(ChatChannel channel, ChatActor actor, string text, Guid? replyTo = null, List<Attachment>? files = null, string? approval = null)
     {
         text = text.Trim();
         if (text.Length == 0 && files is not { Count: > 0 }) throw new ChatException("The message is empty.");
@@ -465,7 +468,14 @@ public sealed class ChatRoom
         if (replyTo is { } r && channel.Messages.All(m => m.Id != r)) throw new ChatException("The message to reply to isn't there any more.");
         if (actor.Agent) Throttle(actor.Name);
         if (Member(channel, actor.Name) == null) Join(channel, actor);
-        var message = new ChatMessage { By = actor.Name, Agent = actor.Agent, At = NextTime(channel), Text = text, ReplyTo = replyTo, Attachments = files is { Count: > 0 } ? files : null };
+        approval = approval?.Trim();
+        if (approval is { Length: 0 }) approval = null;
+        if (approval is { Length: > MaxApproval }) throw new ChatException($"Say what you ask to do in {MaxApproval} characters at most.");
+        var message = new ChatMessage
+        {
+            By = actor.Name, Agent = actor.Agent, At = NextTime(channel), Text = text, ReplyTo = replyTo, Attachments = files is { Count: > 0 } ? files : null,
+            Approval = approval,
+        };
         channel.Messages.Add(message);
         Member(channel, actor.Name)!.LastRead = message.At;
         Changed?.Invoke(channel);
@@ -499,7 +509,12 @@ public sealed class ChatRoom
         if (string.Equals(message.By, actor.Name, StringComparison.OrdinalIgnoreCase)) throw new ChatException("That's your own message.");
         var mine = message.Reactions?.FirstOrDefault(r => string.Equals(r.By, actor.Name, StringComparison.OrdinalIgnoreCase));
         if (mine != null) message.Reactions!.Remove(mine);
-        if (up is { } yes && (mine == null || mine.Up != yes)) (message.Reactions ??= []).Add(new ChatReaction { By = actor.Name, Up = yes, At = Now });
+        if (up is { } yes && (mine == null || mine.Up != yes))
+        {
+            (message.Reactions ??= []).Add(new ChatReaction { By = actor.Name, Up = yes, At = Now });
+            // On a message asking for approval, a person's 👍 or 👎 is their answer; the first one decides, and an agent's never does.
+            if (message.Approval != null && message.Decision == null && !actor.Agent) message.Decision = new ChatDecision { By = actor.Name, Approved = yes, At = Now };
+        }
         if (message.Reactions is { Count: 0 }) message.Reactions = null;
         Changed?.Invoke(channel);
     }

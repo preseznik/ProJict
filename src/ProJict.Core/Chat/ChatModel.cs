@@ -54,6 +54,21 @@ public sealed class ChatMessage
     public List<Attachment>? Attachments { get; set; }
     /// <summary>Thumbs up or down, one per person or agent; null while there are none. On an agent's message they're a yes or no to it.</summary>
     public List<ChatReaction>? Reactions { get; set; }
+    /// <summary>
+    /// The one change this message asks a person to approve (ask_approval, #848d7643), e.g. "commit #9113ea6a"; null for
+    /// other messages. The first person to answer it (Approve or Decline, or a 👍 or 👎 on it) decides.
+    /// </summary>
+    public string? Approval { get; set; }
+    /// <summary>Who approved or declined what the message asks, and when; null while nobody has.</summary>
+    public ChatDecision? Decision { get; set; }
+}
+
+/// <summary>A person's answer to what a message asks them to approve.</summary>
+public sealed class ChatDecision
+{
+    public string By { get; set; } = "";
+    public bool Approved { get; set; }
+    public DateTime At { get; set; } = DateTime.Now;
 }
 
 /// <summary>A 👍 (yes) or 👎 (no) on a message.</summary>

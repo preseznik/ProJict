@@ -262,6 +262,14 @@ public sealed class WorkspaceSettings
     /// <summary>The names agents picked for themselves, and the client each runs in ("Ada" → "Claude Code").</summary>
     public Dictionary<string, string>? AgentNames { get; set; }
 
+    /// <summary>The name each client last went by in each folder it worked in (AgentFolderNames); null while none.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public Dictionary<string, AgentFolder>? AgentFolders { get; set; }
+
+    /// <summary>Shared things agents take turns with, such as a test PC (claim_resource, #bb95b66d); null while none.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public List<SharedResource>? SharedResources { get; set; }
+
     /// <summary>Agents that can't make their own picture and asked another agent to (set_picture wanted=true); null while none.</summary>
     public List<string>? PicturesWanted { get; set; }
 
@@ -319,4 +327,11 @@ public sealed class WorkspaceSettings
     /// <summary>The last export folder, else "ProJict-export" next to the data folder.</summary>
     public string DefaultExportFolder(string dataRoot) =>
         ExportFolder ?? Path.Combine(Path.GetDirectoryName(Path.GetFullPath(dataRoot).TrimEnd('\\')) ?? dataRoot, "ProJict-export");
+}
+
+/// <summary>The name an agent went by in a folder, and when it last did (AgentFolderNames).</summary>
+public sealed class AgentFolder
+{
+    public string Name { get; set; } = "";
+    public DateTime At { get; set; }
 }

@@ -413,6 +413,29 @@
             </DockPanel>
         </Border>
 
+        <!-- Shared things agents hold (claim_resource): who has what, until when; Free lets it go (its holder is told) -->
+        <Border x:Name="ResourceBar" Padding="14,5" Background="{DynamicResource SubtleFillColorSecondaryBrush}"
+                BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}" BorderThickness="0,1,0,0"
+                Visibility="{Binding HasResourcesHeld, Converter={StaticResource BoolToVis}}">
+            <ItemsControl ItemsSource="{Binding ResourcesHeld}" Focusable="False" AutomationProperties.Name="Shared things agents hold">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <DockPanel Margin="0,1">
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE72E;" Margin="0,0,10,0" VerticalAlignment="Center" />
+                            <Button DockPanel.Dock="Right" Style="{StaticResource SubtleButton}" Content="Free" Command="{Binding FreeCommand}" Padding="10,2"
+                                    ToolTip="Lets it go: its holder is told, and the next one waiting may take it" AutomationProperties.Name="Free" />
+                            <TextBlock x:Name="ResourceText" Text="{Binding Text}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{Binding Text}" />
+                        </DockPanel>
+                        <DataTemplate.Triggers>
+                            <DataTrigger Binding="{Binding IsOverdue}" Value="True">
+                                <Setter TargetName="ResourceText" Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                            </DataTrigger>
+                        </DataTemplate.Triggers>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </Border>
+
         <!-- An agent is using a tool's browser (Suno, Tripo3D): Watch shows it (you can click in it too), Stop ends it -->
         <Border x:Name="BrowserBar" Padding="14,8" Background="{DynamicResource SystemFillColorAttentionBackgroundBrush}"
                 BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}" BorderThickness="0,1,0,0"

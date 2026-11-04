@@ -1,0 +1,162 @@
+using ProJict.Core.Storage;
+
+namespace ProJict.Core.Agents;
+
+/// <summary>
+/// A shared thing agents take turns with (#bb95b66d), such as "PC4080S game + GPU": who holds it, what for, since when
+/// and until about when (a lease the holder sets and extends), and who waits for it. Kept in the workspace settings, so
+/// every project's agents see it.
+/// </summary>
+public sealed class SharedResource
+{
+    public string Name { get; set; } = "";
+    /// <summary>The agent holding it; null while it's free.</summary>
+    public string? HeldBy { get; set; }
+    /// <summary>What for, in a few words ("GRID2VR VR test").</summary>
+    public string? For { get; set; }
+    public DateTime Since { get; set; }
+    /// <summary>Until about when the holder needs it; after that it's overdue and others may take it over.</summary>
+    public DateTime Until { get; set; }
+    /// <summary>The holder disconnected with no other session left; after <see cref="ResourceLocks.Grace"/> it counts as free.</summary>
+    public DateTime? HolderLeftAt { get; set; }
+    /// <summary>Who asked for it while someone else held it, first first; they're told when it's free.</summary>
+    public List<string> Waiting { get; set; } = [];
+    /// <summary>When it was last freed (released, or its holder left), and by whom, for telling those who wait.</summary>
+    public DateTime? FreedAt { get; set; }
+    public string? FreedBy { get; set; }
+    /// <summary>Who held it before it was freed or taken over, and until when they'd said, for telling them.</summary>
+    public string? LastHolder { get; set; }
+    public DateTime? LastUntil { get; set; }
+    /// <summary>The holder now took it over from <see cref="LastHolder"/>, whose time had run out.</summary>
+    public bool TakenOver { get; set; }
+}
+
+/// <summary>What became of a claim.</summary>
+public enum ClaimOutcome { Taken, Extended, TakenOver, Busy }
+
+/// <summary>The rules for taking turns with shared things: claim with a lease, extend, release, take over when overdue.</summary>
+public static class ResourceLocks
+{
+    /// <summary>How long a holder that disconnected has to come back before the thing counts as free.</summary>
+    public static readonly TimeSpan Grace = TimeSpan.FromMinutes(2);
+    public const int MinMinutes = 1, MaxMinutes = 8 * 60, DefaultMinutes = 30, MaxName = 60, MaxPurpose = 120;
+    /// <summary>Free things nobody waits for go after this long.</summary>
+    public static readonly TimeSpan ForgottenAfter = TimeSpan.FromDays(14);
+
+    public static List<SharedResource> Of(WorkspaceSettings settings) => settings.SharedResources ??= [];
+
+    public static SharedResource? Find(WorkspaceSettings settings, string name) =>
+        settings.SharedResources?.FirstOrDefault(r => string.Equals(r.Name, name.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Held, and its holder still counts (it hasn't been gone past the grace time).</summary>
+    public static bool IsHeld(SharedResource r, DateTime now) => r.HeldBy != null && !HasLeft(r, now);
+
+    public static bool HasLeft(SharedResource r, DateTime now) => r.HolderLeftAt is { } left && now - left >= Grace;
+
+    /// <summary>Held past the time its holder said: others may take it over.</summary>
+    public static bool IsOverdue(SharedResource r, DateTime now) => IsHeld(r, now) && now > r.Until;
+
+    /// <summary>Why the name or purpose can't be used, or null.</summary>
+    public static string? Problem(string name, string? purpose)
+    {
+        if (name.Trim().Length < 2) return "Name the shared thing, e.g. \"PC4080S game + GPU\".";
+        if (name.Trim().Length > MaxName) return $"Keep the name to {MaxName} characters.";
+        if (purpose?.Trim().Length > MaxPurpose) return $"Say what for in {MaxPurpose} characters at most.";
+        return null;
+    }
+
+    /// <summary>
+    /// The agent claims it for <paramref name="minutes"/>: taken when free (or its holder left), extended when it's the
+    /// agent's already, taken over when overdue, else busy (and the agent waits for it). Returns the outcome and who held it before.
+    /// </summary>
+    public static (ClaimOutcome Outcome, SharedResource Resource, string? Before) Claim(WorkspaceSettings settings, string name, string agent, string? purpose, int minutes, DateTime now)
+    {
+        if (Problem(name, purpose) is { } problem) throw new ArgumentException(problem);
+        minutes = Math.Clamp(minutes, MinMinutes, MaxMinutes);
+        var all = Of(settings);
+        Forget(all, now);
+        var r = Find(settings, name);
+        if (r == null) all.Add(r = new SharedResource { Name = name.Trim() });
+        var mine = string.Equals(r.HeldBy, agent, StringComparison.OrdinalIgnoreCase);
+        if (mine)
+        {
+            r.Until = now.AddMinutes(minutes);
+            if (!string.IsNullOrWhiteSpace(purpose)) r.For = purpose.Trim();
+            r.HolderLeftAt = null;
+            return (ClaimOutcome.Extended, r, null);
+        }
+        if (IsHeld(r, now) && !IsOverdue(r, now))
+        {
+            if (!r.Waiting.Contains(agent, StringComparer.OrdinalIgnoreCase)) r.Waiting.Add(agent);
+            return (ClaimOutcome.Busy, r, r.HeldBy);
+        }
+        var before = IsHeld(r, now) ? r.HeldBy : null;
+        if (before != null)
+        {
+            r.LastHolder = before;
+            r.LastUntil = r.Until;
+        }
+        r.TakenOver = before != null;
+        r.HeldBy = agent;
+        r.For = string.IsNullOrWhiteSpace(purpose) ? null : purpose.Trim();
+        r.Since = now;
+        r.Until = now.AddMinutes(minutes);
+        r.HolderLeftAt = null;
+        r.Waiting.RemoveAll(w => string.Equals(w, agent, StringComparison.OrdinalIgnoreCase));
+        return (before == null ? ClaimOutcome.Taken : ClaimOutcome.TakenOver, r, before);
+    }
+
+    /// <summary>The agent (or the user, <paramref name="by"/>) frees it; null when the agent doesn't hold it.</summary>
+    public static SharedResource? Release(WorkspaceSettings settings, string name, string? holder, string by, DateTime now)
+    {
+        var r = Find(settings, name);
+        if (r?.HeldBy == null || (holder != null && !string.Equals(r.HeldBy, holder, StringComparison.OrdinalIgnoreCase))) return null;
+        Free(r, by, now);
+        return r;
+    }
+
+    /// <summary>The agent's last session ended: what it holds counts as free after the grace time unless it comes back.</summary>
+    public static void Left(WorkspaceSettings settings, string agent, DateTime now)
+    {
+        foreach (var r in settings.SharedResources ?? [])
+            if (string.Equals(r.HeldBy, agent, StringComparison.OrdinalIgnoreCase) && r.HolderLeftAt == null) r.HolderLeftAt = now;
+    }
+
+    /// <summary>The agent is back: what it held is still its own.</summary>
+    public static bool Back(WorkspaceSettings settings, string agent, DateTime now)
+    {
+        var changed = false;
+        foreach (var r in settings.SharedResources ?? [])
+            if (string.Equals(r.HeldBy, agent, StringComparison.OrdinalIgnoreCase) && r.HolderLeftAt != null)
+            {
+                if (HasLeft(r, now)) Free(r, r.HeldBy!, r.HolderLeftAt.Value + Grace);
+                else r.HolderLeftAt = null;
+                changed = true;
+            }
+        return changed;
+    }
+
+    private static void Free(SharedResource r, string by, DateTime at)
+    {
+        r.LastHolder = r.HeldBy;
+        r.LastUntil = r.Until;
+        r.TakenOver = false;
+        r.FreedBy = by;
+        r.FreedAt = at;
+        r.HeldBy = null;
+        r.For = null;
+        r.HolderLeftAt = null;
+    }
+
+    /// <summary>Free things nobody waits for, freed long ago, go.</summary>
+    private static void Forget(List<SharedResource> all, DateTime now) =>
+        all.RemoveAll(r => r.HeldBy == null && r.Waiting.Count == 0 && r.FreedAt is { } freed && now - freed > ForgottenAfter);
+
+    /// <summary>"13:35 (8 min left)" or "13:35 (overdue by 5 min)".</summary>
+    public static string UntilText(SharedResource r, DateTime now)
+    {
+        var minutes = (int)Math.Round(Math.Abs((r.Until - now).TotalMinutes));
+        return r.Until.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture) +
+               (now > r.Until ? $" (overdue by {minutes} min)" : $" ({minutes} min left)");
+    }
+}
