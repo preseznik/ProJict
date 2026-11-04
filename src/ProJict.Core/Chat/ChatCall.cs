@@ -8,10 +8,12 @@ public enum CallVoices { Windows, ElevenLabs }
 /// <summary>Where an agent is in a call: ringing, in it, said no, didn't answer, left, or couldn't be rung (it doesn't hear Chat now).</summary>
 public enum CallState { Ringing, Joined, Declined, Missed, Left, CantNow }
 
-/// <summary>An agent in a call, and since when it's in that state.</summary>
+/// <summary>An agent (or a person, in another ProJict) in a call, and since when it's in that state.</summary>
 public sealed class CallParticipant(string name, CallState state, DateTime since)
 {
     public string Name { get; } = name;
+    /// <summary>A person in another ProJict, whose voice comes over the sharing connection (not an agent read aloud).</summary>
+    public bool IsPerson { get; init; }
     public CallState State { get; set; } = state;
     public DateTime Since { get; set; } = since;
 }
@@ -34,11 +36,28 @@ public sealed class ChatCall
         Agents = [.. agents.Select(a => new CallParticipant(a.Name, a.CanTakeCall ? CallState.Ringing : CallState.CantNow, now))];
     }
 
-    public Guid Id { get; } = Guid.NewGuid();
+    /// <summary>
+    /// A call with a person in another ProJict (#2356ddca): you call them, or (<paramref name="incoming"/>) they call
+    /// you; either way they're the one in it besides you, ringing until it's picked up.
+    /// </summary>
+    public static ChatCall WithPerson(Guid channelId, string me, string person, bool incoming, DateTime now, Guid? id = null)
+    {
+        var call = new ChatCall(channelId, incoming ? person : me, [], now) { Incoming = incoming };
+        if (id is { } known) call.Id = known;
+        call.Agents.Add(new CallParticipant(person, CallState.Ringing, now) { IsPerson = true });
+        return call;
+    }
+
+    public Guid Id { get; private set; } = Guid.NewGuid();
+    /// <summary>They called you: it's ringing here until you pick up or say no.</summary>
+    public bool Incoming { get; private init; }
+    /// <summary>The person in it (a call with a person has just them).</summary>
+    public CallParticipant? Person => Agents.FirstOrDefault(a => a.IsPerson);
     public Guid ChannelId { get; }
     public string Caller { get; }
     public DateTime StartedAt { get; }
     public DateTime? EndedAt { get; private set; }
+    /// <summary>The others in the call: the agents you called, or the person.</summary>
     public List<CallParticipant> Agents { get; }
 
     public bool IsOver => EndedAt != null;

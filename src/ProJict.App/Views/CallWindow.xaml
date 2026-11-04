@@ -13,8 +13,28 @@
                        Visibility="{Binding Problem, Converter={StaticResource EmptyToVis}}" />
         </StackPanel>
 
+        <!-- A person calling you: Accept or Decline -->
+        <StackPanel x:Name="IncomingButtons" DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,14,0,0"
+                    Visibility="{Binding IsIncoming, Converter={StaticResource BoolToVis}}">
+            <Button x:Name="AcceptButton" Command="{Binding AcceptCommand}" Padding="16,8" Margin="0,0,10,0" Background="#107C10" Foreground="White" BorderThickness="0"
+                    AutomationProperties.Name="Accept">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Style="{StaticResource Icon}" Text="&#xE717;" FontSize="16" VerticalAlignment="Center" Foreground="White" />
+                    <TextBlock Text="Accept" Margin="8,0,0,0" VerticalAlignment="Center" Foreground="White" />
+                </StackPanel>
+            </Button>
+            <Button x:Name="DeclineButton" Command="{Binding DeclineCommand}" Padding="16,8" Background="#D13438" Foreground="White" BorderThickness="0"
+                    AutomationProperties.Name="Decline">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Style="{StaticResource Icon}" Text="&#xE778;" FontSize="16" VerticalAlignment="Center" Foreground="White" />
+                    <TextBlock Text="Decline" Margin="8,0,0,0" VerticalAlignment="Center" Foreground="White" />
+                </StackPanel>
+            </Button>
+        </StackPanel>
+
         <!-- Mute and Hang up -->
-        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,14,0,0">
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,14,0,0"
+                    Visibility="{Binding IsOngoing, Converter={StaticResource BoolToVis}}">
             <ToggleButton x:Name="MuteButton" Style="{StaticResource SubtleToggle}" IsChecked="{Binding IsMuted}" Padding="16,8" Margin="0,0,10,0"
                           ToolTip="Mute: what you say isn't heard until you unmute" AutomationProperties.Name="Mute">
                 <StackPanel Orientation="Horizontal">

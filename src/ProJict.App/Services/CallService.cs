@@ -11,7 +11,7 @@ namespace ProJict.App.Services;
 /// your message; what an agent in it answers there is read aloud in a voice of its own. Hanging up, or nobody being left,
 /// ends it; what was said stays in the conversation.
 /// </summary>
-public sealed class CallService(AppState state, MainViewModel main, Dispatcher dispatcher)
+public sealed partial class CallService(AppState state, MainViewModel main, Dispatcher dispatcher)
 {
     private readonly DispatcherTimer _clock = new(DispatcherPriority.Background, dispatcher) { Interval = TimeSpan.FromSeconds(1) };
     private readonly HashSet<Guid> _seen = [];
@@ -73,6 +73,9 @@ public sealed class CallService(AppState state, MainViewModel main, Dispatcher d
     {
         if (IsOn) return "You're in a call already: hang up first.";
         if (agents.Count == 0) return "Pick at least one agent to call.";
+        // A person in another ProJict: their voice comes over the sharing connection.
+        if (agents.Count == 1 && channel.Members.FirstOrDefault(m => string.Equals(m.Name, agents[0], StringComparison.OrdinalIgnoreCase)) is { Agent: false })
+            return StartWithPerson(channel, agents[0]);
         var call = new ChatCall(channel.Id, Me, agents.Select(a => (a, main.AgentTools.HearsChat(a))), DateTime.Now);
         if (!call.HasSomeone)
             return (agents.Count == 1 ? $"{agents[0]} can't" : "None of them can") +
@@ -93,15 +96,20 @@ public sealed class CallService(AppState state, MainViewModel main, Dispatcher d
                     $"you as messages in {Where}; answer there with post_message, a sentence or two at a time in plain spoken words (no lists, code or " +
                     "links), and ProJict reads it aloud. answer_call answer=hang_up leaves the call.");
             else Captions.Add(("ProJict", $"{agent.Name} {ChatCall.Describe(agent.State)} (it doesn't hear Chat right away)."));
+        StartClock();
+        Started?.Invoke(this);
+        Changed?.Invoke();
+        return null;
+    }
+
+    private void StartClock()
+    {
         if (!_clockSet)
         {
             _clock.Tick += (_, _) => Tick();
             _clockSet = true;
         }
         _clock.Start();
-        Started?.Invoke(this);
-        Changed?.Invoke();
-        return null;
     }
 
     /// <summary>An agent answers (yes, no or hang_up); what to tell it, or throws with the problem.</summary>
@@ -147,6 +155,11 @@ public sealed class CallService(AppState state, MainViewModel main, Dispatcher d
     public void HangUp()
     {
         if (Current is not { IsOver: false } call) return;
+        if (call.Person != null)
+        {
+            HangUpPerson(call);
+            return;
+        }
         foreach (var agent in call.Agents.Where(a => a.State is CallState.Joined or CallState.Ringing))
             Line($"📞 {Me} hung up on {agent.Name}.", agent.Name, $"{Me} hung up: the call in {Where} is over.");
         End();
@@ -158,6 +171,12 @@ public sealed class CallService(AppState state, MainViewModel main, Dispatcher d
         if (Current is not { IsOver: false } call)
         {
             _clock.Stop();
+            return;
+        }
+        if (call.Person != null)
+        {
+            TickPerson(call);
+            Changed?.Invoke();
             return;
         }
         foreach (var missed in call.TimeOut(DateTime.Now))
@@ -187,6 +206,7 @@ public sealed class CallService(AppState state, MainViewModel main, Dispatcher d
         _fallback?.Dispose();
         _fallback = null;
         _saying = false;
+        StopSound();
         Speaking = null;
         Changed?.Invoke();
     }
@@ -195,9 +215,11 @@ public sealed class CallService(AppState state, MainViewModel main, Dispatcher d
     private void Line(string text, string? about = null, string? aboutText = null)
     {
         if (_channel is not { } channel) return;
+        Captions.Add(("ProJict", text));
+        // A conversation in another ProJict: its host writes the lines about the call there.
+        if (!Room.Channels.Contains(channel)) return;
         var message = Room.PostNotice(channel, state.ChatMe, text, about, aboutText);
         _seen.Add(message.Id);
-        Captions.Add(("ProJict", text));
     }
 
     /// <summary>Starts hearing you, once someone's picked up.</summary>

@@ -414,6 +414,12 @@ public sealed partial class GuestService
             case "testBuildError":
                 TestBuildFailed(connection, message);
                 break;
+            case "shipError":
+                ShipFailed(connection, message);
+                break;
+            case "callRing" or "callAnswer" or "callHangUp" or "callAudio":
+                HandleCall(connection, message);
+                break;
             case "file":
                 StoreFile(connection, message);
                 break;
@@ -463,7 +469,11 @@ public sealed partial class GuestService
         {
             copy.Revision = -1;
             copy.InFlight = false;
-            if (copy.Project.Remote is { } remote) remote.Role = connection.Role;
+            if (copy.Project.Remote is { } remote)
+            {
+                remote.Role = connection.Role;
+                remote.Self = connection.IsSelf;
+            }
         }
         SetConnected(connection, true);
         _state.StatusText = $"Connected to {connection.HostName}'s ProJict.";
@@ -477,6 +487,7 @@ public sealed partial class GuestService
     private Project? Receive(HostConnection connection, JsonNode node, int revision)
     {
         var id = Guid.Parse((string)node["id"]!);
+        _shipAsked.Remove(id);
         if (connection.Copies.TryGetValue(id, out var copy))
         {
             copy.InFlight = false;
@@ -490,7 +501,7 @@ public sealed partial class GuestService
         }
         var json = node.ToJsonString();
         var project = Json.Deserialize<Project>(json)!;
-        project.Remote = new RemoteOrigin { HostKey = connection.Address, HostName = connection.HostName, Role = connection.Role };
+        project.Remote = new RemoteOrigin { HostKey = connection.Address, HostName = connection.HostName, Role = connection.Role, Self = connection.IsSelf };
         copy = new RemoteCopy(project) { Revision = revision, BaseJson = json, BaseNormalized = ProjectMerge.Normalized(project) };
         connection.Copies[id] = copy;
         _state.AddRemoteProject(project);

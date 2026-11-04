@@ -31,6 +31,9 @@ public sealed partial class CallViewModel : ObservableObject
     /// <summary>Why it can't hear you, if so (you can still type in the conversation).</summary>
     public string? Problem => _calls.Problem;
     public bool IsOver => !_calls.IsOn;
+    /// <summary>A person is calling you: Accept or Decline.</summary>
+    public bool IsIncoming => _calls.IsIncoming;
+    public bool IsOngoing => !IsIncoming;
     public int Columns => Math.Min(3, Math.Max(1, Tiles.Count));
 
     public bool IsMuted
@@ -43,12 +46,15 @@ public sealed partial class CallViewModel : ObservableObject
     public event Action? Over;
 
     [RelayCommand] private void HangUp() => _calls.HangUp();
+    [RelayCommand] private void Accept() => _calls.Accept();
+    [RelayCommand] private void Decline() => _calls.Decline();
 
     /// <summary>The window closed while the call goes on: you hang up.</summary>
     public void Closed()
     {
         _calls.Changed -= Refresh;
-        _calls.HangUp();
+        if (_calls.IsIncoming) _calls.Decline();
+        else _calls.HangUp();
     }
 
     private void Refresh()
@@ -57,11 +63,13 @@ public sealed partial class CallViewModel : ObservableObject
         var where = _calls.Channel is { Direct: true } direct ? ChatRoom.Title(direct, _calls.Me) : "#" + _calls.Channel?.Name;
         Title = _calls.Channel is { Direct: true } ? $"Call with {where}" : $"Call in {where}";
         var tiles = new List<CallTile> { Tile(_calls.Me, _calls.Muted ? "muted" : "you", away: false) };
-        tiles.AddRange(call.Agents.Select(a => Tile(a.Name, ChatCall.Describe(a.State), away: a.State != CallState.Joined)));
+        tiles.AddRange(call.Agents.Select(a => Tile(a.Name, a.IsPerson && call.Incoming && a.State == CallState.Ringing ? "calling you" : ChatCall.Describe(a.State),
+            away: a.State != CallState.Joined)));
         Tiles = tiles;
         Captions = [.. _calls.Captions.TakeLast(CaptionsShown).Select(c => new CallCaption(c.Who, c.Text, c.Who == "ProJict"))];
         var ringing = call.Agents.Where(a => a.State == CallState.Ringing).Select(a => a.Name).ToList();
         StatusText = call.IsOver ? $"Call ended · {ChatCall.Duration(call.EndedAt!.Value - call.StartedAt)}"
+            : _calls.IsIncoming ? $"{call.Caller} is calling you"
             : call.InIt.Any() ? $"In the call · {ChatCall.Duration(DateTime.Now - call.StartedAt)}" + (ringing.Count > 0 ? $" · ringing {string.Join(", ", ringing)}" : "")
             : $"Ringing {string.Join(", ", ringing)}…";
         OnPropertyChanged(string.Empty);

@@ -1,6 +1,8 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.ComponentModel;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Threading;
 using ProJict.App.Services;
 using ProJict.App.ViewModels;
@@ -30,6 +32,22 @@ public partial class ChatView : UserControl
             SearchBox.SelectAll();
             e.Handled = true;
         };
+        // The Media tab's viewer: Esc closes it, the arrows show the one before or after (not while you type).
+        PreviewKeyDown += (_, e) =>
+        {
+            if (_vm is not { IsViewing: true } vm || Keyboard.Modifiers != ModifierKeys.None) return;
+            var typing = Keyboard.FocusedElement is TextBox;
+            if (e.Key == Key.Escape) vm.CloseViewerCommand.Execute(null);
+            else if (e.Key == Key.Left && !typing) vm.ViewPreviousCommand.Execute(null);
+            else if (e.Key == Key.Right && !typing) vm.ViewNextCommand.Execute(null);
+            else return;
+            e.Handled = true;
+        };
+        // A click anywhere outside it closes it too (the click still does what it does there).
+        PreviewMouseLeftButtonDown += (_, e) =>
+        {
+            if (_vm is { IsViewing: true } vm && !Inside(e.OriginalSource as DependencyObject, Viewer)) vm.CloseViewerCommand.Execute(null);
+        };
         DataContextChanged += (_, _) => Attach(DataContext as ChatViewModel);
         Unloaded += (_, _) => Attach(null);
         Loaded += (_, _) => Attach(DataContext as ChatViewModel);
@@ -40,12 +58,14 @@ public partial class ChatView : UserControl
         if (_vm == vm) return;
         if (_vm != null)
         {
+            _vm.PropertyChanged -= OnViewModelChanged;
             _vm.MessagesChanged -= OnMessagesChanged;
             _vm.Reveal -= OnReveal;
             _vm.FocusComposer -= OnFocusComposer;
         }
         _vm = vm;
         if (_vm == null) return;
+        _vm.PropertyChanged += OnViewModelChanged;
         _vm.MessagesChanged += OnMessagesChanged;
         _vm.Reveal += OnReveal;
         _vm.FocusComposer += OnFocusComposer;
@@ -104,6 +124,34 @@ public partial class ChatView : UserControl
     }
 
     private void ShowEarlier_Click(object sender, RoutedEventArgs e) => ShowEarlier();
+
+    // ───────────── The Media tab's viewer ─────────────
+
+    /// <summary>A video or sound opened in the viewer starts playing (once its player has the file).</summary>
+    private void OnViewModelChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(ChatViewModel.Viewing) || _vm?.Viewing is not { Plays: true } file) return;
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () =>
+        {
+            if (_vm?.Viewing == file && ViewerPlayer.Path == file.File.PlayPath) ViewerPlayer.Play();
+        });
+    }
+
+    /// <summary>A click on the dark around the file, not on it or its buttons, closes the viewer.</summary>
+    private void Viewer_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (e.OriginalSource != Viewer || _vm == null) return;
+        _vm.CloseViewerCommand.Execute(null);
+        e.Handled = true;
+    }
+
+    /// <summary>Whether the element is the root or inside it (also text runs, which aren't in the visual tree).</summary>
+    private static bool Inside(DependencyObject? element, DependencyObject root)
+    {
+        for (var d = element; d != null; d = d is Visual or System.Windows.Media.Media3D.Visual3D ? VisualTreeHelper.GetParent(d) : LogicalTreeHelper.GetParent(d))
+            if (d == root) return true;
+        return false;
+    }
 
     /// <summary>Older messages go in front, and the view stays on what you were reading, before it's drawn again.</summary>
     private void ShowEarlier()

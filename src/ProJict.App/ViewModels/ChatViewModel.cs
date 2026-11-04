@@ -45,6 +45,11 @@ public sealed partial class ChatViewModel : ObservableObject
         Archive = new ChatSection(state, "archive", "Archive",
             "Private conversations you archived: nothing new in them counts or notifies you until you open one, or take it out (right-click)", foldedAtFirst: true);
         Room.Changed += OnChanged;
+        // A plan decided elsewhere (on the board, or in the ProJict it's from): its buttons become plain words again.
+        state.ProjectChanged += project =>
+        {
+            if (_shipButtons.Contains(project.Id) && !ShipFlow.WaitsForYou(project)) RebuildMessages();
+        };
         Room.Removed += channel =>
         {
             if (Channel == channel) Channel = null;
@@ -264,6 +269,7 @@ public sealed partial class ChatViewModel : ObservableObject
         Draft = value != null && _drafts.Remove(value.Id, out var draft) ? draft : "";
         Pending.Clear();
         // Another channel opens on its messages.
+        Viewing = null;
         FileSearch = "";
         Tab = ChannelTab.Messages;
         // The "New" line goes above what you hadn't read when you opened the channel.
@@ -1076,6 +1082,7 @@ public sealed partial class ChatViewModel : ObservableObject
     /// <summary>Shows the messages afresh (their buttons come and go with what they're about).</summary>
     private void RebuildMessages()
     {
+        _shipButtons.Clear();
         _messageVms.Clear();
         Messages.Clear();
         SyncMessages();
@@ -1083,13 +1090,18 @@ public sealed partial class ChatViewModel : ObservableObject
 
     /// <summary>
     /// Your own project whose ship plan, posted by the message's agent, waits for you: the channel's project, one the
-    /// message names, or the agent's only one. Guests don't approve here, so in another ProJict's channels there's none.
+    /// message names, or the agent's only one. In the channels of your own ProJict on another computer ("this is me") it's
+    /// one of the projects it shares; guests of someone else don't approve, so in their channels there's none.
     /// </summary>
     internal Project? ShipWaitingFor(ChatChannel? channel, ChatMessage message)
     {
-        if (channel == null || !message.Agent || PlaceOf(channel).Host != null) return null;
+        if (channel == null || !message.Agent) return null;
+        var host = PlaceOf(channel).Host;
+        if (host != null && host is not Services.Sharing.HostConnection { IsSelf: true }) return null;
+        var from = (host as Services.Sharing.HostConnection)?.Address;
         // Only what it wrote about this request, not about an earlier one.
-        var waiting = _state.Projects.Where(p => p.Remote == null && p.OpenShip is { State: ShipState.Planned, PlannedBy: { } by } ship &&
+        var waiting = _state.Projects.Where(p => (from == null ? p.Remote == null : p.Remote is { Self: true } r && r.HostKey == from) &&
+                                                 p.OpenShip is { State: ShipState.Planned, PlannedBy: { } by } ship &&
                                                  message.At >= ship.RequestedAt &&
                                                  string.Equals(Core.Agents.AgentNaming.Identity(by), message.By, StringComparison.OrdinalIgnoreCase)).ToList();
         return waiting.FirstOrDefault(p => channel.Link?.ProjectId == p.Id) ?? waiting.FirstOrDefault(p => message.Text.Contains(p.Name, StringComparison.OrdinalIgnoreCase))
@@ -1098,6 +1110,16 @@ public sealed partial class ChatViewModel : ObservableObject
 
     [System.Text.RegularExpressions.GeneratedRegex(@"\b(Approve|Decline)\b")]
     private static partial System.Text.RegularExpressions.Regex ShipWords();
+
+    /// <summary>Projects whose ship plan has Approve and Decline buttons in the messages shown.</summary>
+    private readonly HashSet<Guid> _shipButtons = [];
+
+    /// <summary>The message shows buttons for this project's plan.</summary>
+    internal Project ShowsShipButtons(Project project)
+    {
+        _shipButtons.Add(project.Id);
+        return project;
+    }
 
     /// <summary>"Approve" and "Decline" in the message's plain text become buttons for that project's ship plan.</summary>
     internal static IReadOnlyList<ChatSegment> WithShipButtons(IReadOnlyList<ChatSegment> segments, Project project) =>
@@ -1574,7 +1596,7 @@ public sealed partial class ChatMessageViewModel : ObservableObject
         EditedText = Model.EditedAt != null && !Model.Deleted ? "(edited)" : null;
         MentionsMe = !IsMine && _owner.Channel is { } here && ChatRoom.Mentions(here, Model, _owner.NameIn(here));
         var parsed = ChatText.Parse(Model.Text, _owner.MentionNames, _owner.IsChannelName, _owner.FindItem);
-        if (_owner.ShipWaitingFor(_owner.Channel, Model) is { } shipping) parsed = ChatViewModel.WithShipButtons(parsed, shipping);
+        if (_owner.ShipWaitingFor(_owner.Channel, Model) is { } shipping) parsed = ChatViewModel.WithShipButtons(parsed, _owner.ShowsShipButtons(shipping));
         Segments = Model.Deleted ? [new ChatSegmentViewModel(new ChatSegment(ChatSegmentKind.Text, "(deleted)"), _owner)]
             : parsed.Select(s => new ChatSegmentViewModel(s, _owner)).ToList();
         var owner = _owner.AttachmentOwner;

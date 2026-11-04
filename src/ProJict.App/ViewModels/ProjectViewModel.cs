@@ -1477,6 +1477,8 @@ public sealed partial class ProjectViewModel : ObservableObject
             OnPropertyChanged(p);
         // A shared project's test build can be asked for only while connected.
         RefreshTestBuild();
+        // Shipping from your own ProJict on another computer comes and goes with "this is me".
+        RefreshShip();
         // Rows and categories bind Owner.CanEdit: redraw them.
         foreach (var category in Categories) category.Refresh();
     }
@@ -1594,8 +1596,22 @@ public sealed partial class ProjectViewModel : ObservableObject
 
     // ───────────── Shipping ─────────────
 
-    /// <summary>Your own projects can be shipped (not the Inbox, nor another ProJict's project).</summary>
-    public bool CanShip => !Project.IsInbox && Project.Remote == null;
+    /// <summary>
+    /// Your own projects can be shipped (not the Inbox), also from your own ProJict on another computer ("this is me"):
+    /// there the request goes to that ProJict (#41f21359). Not another person's project.
+    /// </summary>
+    public bool CanShip => !Project.IsInbox && Project.Remote is null or { Self: true };
+
+    /// <summary>Details › Shipping: how it's shipped is set where the project lives.</summary>
+    public bool CanChangeShipping => !Project.IsInbox && Project.Remote == null;
+
+    /// <summary>A shared project's request changes in the ProJict it's from: true once it's asked there, else the status bar says why not.</summary>
+    private bool ShipThere(string op, ShipRequest? request = null, IEnumerable<ShipStep>? steps = null)
+    {
+        if (Main.Guest.Ship(Project, op, request, steps) is not { } problem) return true;
+        _state.StatusText = problem;
+        return false;
+    }
 
     /// <summary>The request the board's card shows: the open one, else the last one until its card is closed.</summary>
     public ShipRequest? Ship => CanShip && Project.Ships?.LastOrDefault() is { } last && (last.IsOpen || !last.Dismissed) ? last : null;
@@ -1653,7 +1669,20 @@ public sealed partial class ProjectViewModel : ObservableObject
     private void RequestShip()
     {
         if (!CanShip) return;
-        if (!TryShip(() => ShipFlow.Request(Project, ShipChoices.Where(c => c.IsChecked).Select(c => c.Step), _state.UserName))) return;
+        var steps = ShipChoices.Where(c => c.IsChecked).Select(c => c.Step).ToList();
+        if (Project.Remote is { } remote)
+        {
+            if (steps.Count == 0)
+            {
+                _state.StatusText = "Choose at least one step.";
+                return;
+            }
+            if (!ShipThere("request", steps: steps)) return;
+            IsComposingShip = false;
+            _state.StatusText = $"Asked {remote.HostName}'s ProJict to ship it: the request shows here once it's there.";
+            return;
+        }
+        if (!TryShip(() => ShipFlow.Request(Project, steps, _state.UserName))) return;
         IsComposingShip = false;
         _state.StatusText = Project.OpenShip?.State == ShipState.Approved
             ? "Asked to ship: an AI agent working in this project can go ahead."
@@ -1663,6 +1692,11 @@ public sealed partial class ProjectViewModel : ObservableObject
     [RelayCommand]
     private void ApproveShip()
     {
+        if (Ship is { } there && Project.Remote != null)
+        {
+            if (ShipThere("approve", there)) _state.StatusText = $"Approved: {there.PlannedBy ?? "the agent"} can ship it.";
+            return;
+        }
         if (Ship is { } s && TryShip(() => ShipFlow.Decide(s, approve: true, _state.UserName)))
             _state.StatusText = $"Approved: {s.PlannedBy ?? "the agent"} can ship it.";
     }
@@ -1670,12 +1704,22 @@ public sealed partial class ProjectViewModel : ObservableObject
     [RelayCommand]
     private void DeclineShip()
     {
+        if (Ship is { } there && Project.Remote != null)
+        {
+            if (ShipThere("decline", there)) _state.StatusText = "Declined the plan.";
+            return;
+        }
         if (Ship is { } s && TryShip(() => ShipFlow.Decide(s, approve: false, _state.UserName))) _state.StatusText = "Declined the plan.";
     }
 
     [RelayCommand]
     private void WithdrawShip()
     {
+        if (Ship is { } there && Project.Remote != null)
+        {
+            if (ShipThere("withdraw", there)) _state.StatusText = "Ship request withdrawn.";
+            return;
+        }
         if (Ship is { } s && TryShip(() => ShipFlow.Withdraw(s, _state.UserName))) _state.StatusText = "Ship request withdrawn.";
     }
 
@@ -1683,6 +1727,13 @@ public sealed partial class ProjectViewModel : ObservableObject
     private void DismissShip()
     {
         if (Ship is not { IsOpen: false } s) return;
+        // A shared project's card closes where the project is from, and here as that comes back: changed here, the
+        // requests would count as your change and hide newer ones from there.
+        if (Project.Remote != null)
+        {
+            ShipThere("dismiss", s);
+            return;
+        }
         s.Dismissed = true;
         Touch();
         RefreshShip();
@@ -1726,7 +1777,7 @@ public sealed partial class ProjectViewModel : ObservableObject
     public void RefreshShip()
     {
         _shipSteps = null;
-        foreach (var p in new[] { nameof(CanShip), nameof(Ship), nameof(HasShipCard), nameof(ShowShipRequest), nameof(ShipTitle), nameof(ShipStateText),
+        foreach (var p in new[] { nameof(CanShip), nameof(CanChangeShipping), nameof(Ship), nameof(HasShipCard), nameof(ShowShipRequest), nameof(ShipTitle), nameof(ShipStateText),
                      nameof(ShipStatusText), nameof(ShipPlan), nameof(HasShipPlan), nameof(ShipLog), nameof(ShipWaitsForYou), nameof(CanWithdrawShip),
                      nameof(CanDismissShip), nameof(ShipSteps), nameof(ShipHowTo), nameof(ShipLocalWithoutApproval), nameof(HasShipChange),
                      nameof(ShipChangeText) })

@@ -64,6 +64,12 @@ public static class ShipFlow
         };
     }
 
+    /// <summary>
+    /// The project's ship plan waits for your approval: your own project's, or one shared by your own ProJict on another
+    /// computer. A guest's copy of someone else's project shows their plan, but it isn't for the guest to approve.
+    /// </summary>
+    public static bool WaitsForYou(Project project) => project.OpenShip?.State == ShipState.Planned && project.Remote is null or { Self: true };
+
     /// <summary>A new request for these steps (in the project's step order); fails while another one is open.</summary>
     public static ShipRequest Request(Project project, IEnumerable<ShipStep> steps, string by)
     {
