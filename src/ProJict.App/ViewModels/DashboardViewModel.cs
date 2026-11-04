@@ -250,7 +250,9 @@ public sealed partial class DashboardViewModel : ObservableObject
 
     public void Refresh()
     {
-        var projects = _state.Projects.Where(p => !p.IsInbox).ToList();
+        // As the sidebar's Showing box says: your own, one connected ProJict's, or everything.
+        var visible = _state.Projects.Where(_main.Shows).ToList();
+        var projects = visible.Where(p => !p.IsInbox).ToList();
         Filter.Rebuild(projects);
         GroupFilters = [AllGroups, .. _state.Settings.Groups.Union(projects.Select(p => p.Group).Where(g => !string.IsNullOrWhiteSpace(g)), StringComparer.OrdinalIgnoreCase)];
         OnPropertyChanged(nameof(GroupFilters));
@@ -284,13 +286,13 @@ public sealed partial class DashboardViewModel : ObservableObject
         Board = statuses.Select(s => new BoardColumnViewModel(s, Cards.Where(c => c.Status == s).ToList())).ToList();
         OnPropertyChanged(nameof(Board));
 
-        RecentDone = PortfolioStats.RecentlyDone(_state.Projects.Where(p => !Filter.IsHidden(p)), DateTime.Now.AddDays(-7))
+        RecentDone = PortfolioStats.RecentlyDone(visible.Where(p => !Filter.IsHidden(p)), DateTime.Now.AddDays(-7))
             .Take(40)
             .Select(r => new RecentDoneRow(r.Project.Name, r.Category.Name, r.Item.DisplayText().Replace("\n", " "), Ago(r.Item.DoneAt ?? DateTime.Now), r.Project, r.Item))
             .ToList();
         OnPropertyChanged(nameof(RecentDone));
 
-        ToReview = _state.Projects.Where(p => !Filter.IsHidden(p))
+        ToReview = visible.Where(p => !Filter.IsHidden(p))
             .SelectMany(p => p.Walk().Where(l => l.Item.NeedsReview).Select(l => (Project: p, Loc: l)))
             .OrderByDescending(x => x.Loc.Item.DoneAt)
             .Select(x => new RecentDoneRow(x.Project.Name, x.Loc.Category.Name, x.Loc.Item.DisplayText().Replace("\n", " "),
@@ -298,7 +300,7 @@ public sealed partial class DashboardViewModel : ObservableObject
             .ToList();
         OnPropertyChanged(nameof(ToReview));
         OnPropertyChanged(nameof(ToReviewHeader));
-        AgentActivity = BuildAgentActivity(_state.Projects.Where(p => !Filter.IsHidden(p)).ToList(), DateTime.Now.AddDays(-7));
+        AgentActivity = BuildAgentActivity(visible.Where(p => !Filter.IsHidden(p)).ToList(), DateTime.Now.AddDays(-7));
         OnPropertyChanged(nameof(AgentActivity));
 
         var all = shown.Where(p => p.Status != ProjectStatus.Archived).Select(PortfolioStats.For).ToList();

@@ -133,10 +133,13 @@ public sealed partial class FeedViewModel : ObservableObject
     {
         List<ProJict.Core.Api.ApiToken> tokens;
         lock (_main.ApiStore.Sync) tokens = [.. _main.ApiStore.Data.Tokens];
-        _all = [.. ActivityFeed.Build(_state.Projects, _state.Settings, _state.UserName)
-            .Concat(ActivityFeed.ApiTokens(tokens, DateTime.Now, _state.UserName))
-            .Concat(ActivityFeed.Channels(_state.Chat.Channels, _state.Projects)).OrderByDescending(e => e.At)];
-        ProjectChoices = [AllProjects, .. _state.Projects.Select(p => p.Name).Order(StringComparer.CurrentCultureIgnoreCase)];
+        // As the sidebar's Showing box says: your own (with your API tokens and channels), one connected ProJict's, or everything.
+        var projects = _state.Projects.Where(_main.Shows).ToList();
+        var own = _main.ShowsOwn;
+        _all = [.. ActivityFeed.Build(projects, _state.Settings, _state.UserName)
+            .Concat(own ? ActivityFeed.ApiTokens(tokens, DateTime.Now, _state.UserName) : [])
+            .Concat(own ? ActivityFeed.Channels(_state.Chat.Channels, _state.Projects) : []).OrderByDescending(e => e.At)];
+        ProjectChoices = [AllProjects, .. projects.Select(p => p.Name).Order(StringComparer.CurrentCultureIgnoreCase)];
         if (_askedWho != null && WhoFilter != _askedWho) _askedWho = null;
         WhoChoices = [Everyone, People, Agents, .. _all.Select(e => e.Who).Append(_askedWho).OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase)
             .Order(StringComparer.CurrentCultureIgnoreCase)];

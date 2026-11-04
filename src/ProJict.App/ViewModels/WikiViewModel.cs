@@ -213,8 +213,9 @@ public sealed partial class WikiViewModel : ObservableObject
     private void RebuildTree()
     {
         Tree.Clear();
-        foreach (var node in Nodes(_state.Wiki, null, "")) Tree.Add(node);
-        foreach (var host in _main.Guest.Connections.Where(c => c.Wiki is { Pages.Count: > 0 }))
+        // As the sidebar's Showing box says: your own wiki, one connected ProJict's, or all of them.
+        if (_main.ShowsOwn) foreach (var node in Nodes(_state.Wiki, null, "")) Tree.Add(node);
+        foreach (var host in _main.Guest.Connections.Where(c => c.Wiki is { Pages.Count: > 0 } && _main.ShowsChat(c)))
         {
             var key = "host:" + host.Address;
             var root = new WikiNodeViewModel(this, $"{host.HostName}'s wiki", key, null, host, "", isHost: true) { IsExpanded = !_expanded.Contains(key + ":closed") };
@@ -298,8 +299,8 @@ public sealed partial class WikiViewModel : ObservableObject
     {
         Results.Clear();
         if (!IsFiltering) return;
-        foreach (var hit in WikiText.Search(_state.Wiki.Pages, Filter, 100)) Results.Add(new WikiHitViewModel(this, hit, null));
-        foreach (var host in _main.Guest.Connections.Where(c => c.Wiki != null))
+        if (_main.ShowsOwn) foreach (var hit in WikiText.Search(_state.Wiki.Pages, Filter, 100)) Results.Add(new WikiHitViewModel(this, hit, null));
+        foreach (var host in _main.Guest.Connections.Where(c => c.Wiki != null && _main.ShowsChat(c)))
             foreach (var hit in WikiText.Search(host.Wiki!.Pages, Filter, 50)) Results.Add(new WikiHitViewModel(this, hit, host));
     }
 

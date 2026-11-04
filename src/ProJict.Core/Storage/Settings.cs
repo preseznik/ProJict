@@ -79,6 +79,12 @@ public sealed class AppSettings
     public int ChatCacheMaxGb { get; set; } = 10;
     /// <summary>How Chat's list is sorted (its sort button), on this computer.</summary>
     public Chat.ChatOrder ChatOrder { get; set; }
+    /// <summary>
+    /// What a ProJict connected to others shows (the sidebar's Showing box): null for everything, "this" for only its own,
+    /// or a connected ProJict's address for only its (see <see cref="Sharing.ShowingFrom"/>).
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? ShowingFrom { get; set; }
     /// <summary>Whose voices read agents' answers in calls (Settings › Chat).</summary>
     public Chat.CallVoices CallVoices { get; set; }
     /// <summary>Whether a file of this size, posted in such a channel, goes to the Chat cache.</summary>

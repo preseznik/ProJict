@@ -411,22 +411,25 @@ public sealed partial class ChatViewModel : ObservableObject
         var others = new List<ChannelRowViewModel>();
         // As the sort button says: by name, by the last message, or newest added first.
         var order = _state.AppSettings.ChatOrder;
-        foreach (var channel in ChatSorting.Sort(Room.Channels.Where(c => !c.Direct), order, c => c.Name))
+        // As the sidebar's Showing box says: your own channels, one connected ProJict's, or everything.
+        List<ChatChannel> own = _main.ShowsOwn ? Room.Channels : [];
+        foreach (var channel in ChatSorting.Sort(own.Where(c => !c.Direct), order, c => c.Name))
             (ChatRoom.Member(channel, MyName) != null ? mine : others).Add(new ChannelRowViewModel(channel, this));
         YourChannels = mine;
         OtherChannels = others;
         // Yours; the agents' conversations with each other have a panel of their own.
-        var yours = ChatSorting.Sort(Room.Channels.Where(c => c.Direct && ChatRoom.Member(c, MyName) != null), order, c => ChatRoom.Title(c, MyName))
+        var yours = ChatSorting.Sort(own.Where(c => c.Direct && ChatRoom.Member(c, MyName) != null), order, c => ChatRoom.Title(c, MyName))
             .Select(c => new ChannelRowViewModel(c, this)).ToList();
         PrivateChats = [.. yours.Where(r => !r.IsArchived)];
         ArchivedChats = [.. yours.Where(r => r.IsArchived)];
-        AgentChats = Room.Channels.Where(c => c.Direct && ChatRoom.Member(c, MyName) == null)
+        AgentChats = own.Where(c => c.Direct && ChatRoom.Member(c, MyName) == null)
             .OrderByDescending(c => c.Messages.LastOrDefault()?.At ?? c.CreatedAt)
             .Select(c => new AgentChatRow(c, this)).ToList();
-        BrowseRows = Room.Channels.Where(c => !c.Direct).OrderBy(c => c.Name, StringComparer.Ordinal).Select(c => new BrowseRowViewModel(c, this)).ToList();
+        BrowseRows = own.Where(c => !c.Direct).OrderBy(c => c.Name, StringComparer.Ordinal).Select(c => new BrowseRowViewModel(c, this)).ToList();
         // Each host's: channels you're in, the others you could join, then private conversations.
         // And each guest's that shares its own channels back with you.
         HostChats = _main.Guest.Connections.Where(c => c.Chat is { Channels.Count: > 0 }).Cast<IChatRemote>().Concat(_main.Host.BackChats)
+            .Where(_main.ShowsChat)
             .Select(c => new ChatSection(_state, "host:" + c.OwnerName, $"{c.OwnerName}'s ProJict", "Shared with you: it's kept there, not here", shared: true).Set(
                 ChatSorting.Sort(c.Chat!.Channels, order, ch => ChatRoom.Title(ch, c.MyName ?? ""))
                     .OrderBy(ch => ch.Direct).ThenByDescending(ch => ChatRoom.Member(ch, c.MyName ?? "") != null)

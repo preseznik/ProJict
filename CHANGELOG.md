@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.44
+
+- **Switch between your own ProJict and the ones you're connected to.** A ProJict connected to others mixed their projects and channels in with its own. Now a **Showing** box at the top of the sidebar picks what you see: **Everything** (as before), **This ProJict** (only your own projects, channels and wiki), or one connected ProJict (only what it shares with you). The sidebar, the dashboard, the feed, Chat's list, the wiki and **Search** (Ctrl+K) all follow it, and a project that's no longer shown closes for the dashboard. The choice is kept on this computer, and if that connection is removed, everything shows again. The box only appears while you're connected to another ProJict.
+
 ## 0.1.43 (2026-11-04)
 
 - **Agents read results without parsing text.** An agent's MCP client got every result as JSON inside its text, so it had to parse that text before it could check an item's state or read messages. Clients on MCP 2025-06-18 or newer now get the same JSON as structured content too (the text stays as it was, for the others). `get_item`, `list_items`, `read_channel` and `get_started` also describe their results with an output schema; more tools get one as they're checked.

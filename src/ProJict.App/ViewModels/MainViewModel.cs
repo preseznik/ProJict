@@ -241,7 +241,7 @@ public sealed partial class MainViewModel : ObservableObject
         // The Agents view's project list leaves out the projects hidden there.
         SidebarFilter.HiddenChanged += AgentActivity.RefreshProjectChoices;
         Dashboard.Filter.HiddenChanged += AgentActivity.RefreshProjectChoices;
-        ProjectsView.Filter = o => o is ProjectListItemViewModel i && SidebarFilter.Matches(i.Project);
+        ProjectsView.Filter = o => o is ProjectListItemViewModel i && SidebarFilter.Matches(i.Project) && Shows(i.Project);
         SidebarFilter.Changed += () =>
         {
             SyncGroupNames();
@@ -253,6 +253,7 @@ public sealed partial class MainViewModel : ObservableObject
         {
             if (ProjectsView.OfType<ProjectListItemViewModel>().FirstOrDefault() is { } first) OpenProject(first.Project);
         };
+        WatchShowing();
         RebuildList();
 
         state.ProjectListChanged += RebuildList;
@@ -560,7 +561,7 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>Every group from the settings gets a heading, even an empty one, except while searching.</summary>
     private bool SyncGroupNames()
     {
-        List<string> names = SidebarFilter.IsSearching ? [] : State.Settings.Groups;
+        List<string> names = SidebarFilter.IsSearching || !ShowsOwn ? [] : State.Settings.Groups;
         if (_groupDescription.GroupNames.OfType<string>().SequenceEqual(names)) return false;
         _groupDescription.GroupNames.Clear();
         foreach (var name in names) _groupDescription.GroupNames.Add(name);
