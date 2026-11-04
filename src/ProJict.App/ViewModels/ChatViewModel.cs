@@ -428,12 +428,17 @@ public sealed partial class ChatViewModel : ObservableObject
         BrowseRows = own.Where(c => !c.Direct).OrderBy(c => c.Name, StringComparer.Ordinal).Select(c => new BrowseRowViewModel(c, this)).ToList();
         // Each host's: channels you're in, the others you could join, then private conversations.
         // And each guest's that shares its own channels back with you.
+        // Its private conversations fold on their own, under the channels (#39a84d31).
         HostChats = _main.Guest.Connections.Where(c => c.Chat is { Channels.Count: > 0 }).Cast<IChatRemote>().Concat(_main.Host.BackChats)
             .Where(_main.ShowsChat)
-            .Select(c => new ChatSection(_state, "host:" + c.OwnerName, $"{c.OwnerName}'s ProJict", "Shared with you: it's kept there, not here", shared: true).Set(
-                ChatSorting.Sort(c.Chat!.Channels, order, ch => ChatRoom.Title(ch, c.MyName ?? ""))
-                    .OrderBy(ch => ch.Direct).ThenByDescending(ch => ChatRoom.Member(ch, c.MyName ?? "") != null)
-                    .Select(ch => new ChannelRowViewModel(ch, this)).ToList())).ToList();
+            .Select(c =>
+            {
+                var sorted = ChatSorting.Sort(c.Chat!.Channels, order, ch => ChatRoom.Title(ch, c.MyName ?? "")).ToList();
+                return new ChatSection(_state, "host:" + c.OwnerName, $"{c.OwnerName}'s ProJict", "Shared with you: it's kept there, not here", shared: true)
+                    .Set([.. sorted.Where(ch => !ch.Direct).OrderByDescending(ch => ChatRoom.Member(ch, c.MyName ?? "") != null).Select(ch => new ChannelRowViewModel(ch, this))])
+                    .WithSub(new ChatSection(_state, "host:" + c.OwnerName + ":private", "Private messages", $"Your private conversations in {c.OwnerName}'s ProJict")
+                        .Set([.. sorted.Where(ch => ch.Direct).Select(ch => new ChannelRowViewModel(ch, this))]));
+            }).ToList();
         OnPropertyChanged(nameof(OrderText));
         OnPropertyChanged(nameof(OrderToolTip));
         Yours.Set(YourChannels);
@@ -1320,11 +1325,17 @@ public sealed record InviteChoice(string Name, string Label)
 public sealed partial class ChatSection(AppState state, string key, string title, string hint, bool shared = false, bool foldedAtFirst = false) : ObservableObject
 {
     private List<ChannelRowViewModel> _all = [];
+    /// <summary>The section it's part of (a connected ProJict's, for its private conversations): folding that folds this too.</summary>
+    private ChatSection? _parent;
     public string Key => key;
     public string Title => title;
     /// <summary>Another ProJict's, shown with a link mark.</summary>
     public bool IsShared => shared;
-    public bool HasRows => _all.Count > 0;
+    public bool HasRows => _all.Count > 0 || Sub?.HasRows == true;
+    /// <summary>A section of its own inside this one, folded on its own: a connected ProJict's private conversations.</summary>
+    public ChatSection? Sub { get; private set; }
+    /// <summary>Open, and so is the section it's part of.</summary>
+    public bool IsShownOpen => IsOpen && _parent?.IsOpen != false;
     /// <summary>Open, or folded; one that starts folded (the archive) is kept as "open:key" once you open it.</summary>
     public bool IsOpen
     {
@@ -1354,11 +1365,20 @@ public sealed partial class ChatSection(AppState state, string key, string title
         return this;
     }
 
+    internal ChatSection WithSub(ChatSection sub)
+    {
+        Sub = sub;
+        sub._parent = this;
+        Changed();
+        return this;
+    }
+
     private void Changed()
     {
-        Rows = IsOpen ? _all : _all.Where(r => r.IsSelected || r.HasUnread).ToList();
-        foreach (var name in new[] { nameof(IsOpen), nameof(Rows), nameof(HiddenText), nameof(HasRows), nameof(ToolTip) })
+        Rows = IsShownOpen ? _all : _all.Where(r => r.IsSelected || r.HasUnread).ToList();
+        foreach (var name in new[] { nameof(IsOpen), nameof(IsShownOpen), nameof(Rows), nameof(HiddenText), nameof(HasRows), nameof(ToolTip), nameof(Sub) })
             OnPropertyChanged(name);
+        Sub?.Changed();
     }
 
     [RelayCommand]

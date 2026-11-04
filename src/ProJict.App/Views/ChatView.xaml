@@ -122,6 +122,31 @@
         </DataTemplate>
 
         <!-- A sidebar section: its heading folds the channels under it away (the open one and those with something new stay). -->
+        <!-- A section inside another (a connected ProJict's private conversations), folded on its own. -->
+        <DataTemplate x:Key="ChatSubSectionView" DataType="{x:Type vm:ChatSection}">
+            <StackPanel x:Name="Section" Margin="10,0,0,0">
+                <Button x:Name="Heading" Style="{StaticResource SubtleButton}" Command="{Binding ToggleCommand}" HorizontalAlignment="Stretch" Padding="0,3" Margin="-4,6,0,2"
+                        ToolTip="{Binding ToolTip}" AutomationProperties.Name="{Binding Title}">
+                    <DockPanel HorizontalAlignment="Stretch" Width="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=Button}}">
+                        <TextBlock x:Name="Chevron" DockPanel.Dock="Left" Style="{StaticResource Icon}" Text="&#xE70D;" FontSize="7" Width="12" TextAlignment="Center" Margin="0,2,0,0"
+                                   VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                        <TextBlock DockPanel.Dock="Right" Text="{Binding HiddenText}" Style="{StaticResource MutedText}" FontSize="11" Margin="6,0,8,0" VerticalAlignment="Center"
+                                   Visibility="{Binding HiddenText, Converter={StaticResource EmptyToVis}}" />
+                        <TextBlock Text="{Binding Title}" Style="{StaticResource MutedText}" FontSize="11" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                    </DockPanel>
+                </Button>
+                <ItemsControl ItemsSource="{Binding Rows}" ItemTemplate="{StaticResource ChannelRow}" Focusable="False" Margin="-10,0,0,0" />
+            </StackPanel>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsShownOpen}" Value="False">
+                    <Setter TargetName="Chevron" Property="Text" Value="&#xE76C;" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding HasRows}" Value="False">
+                    <Setter TargetName="Section" Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
         <DataTemplate x:Key="ChatSectionView" DataType="{x:Type vm:ChatSection}">
             <StackPanel x:Name="Section">
                 <Button x:Name="Heading" Style="{StaticResource SubtleButton}" Command="{Binding ToggleCommand}" HorizontalAlignment="Stretch" Padding="0,4" Margin="-4,10,0,2"
@@ -137,6 +162,7 @@
                     </DockPanel>
                 </Button>
                 <ItemsControl ItemsSource="{Binding Rows}" ItemTemplate="{StaticResource ChannelRow}" Focusable="False" />
+                <ContentControl x:Name="SubSection" Content="{Binding Sub}" ContentTemplate="{StaticResource ChatSubSectionView}" Focusable="False" />
             </StackPanel>
             <DataTemplate.Triggers>
                 <DataTrigger Binding="{Binding IsOpen}" Value="False">
