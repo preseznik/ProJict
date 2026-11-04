@@ -186,5 +186,5 @@ public sealed partial class GuestService
 
     /// <summary>The file of a message in the host's chat, if the id is one.</summary>
     private static Attachment? ChatAttachment(HostConnection connection, Guid id) =>
-        connection.Chat?.Channels.SelectMany(c => c.Messages).SelectMany(m => m.Attachments ?? []).FirstOrDefault(a => a.Id == id);
+        connection.Chat?.Channels.SelectMany(ProJict.Core.Chat.ChatRoom.Files).FirstOrDefault(a => a.Id == id);
 }

@@ -57,6 +57,19 @@ public sealed class AgentPictures(string dataRoot)
     /// <summary>Makes the agent's picture from an image file. Throws InvalidOperationException when it isn't an image.</summary>
     public void Set(string agent, string imageFile)
     {
+        var png = SquarePng(imageFile, Size);
+        Directory.CreateDirectory(Folder);
+        var target = PathOf(agent);
+        var fresh = target + ".new";
+        File.WriteAllBytes(fresh, png);
+        File.Move(fresh, target, overwrite: true);
+        _cache.Remove(agent);
+        Changed?.Invoke();
+    }
+
+    /// <summary>The image file cut to a square in the middle and scaled to <paramref name="size"/>, as PNG. Throws InvalidOperationException when it isn't an image.</summary>
+    public static byte[] SquarePng(string imageFile, int size)
+    {
         BitmapSource source;
         try
         {
@@ -69,16 +82,12 @@ public sealed class AgentPictures(string dataRoot)
         }
         var side = Math.Min(source.PixelWidth, source.PixelHeight);
         BitmapSource square = new CroppedBitmap(source, new Int32Rect((source.PixelWidth - side) / 2, (source.PixelHeight - side) / 2, side, side));
-        if (side != Size) square = new TransformedBitmap(square, new ScaleTransform((double)Size / side, (double)Size / side));
+        if (side != size) square = new TransformedBitmap(square, new ScaleTransform((double)size / side, (double)size / side));
         var encoder = new PngBitmapEncoder();
         encoder.Frames.Add(BitmapFrame.Create(square));
-        Directory.CreateDirectory(Folder);
-        var target = PathOf(agent);
-        var fresh = target + ".new";
-        using (var output = File.Create(fresh)) encoder.Save(output);
-        File.Move(fresh, target, overwrite: true);
-        _cache.Remove(agent);
-        Changed?.Invoke();
+        using var output = new MemoryStream();
+        encoder.Save(output);
+        return output.ToArray();
     }
 
     public void Remove(string agent)

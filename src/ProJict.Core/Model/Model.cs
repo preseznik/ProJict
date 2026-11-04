@@ -376,6 +376,9 @@ public sealed class Project
     public List<CleanupRequest>? Cleanups { get; set; }
     /// <summary>The clean-up waiting for a plan or your decision: agents do no other work here meanwhile.</summary>
     [JsonIgnore] public CleanupRequest? OpenCleanup => Cleanups?.LastOrDefault(c => c.IsOpen);
+    /// <summary>The project's small icon (a square picture), shown beside its name; null while it has none.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Attachment? Icon { get; set; }
     /// <summary>The project's studio, if it has one: its roles and the agents hired to them (its first, when it has two).</summary>
     public Studio? Studio { get; set; }
     /// <summary>Its second studio, of the other kind (a game studio and a film studio); older ProJicts don't know it.</summary>
@@ -429,6 +432,7 @@ public sealed class Project
         GitHubUrl = snapshot.GitHubUrl;
         PromptPreamble = snapshot.PromptPreamble;
         Description = snapshot.Description;
+        Icon = snapshot.Icon;
         Categories = snapshot.Categories;
         Notes = snapshot.Notes;
         Releases = snapshot.Releases;

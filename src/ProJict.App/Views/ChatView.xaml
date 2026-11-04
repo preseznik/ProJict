@@ -83,6 +83,8 @@
                     </Grid.ColumnDefinitions>
                     <StackPanel>
                         <StackPanel Orientation="Horizontal">
+                            <Image x:Name="ChannelIcon" Source="{Binding Icon}" Width="16" Height="16" Margin="0,0,6,0" VerticalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality"
+                                   Visibility="{Binding HasIcon, Converter={StaticResource BoolToVis}}" />
                             <TextBlock x:Name="Name" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
                             <!-- From another ProJict: whose -->
                             <TextBlock x:Name="SourceTag" Text="{Binding SourceTag}" FontSize="11" Margin="6,1,0,0" VerticalAlignment="Center"
@@ -259,7 +261,14 @@
                         </Grid.ColumnDefinitions>
                         <Border x:Name="Badge" Width="30" Height="30" CornerRadius="15" Background="{Binding Badge.Background}" VerticalAlignment="Top" HorizontalAlignment="Left"
                                 Margin="0,4,0,0">
-                            <TextBlock Text="{Binding Badge.Initials}" Foreground="White" FontWeight="SemiBold" FontSize="11.5" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <Grid>
+                                <TextBlock Text="{Binding Badge.Initials}" Foreground="White" FontWeight="SemiBold" FontSize="11.5" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                <Ellipse x:Name="AuthorPicture" Width="30" Height="30" Visibility="{Binding HasPicture, Converter={StaticResource BoolToVis}}">
+                                    <Ellipse.Fill>
+                                        <ImageBrush ImageSource="{Binding Picture}" Stretch="UniformToFill" />
+                                    </Ellipse.Fill>
+                                </Ellipse>
+                            </Grid>
                         </Border>
                         <TextBlock x:Name="SideTime" Text="{Binding Time}" ToolTip="{Binding WhenToolTip}" FontSize="10.5" Foreground="{DynamicResource TextFillColorTertiaryBrush}"
                                    Margin="0,3,0,0" Visibility="Collapsed" />
@@ -663,6 +672,8 @@
                 </StackPanel>
                 <StackPanel>
                     <StackPanel Orientation="Horizontal">
+                        <Image x:Name="ChannelHeaderIcon" Source="{Binding Icon}" Width="28" Height="28" Margin="0,0,10,0" VerticalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality"
+                               Visibility="{Binding HasIcon, Converter={StaticResource BoolToVis}}" />
                         <TextBlock x:Name="ChannelTitle" Text="{Binding Title}" FontSize="22" FontWeight="SemiBold" />
                         <Border Style="{StaticResource TagChip}" Background="{DynamicResource SubtleFillColorSecondaryBrush}" Margin="10,0,0,0" VerticalAlignment="Center"
                                 ToolTip="{Binding AccessToolTip}">

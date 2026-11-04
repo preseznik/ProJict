@@ -600,7 +600,11 @@ public sealed partial class GuestService
         if (connection.Copies.Values.FirstOrDefault(c => c.Project.Attachments().Any(a => a.Id == id)) is { } copy)
         {
             path = _state.AttachmentPath(copy.Project, copy.Project.Attachments().First(a => a.Id == id));
-            arrived = () => _main.GetProjectViewModel(copy.Project).RebuildAll();
+            arrived = () =>
+            {
+                _main.GetProjectViewModel(copy.Project).RebuildAll();
+                if (copy.Project.Icon?.Id == id) _main.IconArrived(copy.Project);
+            };
         }
         else if (ChatAttachment(connection, id) is { } chat)
         {

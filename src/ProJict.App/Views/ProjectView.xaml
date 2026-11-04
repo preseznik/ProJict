@@ -467,8 +467,12 @@
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <StackPanel>
-                <TextBox Style="{StaticResource RowTextBox}" FontSize="26" FontWeight="SemiBold" Padding="2,0" TextWrapping="NoWrap"
-                         Text="{Binding Name, UpdateSourceTrigger=LostFocus}" IsReadOnly="{Binding IsTitleReadOnly}" HorizontalAlignment="Left" MinWidth="200" />
+                <StackPanel Orientation="Horizontal">
+                    <Image x:Name="HeaderIcon" Source="{Binding Icon}" Width="32" Height="32" Margin="2,0,10,0" VerticalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality"
+                           Visibility="{Binding HasIcon, Converter={StaticResource BoolToVis}}" />
+                    <TextBox Style="{StaticResource RowTextBox}" FontSize="26" FontWeight="SemiBold" Padding="2,0" TextWrapping="NoWrap"
+                             Text="{Binding Name, UpdateSourceTrigger=LostFocus}" IsReadOnly="{Binding IsTitleReadOnly}" HorizontalAlignment="Left" MinWidth="200" />
+                </StackPanel>
                 <!-- Another ProJict's project: whose it is and what you may do in it. -->
                 <StackPanel Orientation="Horizontal" Margin="4,2,0,0" Visibility="{Binding RemoteText, Converter={StaticResource EmptyToVis}}">
                     <TextBlock Style="{StaticResource Icon}" Text="&#xE72D;" FontSize="12" Margin="0,0,6,0" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" />
@@ -1135,6 +1139,7 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
                         <Grid.Resources>
                             <Style TargetType="TextBlock" BasedOn="{StaticResource MutedText}">
@@ -1178,20 +1183,30 @@
                             <TextBlock Text="{Binding IssueSyncText}" Margin="0,6,0,0" FontSize="12" TextWrapping="Wrap" />
                         </StackPanel>
 
-                        <TextBlock Grid.Row="4" Text="Description" />
-                        <TextBox Grid.Row="4" Grid.Column="1" Margin="0,4" Text="{Binding Description, UpdateSourceTrigger=PropertyChanged}"
+                        <TextBlock Grid.Row="4" Text="Icon" />
+                        <StackPanel x:Name="IconDetails" Grid.Row="4" Grid.Column="1" Orientation="Horizontal" Margin="0,4">
+                            <Image Source="{Binding Icon}" Width="32" Height="32" Margin="0,0,10,0" VerticalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality"
+                                   Visibility="{Binding HasIcon, Converter={StaticResource BoolToVis}}" />
+                            <Button Content="Choose…" Command="{Binding ChooseIconCommand}" VerticalAlignment="Center"
+                                    ToolTip="A small picture shown beside the project's name: in the sidebar, here and on the Dashboard (any image: it's cut to a square)" />
+                            <Button Content="Remove" Command="{Binding RemoveIconCommand}" Margin="8,0,0,0" VerticalAlignment="Center"
+                                    Visibility="{Binding HasIcon, Converter={StaticResource BoolToVis}}" />
+                        </StackPanel>
+
+                        <TextBlock Grid.Row="5" Text="Description" />
+                        <TextBox Grid.Row="5" Grid.Column="1" Margin="0,4" Text="{Binding Description, UpdateSourceTrigger=PropertyChanged}"
                                  AcceptsReturn="True" TextWrapping="Wrap" MinHeight="60" VerticalContentAlignment="Top" />
 
-                        <TextBlock Grid.Row="5" Text="Prompt preamble" />
-                        <StackPanel Grid.Row="5" Grid.Column="1" Margin="0,4">
+                        <TextBlock Grid.Row="6" Text="Prompt preamble" />
+                        <StackPanel Grid.Row="6" Grid.Column="1" Margin="0,4">
                             <TextBox Text="{Binding PromptPreamble, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" TextWrapping="Wrap"
                                      MinHeight="120" VerticalContentAlignment="Top" FontFamily="{StaticResource MonoFont}" FontSize="13" />
                             <TextBlock Margin="0,4,0,0" FontSize="12" TextWrapping="Wrap"
                                        Text="Put at the top of every “Copy prompt”: engine version, conventions, how to test, what to commit…" />
                         </StackPanel>
 
-                        <TextBlock Grid.Row="6" Text="Shipping" Visibility="{Binding CanShip, Converter={StaticResource BoolToVis}}" />
-                        <StackPanel Grid.Row="6" Grid.Column="1" Margin="0,4" Visibility="{Binding CanShip, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Grid.Row="7" Text="Shipping" Visibility="{Binding CanShip, Converter={StaticResource BoolToVis}}" />
+                        <StackPanel Grid.Row="7" Grid.Column="1" Margin="0,4" Visibility="{Binding CanShip, Converter={StaticResource BoolToVis}}">
                             <ItemsControl ItemsSource="{Binding ShipSteps}" Focusable="False" AutomationProperties.Name="Steps this project has">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
@@ -1219,8 +1234,8 @@
                                        Text="How to ship it: what an AI agent does when you ask (Ship button), e.g. bump the version in …, run build.ps1, test, commit, push, publish the GitHub release. Untick the steps this project doesn't have." />
                         </StackPanel>
 
-                        <TextBlock Grid.Row="8" Text="Test build" />
-                        <StackPanel Grid.Row="8" Grid.Column="1" Margin="0,4">
+                        <TextBlock Grid.Row="9" Text="Test build" />
+                        <StackPanel Grid.Row="9" Grid.Column="1" Margin="0,4">
                             <DockPanel>
                                 <Button DockPanel.Dock="Right" Content="Browse…" Command="{Binding BrowseTestBuildCommand}" Margin="8,0,0,0"
                                         Visibility="{Binding IsRemote, Converter={StaticResource InvBoolToVis}}" />
@@ -1236,16 +1251,16 @@
                                        Text="The build to try now: an app, installer, folder or file (a relative path is in the repo folder). It shows under the project's name with Run. Agents set it after building (update_project test_build)." />
                         </StackPanel>
 
-                        <TextBlock Grid.Row="7" Text="Sharing" Visibility="{Binding CanBePrivate, Converter={StaticResource BoolToVis}}" />
-                        <StackPanel Grid.Row="7" Grid.Column="1" Margin="0,8,0,4" Visibility="{Binding CanBePrivate, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Grid.Row="8" Text="Sharing" Visibility="{Binding CanBePrivate, Converter={StaticResource BoolToVis}}" />
+                        <StackPanel Grid.Row="8" Grid.Column="1" Margin="0,8,0,4" Visibility="{Binding CanBePrivate, Converter={StaticResource BoolToVis}}">
                             <CheckBox Content="Private" IsChecked="{Binding IsPrivate}" AutomationProperties.Name="Private project" />
                             <TextBlock Margin="0,4,0,0" FontSize="12" TextWrapping="Wrap"
                                        Text="Only on this computer: people you share with, and their agents, don't see it or its channels, even when its group is shared with them. You and your own agents still do." />
                         </StackPanel>
 
                         <!-- The project's studios (a game studio, a film studio, or both): each one's roles and what each expects; hiring is in the Agents view. -->
-                        <TextBlock Grid.Row="9" Text="Studios" Visibility="{Binding CanHaveStudio, Converter={StaticResource BoolToVis}}" />
-                        <StackPanel x:Name="StudioDetails" Grid.Row="9" Grid.Column="1" Margin="0,4" Visibility="{Binding CanHaveStudio, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Grid.Row="10" Text="Studios" Visibility="{Binding CanHaveStudio, Converter={StaticResource BoolToVis}}" />
+                        <StackPanel x:Name="StudioDetails" Grid.Row="10" Grid.Column="1" Margin="0,4" Visibility="{Binding CanHaveStudio, Converter={StaticResource BoolToVis}}">
                             <StackPanel Orientation="Horizontal">
                                 <Button Content="Set up a game studio" Command="{Binding SetUpStudioCommand}" CommandParameter="Game" Margin="0,0,8,0"
                                         Visibility="{Binding CanSetUpGameStudio, Converter={StaticResource BoolToVis}}" />
@@ -1297,8 +1312,8 @@
                         </StackPanel>
 
                         <!-- Outside tools (Settings › Tools) set up for the project -->
-                        <TextBlock Grid.Row="10" Text="Tools" Visibility="{Binding CanHaveTools, Converter={StaticResource BoolToVis}}" />
-                        <StackPanel x:Name="ToolDetails" Grid.Row="10" Grid.Column="1" Margin="0,4" Visibility="{Binding CanHaveTools, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Grid.Row="11" Text="Tools" Visibility="{Binding CanHaveTools, Converter={StaticResource BoolToVis}}" />
+                        <StackPanel x:Name="ToolDetails" Grid.Row="11" Grid.Column="1" Margin="0,4" Visibility="{Binding CanHaveTools, Converter={StaticResource BoolToVis}}">
                             <ItemsControl ItemsSource="{Binding ToolChoices}" Focusable="False" Visibility="{Binding HasToolChoices, Converter={StaticResource BoolToVis}}">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>

@@ -433,7 +433,7 @@ public sealed partial class AppState : ObservableObject
     public void CleanUpAttachments()
     {
         var inUse = Projects.SelectMany(p => p.Attachments()).Concat(Settings.GroupAttachments())
-            .Concat(Chat.Channels.SelectMany(c => c.Messages).SelectMany(m => m.Attachments ?? []))
+            .Concat(Chat.Channels.SelectMany(ChatRoom.Files))
             .Concat(Wiki.Pages.SelectMany(p => p.Attachments ?? [])).Select(a => a.Id).ToHashSet();
         var started = DateTime.Now;
         Task.Run(() =>

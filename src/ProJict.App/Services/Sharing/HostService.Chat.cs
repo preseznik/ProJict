@@ -192,6 +192,6 @@ public sealed partial class HostService
     private Attachment? ChatAttachment(GuestSession session, Guid id)
     {
         var actor = ChatActorOf(session.Account);
-        return _state.Chat.Visible(actor).SelectMany(c => c.Messages).SelectMany(m => m.Attachments ?? []).FirstOrDefault(a => a.Id == id);
+        return _state.Chat.Visible(actor).SelectMany(ChatRoom.Files).FirstOrDefault(a => a.Id == id);
     }
 }

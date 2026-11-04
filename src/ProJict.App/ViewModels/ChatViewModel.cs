@@ -548,7 +548,7 @@ public sealed partial class ChatViewModel : ObservableObject
     {
         // A guest's shared-back channel: its messages' files are fetched to keep with yours, so they open like any other.
         if (Channel != null && Here.Host is BackChat back) _main.Host.BackFetchFiles(back, Channel.Messages.SelectMany(m => m.Attachments ?? []));
-        foreach (var name in new[] { nameof(HasChannel), nameof(Title), nameof(IsDirect), nameof(ShowJoin), nameof(IsInviteOnly), nameof(AccessText), nameof(AccessToolTip), nameof(LinkText), nameof(LinkSeparator), nameof(StartedText),
+        foreach (var name in new[] { nameof(HasChannel), nameof(Title), nameof(Icon), nameof(HasIcon), nameof(CanRemoveIcon), nameof(IsDirect), nameof(ShowJoin), nameof(IsInviteOnly), nameof(AccessText), nameof(AccessToolTip), nameof(LinkText), nameof(LinkSeparator), nameof(StartedText),
                      nameof(IsMember), nameof(IsModerator), nameof(MembersText), nameof(CanWrite), nameof(TopicText), nameof(ComposerNote),
                      nameof(CanInvite), nameof(ShowChannelPane), nameof(ShowEmptyPane), nameof(IsOwner), nameof(CanCall), nameof(CallToolTip) })
             OnPropertyChanged(name);
@@ -1328,7 +1328,10 @@ public sealed partial class ChannelChip(ChatChannel channel, MainViewModel main,
 public sealed partial class ChannelRowViewModel(ChatChannel model, ChatViewModel owner)
 {
     public ChatChannel Model => model;
-    public string Name => ChatRoom.Title(model, owner.NameIn(model));
+    /// <summary>Its icon takes the # in front of its name.</summary>
+    public string Name => HasIcon ? model.Name : ChatRoom.Title(model, owner.NameIn(model));
+    public System.Windows.Media.ImageSource? Icon { get; } = owner.IconOf(model);
+    public bool HasIcon => Icon != null;
     /// <summary>Whose ProJict a channel from another one is in ("iztok4090"), shown next to its name; null for yours.</summary>
     public string? Source => owner.PlaceOf(model).Host?.OwnerName;
     public string SourceTag => Source != null ? "· " + Source : "";
@@ -1534,6 +1537,9 @@ public sealed partial class ChatMessageViewModel : ObservableObject
     public bool IsNotice => Model.Notice;
     public string NoticeText => Model.Text;
     public WorkerBadge Badge => WorkerBadge.For([Model.By])[0];
+    /// <summary>Their picture, in the badge instead of the initials, when they have one.</summary>
+    public System.Windows.Media.ImageSource? Picture => _owner.PictureOf(Model.By);
+    public bool HasPicture => Picture != null;
     public string Time => Model.At.ToString("HH:mm", CultureInfo.CurrentCulture);
     public string WhenToolTip => Model.At.ToString("dddd d MMMM yyyy, HH:mm", CultureInfo.CurrentCulture);
     public bool IsMine => !Model.Agent && string.Equals(Model.By, _owner.NameIn(_owner.Channel), StringComparison.OrdinalIgnoreCase);

@@ -216,6 +216,11 @@ public partial class ChatView : UserControl
             menu.Items.Add(new Separator());
             menu.Items.Add(new MenuItem { Header = _vm.IsInviteOnly ? "Open it to everyone who can see its project" : "Make it invite only", Command = _vm.ToggleAccessCommand });
         }
+        if (_vm.CanSetIcon)
+        {
+            menu.Items.Add(new MenuItem { Header = "Set icon…", Command = _vm.SetIconCommand, ToolTip = "A small picture in front of the channel's name (any image: it's cut to a square)" });
+            if (_vm.CanRemoveIcon) menu.Items.Add(new MenuItem { Header = "Remove icon", Command = _vm.RemoveIconCommand });
+        }
         if (_vm.CanLink)
         {
             // What it's about: a project (it opens from there, and the project from here), or nothing in particular.

@@ -246,6 +246,7 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
                     <TextBlock Text="Your name" VerticalAlignment="Center" />
                     <TextBox x:Name="UserName" Grid.Column="1" Width="220" HorizontalAlignment="Left"
@@ -256,6 +257,17 @@
                         <TextBox x:Name="CommentFileLimit" Width="70" AutomationProperties.Name="Largest file in a comment, MB"
                                  ToolTip="The largest file you, people you share with or AI agents may post in a discussion (up to 2048 MB)" />
                         <TextBlock Text="MB each" VerticalAlignment="Center" Margin="8,0,0,0" />
+                    </StackPanel>
+                    <TextBlock Grid.Row="2" Text="Your picture" VerticalAlignment="Center" Margin="0,8,0,0" />
+                    <StackPanel x:Name="YourPicture" Grid.Row="2" Grid.Column="1" Orientation="Horizontal" Margin="0,8,0,0">
+                        <Ellipse x:Name="YourPictureImage" Width="32" Height="32" Margin="0,0,10,0" Visibility="Collapsed">
+                            <Ellipse.Fill>
+                                <ImageBrush x:Name="YourPictureBrush" Stretch="UniformToFill" />
+                            </Ellipse.Fill>
+                        </Ellipse>
+                        <Button Content="Choose…" Click="ChoosePicture_Click" VerticalAlignment="Center"
+                                ToolTip="Shown beside your messages in Chat and your comments (any image: it's cut to a square)" />
+                        <Button x:Name="RemovePicture" Content="Remove" Click="RemovePicture_Click" Margin="8,0,0,0" VerticalAlignment="Center" Visibility="Collapsed" />
                     </StackPanel>
                 </Grid>
             </StackPanel>

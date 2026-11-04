@@ -78,6 +78,9 @@ public sealed class ChatChannel
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool Suspended { get; set; }
     public ChannelLink? Link { get; set; }
+    /// <summary>The channel's small icon (a square picture), shown instead of its # in Chat; null while it has none.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Attachment? Icon { get; set; }
     public string CreatedBy { get; set; } = "";
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool CreatedByAgent { get; set; }

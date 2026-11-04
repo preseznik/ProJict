@@ -48,8 +48,16 @@
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <TextBlock x:Name="Glyph" Style="{StaticResource Icon}" Text="{Binding Glyph}" FontSize="12" Margin="0,0,6,0"
-                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                            <Grid Margin="0,0,6,0" VerticalAlignment="Center">
+                                <TextBlock x:Name="Glyph" Style="{StaticResource Icon}" Text="{Binding Glyph}" FontSize="12"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" Visibility="{Binding HasPicture, Converter={StaticResource InvBoolToVis}}" />
+                                <!-- Their picture, when they have one. -->
+                                <Ellipse x:Name="AuthorPicture" Width="18" Height="18" Visibility="{Binding HasPicture, Converter={StaticResource BoolToVis}}">
+                                    <Ellipse.Fill>
+                                        <ImageBrush ImageSource="{Binding Picture}" Stretch="UniformToFill" />
+                                    </Ellipse.Fill>
+                                </Ellipse>
+                            </Grid>
                             <TextBlock Grid.Column="1" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{Binding WhenToolTip}">
                                 <Run Text="{Binding By, Mode=OneWay}" FontWeight="SemiBold" /><Run Text="   " /><Run Text="{Binding WhenText, Mode=OneWay}" FontSize="11" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                             </TextBlock>

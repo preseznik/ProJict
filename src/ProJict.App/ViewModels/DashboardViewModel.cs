@@ -13,6 +13,9 @@ public sealed partial class ProjectCardViewModel(Project project, ProjectStats s
 {
     public Project Project { get; } = project;
     public ProjectStats Stats { get; } = stats;
+    /// <summary>Its icon, beside its name (null while it has none).</summary>
+    public System.Windows.Media.ImageSource? Icon => main.IconOf(Project);
+    public bool HasIcon => Icon != null;
 
     // Time spent and tokens reported (the project's Time tab), for the Table; worked out when first shown.
     private ProjectTime? _time;

@@ -296,7 +296,10 @@
                                     <ItemsControl ItemsSource="{Binding Workers}" ItemsPanel="{StaticResource WorkerBadgePanel}" ItemTemplate="{StaticResource WorkerBadgeTemplate}"
                                                   Focusable="False" Margin="-2,0,6,0" VerticalAlignment="Center" ToolTip="{Binding WorkersToolTip}"
                                                   Visibility="{Binding HasWorkers, Converter={StaticResource BoolToVis}}" />
-                                    <TextBlock Grid.Column="1" Text="{Binding Name}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                                    <DockPanel Grid.Column="1">
+                                        <Image Source="{Binding Icon}" Width="16" Height="16" Margin="0,0,6,0" VerticalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality" Visibility="{Binding HasIcon, Converter={StaticResource BoolToVis}}" />
+                                        <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                                    </DockPanel>
                                     <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="6,0,0,0">
                                         <TextBlock Style="{StaticResource Icon}" Text="&#xE72E;" FontSize="11" Margin="0,0,6,0" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                                    ToolTip="{x:Static vm:ProjectListItemViewModel.PrivateToolTip}" Visibility="{Binding IsPrivate, Converter={StaticResource BoolToVis}}"
@@ -312,6 +315,10 @@
                                     <Grid.ContextMenu>
                                         <ContextMenu Opened="ProjectMenu_Opened">
                                             <MenuItem Header="Rename…" Command="{Binding PlacementTarget.Tag.RenameProjectCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" />
+                                            <MenuItem Header="Set icon…" Command="{Binding PlacementTarget.Tag.SetProjectIconCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"
+                                                      ToolTip="A small picture shown beside the project's name (any image: it's cut to a square)" Visibility="{Binding IsOwn, Converter={StaticResource BoolToVis}}" />
+                                            <MenuItem Header="Remove icon" Command="{Binding PlacementTarget.Tag.RemoveProjectIconCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"
+                                                      Visibility="{Binding CanRemoveIcon, Converter={StaticResource BoolToVis}}" />
                                             <MenuItem Header="Agents" Command="{Binding PlacementTarget.Tag.ShowAgentsCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"
                                                       ToolTip="What AI agents are doing in this project, and what they did" />
                                             <MenuItem Header="{Binding ChatHeader}" Command="{Binding PlacementTarget.Tag.ProjectChatCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"

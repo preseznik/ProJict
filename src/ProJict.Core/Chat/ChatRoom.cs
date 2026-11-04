@@ -76,7 +76,7 @@ public sealed class ChatRoom
     /// <summary>What a guest gets of a channel: its newest messages, without who was kicked or what agents were given.</summary>
     public static ChatChannel ForGuest(ChatChannel channel, int messages = 300) => new()
     {
-        Id = channel.Id, Name = channel.Name, Topic = channel.Topic, Access = channel.Access, Direct = channel.Direct, Link = channel.Link,
+        Id = channel.Id, Name = channel.Name, Topic = channel.Topic, Access = channel.Access, Direct = channel.Direct, Link = channel.Link, Icon = channel.Icon,
         CreatedBy = channel.CreatedBy, CreatedByAgent = channel.CreatedByAgent, CreatedAt = channel.CreatedAt,
         Members = channel.Members, Messages = channel.Messages.Skip(Math.Max(0, channel.Messages.Count - messages)).ToList(),
     };
@@ -244,6 +244,20 @@ public sealed class ChatRoom
         AddNotice(channel, by, channel.Topic == null ? $"{by.Name} cleared the topic" : $"{by.Name} set the topic: {channel.Topic}");
         Changed?.Invoke(channel);
     }
+
+    /// <summary>The channel's icon (a square picture already stored), or none; moderators change it.</summary>
+    public void SetIcon(ChatChannel channel, ChatActor by, Attachment? icon)
+    {
+        NotDirect(channel);
+        RequireModerator(channel, by);
+        channel.Icon = icon;
+        AddNotice(channel, by, icon == null ? $"{by.Name} removed the channel's icon" : $"{by.Name} gave the channel an icon");
+        Changed?.Invoke(channel);
+    }
+
+    /// <summary>Every file in the channel: its messages' and its icon.</summary>
+    public static IEnumerable<Attachment> Files(ChatChannel channel) =>
+        channel.Messages.SelectMany(m => m.Attachments ?? []).Concat(channel.Icon is { } icon ? [icon] : []);
 
     /// <summary>What a channel is about (a project, a category or an item), or nothing in particular; moderators change it.</summary>
     /// <param name="about">How the notice names it ("DIRT2VR").</param>

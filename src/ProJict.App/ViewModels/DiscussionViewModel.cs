@@ -151,6 +151,7 @@ public sealed partial class DiscussionViewModel : ObservableObject
     /// <summary>Shows and opens the files of this discussion: the project's own, or the Inbox's (the same data folder) for a group.</summary>
     internal ProjectViewModel AttachmentOwner => _main.GetProjectViewModel(Project ?? _state.Inbox);
     internal ChatViewModel Chat => _main.Chat;
+    internal System.Windows.Media.ImageSource? PictureOf(string name) => _state.Pictures.Of(name);
 
     [RelayCommand] private void AttachFiles() => AddFiles(Pending, AskForFiles());
 
@@ -315,6 +316,9 @@ public sealed partial class CommentViewModel : ObservableObject
 
     public string By => Model.Deleted ? "" : Model.By;
     public bool IsAgent => Model.Agent;
+    /// <summary>Their picture (one you or an agent set), instead of the robot or person.</summary>
+    public System.Windows.Media.ImageSource? Picture => Model.Deleted ? null : _owner.PictureOf(Model.By);
+    public bool HasPicture => Picture != null;
     /// <summary>A robot for AI agents, a person otherwise.</summary>
     public string Glyph => Model.Agent ? "" : "";
     public string Text => Model.Deleted ? "(deleted)" : Model.Text;

@@ -51,6 +51,7 @@ public partial class SettingsWindow : Window
             box.IsChecked = s.AgentPriorities.Contains(Enum.Parse<Priority>((string)box.Tag));
         AgentInstructions.Text = s.AgentInstructions ?? "";
         UserName.Text = state.UserName;
+        ShowYourPicture();
         CommentFileLimit.Text = s.CommentFileLimitMb.ToString();
         ChatFileLimit.Text = s.ChatFileLimitMb.ToString();
         PrivateFilesDays.Text = state.AppSettings.PrivateFilesDays.ToString();
@@ -583,5 +584,38 @@ public partial class SettingsWindow : Window
         }
 
         DialogResult = true;
+    }
+
+    // ───────────── Your picture ─────────────
+
+    /// <summary>Yours, beside your messages and comments (kept like the agents' pictures, by your name).</summary>
+    private void ShowYourPicture()
+    {
+        var picture = _state.Pictures.Of(_state.UserName);
+        YourPictureBrush.ImageSource = picture;
+        YourPictureImage.Visibility = RemovePicture.Visibility = picture != null ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void ChoosePicture_Click(object sender, RoutedEventArgs e)
+    {
+        if (Services.Icons.Pick("Your picture") is not { } file) return;
+        try
+        {
+            _state.Pictures.Set(_state.UserName, file);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.IO.IOException or UnauthorizedAccessException)
+        {
+            _state.StatusText = ex.Message;
+            return;
+        }
+        _state.StatusText = "Your picture shows beside your messages and comments.";
+        ShowYourPicture();
+    }
+
+    private void RemovePicture_Click(object sender, RoutedEventArgs e)
+    {
+        _state.Pictures.Remove(_state.UserName);
+        _state.StatusText = "Your initials show beside your messages again.";
+        ShowYourPicture();
     }
 }

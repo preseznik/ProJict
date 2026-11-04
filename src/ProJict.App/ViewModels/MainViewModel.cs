@@ -42,6 +42,12 @@ public sealed partial class ProjectListItemViewModel(Project project, MainViewMo
     public bool HasCleanup => Project.OpenCleanup != null;
     public string? CleanupToolTip => Project.OpenCleanup is { } c ? $"Clean-up of the repo folder: {CleanupFlow.StateName(c.State)}" : null;
 
+    /// <summary>Its icon, beside its name (null while it has none, or another ProJict's hasn't come yet).</summary>
+    public System.Windows.Media.ImageSource? Icon => main.IconOf(Project);
+    public bool HasIcon => Icon != null;
+    /// <summary>One of yours (not another ProJict's): you can set its icon.</summary>
+    public bool IsOwn => Project.Remote == null;
+    public bool CanRemoveIcon => IsOwn && Project.Icon != null;
     /// <summary>Private: a lock next to the name, and right-click › Private ticked.</summary>
     public bool IsPrivate => Project.Private;
     /// <summary>Your own projects, not the Inbox (never shared) or one shared with you.</summary>
