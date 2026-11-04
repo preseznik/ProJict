@@ -144,6 +144,8 @@ public sealed partial class AgentTools
                     Chat.Changed += listener;
                     _state.ProjectChanged += touched;
                     SleepChanged += sleepy;
+                    // A shared thing freed or taken over too (a lease running out is found by the regular recheck).
+                    ResourcesChanged += sleepy;
                     // Other ProJicts' channels too: a message there wakes it as well.
                     rooms.AddRange(SharedRooms(identity));
                     foreach (var room in rooms) room.Changed += listener;
@@ -187,6 +189,7 @@ public sealed partial class AgentTools
                         Chat.Changed -= listener;
                         _state.ProjectChanged -= touched;
                         SleepChanged -= sleepy;
+                        ResourcesChanged -= sleepy;
                         foreach (var room in rooms) room.Changed -= listener;
                     });
                 }
@@ -241,7 +244,7 @@ public sealed partial class AgentTools
         List<McpSession> same;
         lock (_live) same = _live.Where(s => string.Equals(s.AgentName, identity.AgentName, StringComparison.OrdinalIgnoreCase)).ToList();
         foreach (var session in same) identity.Noticed.UnionWith(session.Noticed);
-        var lines = AnswerLines(identity).Select(l => "[answer] " + l).ToList();
+        var lines = AnswerNews(identity).Select(a => (a.Approval ? "[approval] " : "[answer] ") + a.Text).ToList();
         foreach (var session in same) session.Noticed.UnionWith(identity.Noticed);
         Keep(identity);
         return lines;

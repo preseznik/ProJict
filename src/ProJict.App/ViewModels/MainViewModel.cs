@@ -5,6 +5,7 @@ using System.Windows.Data;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ProJict.App.Views;
+using ProJict.Core.Agents;
 using ProJict.Core.Features;
 using ProJict.Core.Model;
 using ProJict.Core.Storage;
@@ -124,6 +125,8 @@ public sealed partial class MainViewModel : ObservableObject
         Guest = new Services.Sharing.GuestService(state, this, Sharing);
         AgentTools = new Services.AgentTools(state, this, System.Windows.Threading.Dispatcher.CurrentDispatcher);
         Calls = new Services.CallService(state, this, System.Windows.Threading.Dispatcher.CurrentDispatcher);
+        AgentTools.ResourcesChanged += RefreshResources;
+        RefreshResources();
         ApiStore = new Services.Api.ApiStore(state.PersistsSettings ? ProJict.Core.Api.ApiData.DefaultPath : null);
         Api = new Services.Api.ApiServer(AgentTools, ApiStore, () => State.Projects.Where(p => p.Remote == null).ToList(),
             Services.UpdateService.CurrentVersionText);
@@ -397,6 +400,33 @@ public sealed partial class MainViewModel : ObservableObject
     public string BrowserInUseText => BrowserInUse is { } s
         ? $"{s.Agent} is using {s.Tool.Name} in ProJict's browser" + (Browsers.Sessions.Count > 1 ? $" (and {Browsers.Sessions.Count - 1} more)." : ".")
         : "";
+
+    /// <summary>Shared things agents hold now (claim_resource, #bb95b66d): the bar at the bottom says who has what and until when, with Free.</summary>
+    public IReadOnlyList<ResourceBarItem> ResourcesHeld { get; private set; } = [];
+    public bool HasResourcesHeld => ResourcesHeld.Count > 0;
+    private System.Windows.Threading.DispatcherTimer? _resourceClock;
+
+    private void RefreshResources()
+    {
+        var now = DateTime.Now;
+        ResourcesHeld = [.. (State.Settings.SharedResources ?? []).Where(r => ResourceLocks.IsHeld(r, now)).Select(r => new ResourceBarItem(r.Name,
+            $"“{r.Name}”: {r.HeldBy}" + (r.For is { } why ? $" ({why})" : "") + $" until {ResourceLocks.UntilText(r, now)}" +
+            (r.Waiting.Count > 0 ? $" · {r.Waiting.Count} waiting" : ""),
+            ResourceLocks.IsOverdue(r, now), () => AgentTools.FreeResource(r.Name)))];
+        OnPropertyChanged(nameof(ResourcesHeld));
+        OnPropertyChanged(nameof(HasResourcesHeld));
+        // Time goes by: the minutes left (and a holder leaving for good) show without anything else happening.
+        if (HasResourcesHeld)
+        {
+            if (_resourceClock == null)
+            {
+                _resourceClock = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
+                _resourceClock.Tick += (_, _) => RefreshResources();
+            }
+            _resourceClock.Start();
+        }
+        else _resourceClock?.Stop();
+    }
 
     /// <summary>Shows the browser it's using, where you can click too (take over); closing it hides it again.</summary>
     [RelayCommand]

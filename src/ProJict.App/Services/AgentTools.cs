@@ -186,6 +186,8 @@ public sealed partial class AgentTools : IMcpToolHost
         AddToolTools();
         AddBrowserTools();
         AddCallTools();
+        AddResourceTools();
+        AddSessionTools();
         AddWorkTools();
         AddUsageTools();
         AddComfyTools();
@@ -354,9 +356,13 @@ public sealed partial class AgentTools : IMcpToolHost
         if (!_dispatcher.HasShutdownStarted)
             _dispatcher.InvokeAsync(() =>
             {
+                // Its subagents' sessions end with it (their tokens keep their names for when it's back).
+                EndSubSessions(session);
                 _main.Agents.Disconnected(session);
                 // A tool's browser it had is free for others now.
                 _main.Browsers.ReleaseHeldBy(session);
+                // Shared things it holds go after a grace time, unless it comes back (a restart of ProJict itself doesn't count).
+                ResourceHolderLeft(session.AgentName);
             });
     }
 
@@ -365,12 +371,16 @@ public sealed partial class AgentTools : IMcpToolHost
 
     public async Task<string> CallAsync(McpSession session, string name, JsonElement arguments)
     {
+        // A subagent sharing the connection calls with its session token (start_session): the call is its own.
+        if (name != "start_session" && SessionToken(arguments) is { } token)
+            session = await _dispatcher.InvokeAsync(() => SubSessionFor(session, token));
         if (session.Frozen) throw new McpToolException(FrozenMessage, ToolProblem.Forbidden);
         // What it was told lives on the UI thread, like everything else about sessions; so does its name.
         await _dispatcher.InvokeAsync(() =>
         {
             GiveNameBack(session, name);
             Recall(session);
+            ResourceHolderBack(session);
         });
         if (name == "wait_for_messages")
         {
@@ -444,6 +454,11 @@ public sealed partial class AgentTools : IMcpToolHost
     }
 
     private static bool HasOwnName(McpSession session) => session.Name != null || !string.IsNullOrWhiteSpace(session.SignAs);
+
+    /// <summary>The "session" token a call carries (start_session), if any.</summary>
+    private static string? SessionToken(JsonElement arguments) =>
+        arguments.ValueKind == JsonValueKind.Object && arguments.TryGetProperty("session", out var value) && value.ValueKind == JsonValueKind.String &&
+        value.GetString() is { Length: > 0 } token ? token : null;
 
     /// <summary>
     /// (UI thread.) A session without a name of its own gets the one its client went by in this folder before, on its
@@ -540,6 +555,7 @@ public sealed partial class AgentTools : IMcpToolHost
                 "create_channel" => $"Started {name}",
                 "read_channel" => $"Read {name}",
                 "post_message" => $"Wrote in {name}",
+                "ask_approval" => $"Asked for approval in {name}",
                 "edit_message" => args.Bool("delete") == true ? $"Deleted a message in {name}" : $"Edited a message in {name}",
                 "join_channel" => args.Bool("leave") == true ? $"Left {name}" : $"Joined {name}",
                 "invite_to_channel" => $"Invited {args.String("who")} to {name}",
@@ -834,11 +850,15 @@ public sealed partial class AgentTools : IMcpToolHost
         }
         foreach (var (project, item) in held) Edit(project, item.Id, i => i.ClaimedBy = session.AgentName);
         // The name it goes by in its folder, for when it comes back without one (#67422d19); an API token remembers its own.
-        if (session.TokenId == null) AgentFolderNames.Remember(_state.Settings, session.Client, session.WorkingDirectory, session.AgentName, DateTime.Now);
+        // A subagent's name is its token's, not the folder's.
+        if (session.Parent != null) SubSessionRenamed(session);
+        else if (session.TokenId == null) AgentFolderNames.Remember(_state.Settings, session.Client, session.WorkingDirectory, session.AgentName, DateTime.Now);
         // A name of its own goes with all its channels; the client's default name ("Claude Code") only with those it joined
         // in this session: other sessions went by that name before (#97eefe11).
         Chat.RenameMember(old, session.AgentName, former == null ? session.ConnectedAt : null);
         known[session.AgentName] = session.Client;
+        // Back under its name (the bridge replays set_name after ProJict restarts): what it holds is still its own.
+        ResourceHolderBack(session);
         _state.MarkSettingsDirty();
         _main.Agents.Renamed();
         return before != null;

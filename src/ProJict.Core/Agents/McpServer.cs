@@ -35,6 +35,13 @@ public sealed class McpSession
     public bool FolderNameChecked { get; set; }
     /// <summary>The name it had in its folder before, given back on its first call; its next tool result tells it.</summary>
     public string? NameGivenBack { get; set; }
+    /// <summary>
+    /// A subagent's session (start_session, #5ba6f2b2): the connection it shares with its lead agent. Calls that carry its
+    /// token act as it; it ends with that connection.
+    /// </summary>
+    public McpSession? Parent { get; set; }
+    /// <summary>A subagent session's token, hashed (the token itself is only ever in the agent's hands).</summary>
+    public string? TokenHash { get; set; }
 
     /// <summary>The name it signs with, whatever the client calls itself, until it picks one: an API token's name.</summary>
     public string? SignAs { get; init; }

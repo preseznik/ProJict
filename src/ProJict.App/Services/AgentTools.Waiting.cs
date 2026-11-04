@@ -67,6 +67,8 @@ public sealed partial class AgentTools
             if (session.Noticed.Add(key)) lines.Add(line);
         foreach (var (key, line) in ListenLines(session))
             if (session.Noticed.Add(key)) lines.Add(line);
+        foreach (var (key, line) in ResourceLines(session))
+            if (session.Noticed.Add(key)) lines.Add(line);
         // Said to each session it's given back to (a tip, so not kept across restarts like news).
         if (session.NameGivenBack is { } given && session.Noticed.Add($"tip:name-given-back:{given}"))
             lines.Add($"You're {given} again: the name you picked in this folder before, which ProJict keeps across restarts and updates. " +

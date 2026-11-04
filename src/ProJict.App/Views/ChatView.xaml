@@ -289,6 +289,38 @@
                                        Visibility="{Binding EditedText, Converter={StaticResource EmptyToVis}}" />
                             <ItemsControl ItemsSource="{Binding Attachments}" ItemTemplateSelector="{StaticResource ChatFile}" ItemsPanel="{StaticResource Wrap}"
                                           Focusable="False" Margin="0,4,0,0" Visibility="{Binding HasAttachments, Converter={StaticResource BoolToVis}}" />
+                            <!-- What it asks to approve (ask_approval): Approve and Decline until someone answers, then who did -->
+                            <Border x:Name="ApprovalBox" Margin="0,5,0,0" Padding="10,7" CornerRadius="6" HorizontalAlignment="Left" MaxWidth="560"
+                                    Background="{DynamicResource SubtleFillColorSecondaryBrush}" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}" BorderThickness="1"
+                                    Visibility="{Binding AsksApproval, Converter={StaticResource BoolToVis}}">
+                                <StackPanel>
+                                    <TextBlock TextWrapping="Wrap">
+                                        <Run Text="Asks to approve: " Foreground="{DynamicResource TextFillColorSecondaryBrush}" /><Run Text="{Binding Approval, Mode=OneWay}" FontWeight="SemiBold" />
+                                    </TextBlock>
+                                    <StackPanel Orientation="Horizontal" Margin="0,7,0,0" Visibility="{Binding CanDecide, Converter={StaticResource BoolToVis}}">
+                                        <Button x:Name="ApproveButton" Style="{StaticResource AccentButtonStyle}" Content="Approve" Padding="14,4" Command="{Binding ApproveCommand}"
+                                                ToolTip="Lets the agent do exactly this" />
+                                        <Button x:Name="DeclineButton" Content="Decline" Padding="14,4" Margin="6,0,0,0" Command="{Binding DeclineCommand}"
+                                                ToolTip="The agent won't do it" />
+                                    </StackPanel>
+                                    <TextBlock x:Name="DecisionLine" Text="{Binding DecisionText}" FontSize="12" Margin="0,4,0,0"
+                                               Visibility="{Binding DecisionText, Converter={StaticResource EmptyToVis}}">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsApproved}" Value="True">
+                                                        <Setter Property="Foreground" Value="{DynamicResource SystemFillColorSuccessBrush}" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding IsDeclined}" Value="True">
+                                                        <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </StackPanel>
+                            </Border>
                             <!-- Thumbs given: a yes or no to the message -->
                             <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
                                 <Button Style="{StaticResource SubtleButton}" Padding="6,1" Margin="0,0,4,0" Command="{Binding ThumbUpCommand}" ToolTip="{Binding UpsToolTip}"

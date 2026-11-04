@@ -17,7 +17,7 @@ public sealed partial class AgentTools
 {
     private const int MaxWaitSeconds = 60;
     private static readonly HashSet<string> ChatTools =
-        ["list_channels", "create_channel", "read_channel", "post_message", "edit_message", "join_channel", "invite_to_channel", "moderate_channel", "wait_for_messages"];
+        ["list_channels", "create_channel", "read_channel", "post_message", "ask_approval", "edit_message", "join_channel", "invite_to_channel", "moderate_channel", "wait_for_messages"];
     /// <summary>Chat's tools, for an API token that may only use Chat.</summary>
     public static IReadOnlySet<string> ChatToolNames => ChatTools;
 
@@ -56,6 +56,16 @@ public sealed partial class AgentTools
                 ("attachments", "string[]", "Files to post with it, e.g. a screenshot or a build (absolute paths or relative to your working directory), " +
                  "each up to the user's limit for Chat (500 MB unless they changed it).", false)),
             PostMessage, filesArgument: "attachments");
+        Add("ask_approval", "Ask for approval",
+            "Asks a person in Chat to approve one change you name, before you make it (commit, push, delete, spend…). The message gets Approve and Decline " +
+            "buttons; a 👍 or 👎 on it answers too, and the first person to answer decides. You're told \"approved\" or \"declined\" for exactly what you " +
+            "named (your chat watcher prints [approval] …), and nothing else counts as approval: a 👍 on any other message is just agreement with it. " +
+            "Do nothing of it before you're told. One change per question.",
+            Schema(ChannelArg, ("asks", "string", $"Exactly what you'll do once approved, as a short line (up to {ChatRoom.MaxApproval} characters), " +
+                                                  "e.g. \"commit #9113ea6a (not pushed)\" or \"delete the 3 old test builds\".", true),
+                ("text", "string", "The message, if you want to say more than the request (it's shown above it).", false),
+                ("reply_to", "string", "Id of the message you answer; it's quoted.", false)),
+            AskApproval);
         Add("edit_message", "Edit or delete a chat message",
             "Changes the text of your own message, or deletes it (moderators can delete anyone's).",
             Schema(ChannelArg, ("id", "string", "The message id.", true), ("text", "string", "The new text.", false),
@@ -77,8 +87,9 @@ public sealed partial class AgentTools
                 ("topic", "string", "For set_topic: the new topic (empty clears it).", false)),
             ModerateChannel);
         Add("wait_for_messages", "Wait for chat messages",
-            $"Listens for new chat messages for you: in channels you're in, or anywhere you're @mentioned; and for 👍/👎 answers to your own " +
-            $"messages (answers: a 👍 means yes, take it as approval; a 👎 means no). Returns at once when some wait, else as soon as one arrives, " +
+            $"Listens for new chat messages for you: in channels you're in, or anywhere you're @mentioned; for the answers to what you asked with " +
+            $"ask_approval (approved or declined); and for 👍/👎 on your other messages (agreement or disagreement with them, never approval). " +
+            $"Returns at once when some wait, else as soon as one arrives, " +
             $"or empty after the time given (at most {MaxWaitSeconds} s). Call it again to keep listening.",
             Schema(("seconds", "integer", $"How long to wait (default and most {MaxWaitSeconds}).", false),
                 ("channel", "string", "Only this channel.", false)),
@@ -243,6 +254,30 @@ public sealed partial class AgentTools
             result["note"] = "That was long for a chat channel. Keep messages short and conversational: a few sentences, one point at a time. " +
                              "Put details in the item's discussion (add_comment) or a note (write_doc) and link it, or go on privately with post_message to @name.";
         return Json(result);
+    }
+
+    /// <summary>A message asking a person to approve one named change (#848d7643): Approve and Decline buttons, and only its answer counts.</summary>
+    private string AskApproval(McpSession session, Args args, List<Attachment> files)
+    {
+        RequireChat();
+        RequireOwnName(session, "ask");
+        if (SharedChannelFor(session, args) is not null)
+            throw new McpToolException("Ask for approval in this ProJict's own channels, or privately with post_message to @name; another ProJict's channels can't take it yet.");
+        var channel = ChannelFor(session, args, start: true);
+        var asks = args.Required("asks").Trim();
+        Guid? replyTo = args.String("reply_to") is { } r
+            ? (ChatRoom.FindMessage(channel, r.Trim()) ?? throw new McpToolException($"No message {r} in #{channel.Name}.", ToolProblem.NotFound)).Id
+            : null;
+        var text = args.String("text") is { } said && said.Trim().Length > 0 ? said : $"May I {asks}?";
+        var message = Chatting(() => Chat.Post(channel, ActorOf(session), text, replyTo, approval: asks));
+        session.Noticed.Add($"chat:{message.Id}");
+        return Json(new JsonObject
+        {
+            ["id"] = ShortId(message.Id),
+            ["channel"] = Display(channel, session),
+            ["asks"] = message.Approval,
+            ["next"] = "Wait for the answer: you'll be told when it's approved or declined (your chat watcher prints [approval] …). Do nothing of it before.",
+        });
     }
 
     private static bool IsWallOfText(string text) =>
@@ -454,10 +489,39 @@ public sealed partial class AgentTools
     /// 👍 and 👎 others gave the agent's messages, each once: a yes or no to what it asked or said, so nobody has to type it.
     /// "iztok answered yes (👍) to your message “Shall I ship 1.4?” in #grid2vr".
     /// </summary>
-    private List<string> AnswerLines(McpSession session) =>
-        [.. NewAnswers(session).ToList().Where(a => session.Noticed.Add(a.Key)).Select(a =>
-            $"{a.Reaction.By} answered {(a.Reaction.Up ? "yes (👍)" : "no (👎)")} to your message “{Short(OneLine(a.Message.Text))}” in {Display(a.Channel, session)}" +
-            $" (id {ShortId(a.Message.Id)}): take it as {(a.Reaction.Up ? "approval" : "a decline")}.")];
+    private List<string> AnswerLines(McpSession session) => [.. AnswerNews(session).Select(a => a.Text)];
+
+    /// <summary>
+    /// What others answered to the agent's messages, each once: a person's decision on what it asked to approve
+    /// (ask_approval, #848d7643), and 👍 or 👎 on its other messages, which are agreement or disagreement with what they say,
+    /// not a go-ahead for anything.
+    /// </summary>
+    private List<(bool Approval, string Text)> AnswerNews(McpSession session)
+    {
+        var news = new List<(bool, string)>();
+        foreach (var (channel, message, decision, key) in NewDecisions(session).ToList())
+            if (session.Noticed.Add(key))
+                news.Add((true, decision.Approved
+                    ? $"{decision.By} approved what you asked in {Display(channel, session)} (id {ShortId(message.Id)}): “{message.Approval}”. Go ahead with that, and only that."
+                    : $"{decision.By} declined what you asked in {Display(channel, session)} (id {ShortId(message.Id)}): “{message.Approval}”. Don't do it; ask them what they'd like instead if it isn't clear."));
+        foreach (var a in NewAnswers(session).ToList())
+            if (session.Noticed.Add(a.Key))
+                news.Add((false, $"{a.Reaction.By} gave {(a.Reaction.Up ? "👍" : "👎")} to your message “{Short(OneLine(a.Message.Text))}” in {Display(a.Channel, session)}" +
+                                 $" (id {ShortId(a.Message.Id)}): {(a.Reaction.Up ? "agreement" : "disagreement")} with what it says, not a go-ahead for anything else" +
+                                 " (ask for one with ask_approval)."));
+        return news;
+    }
+
+    /// <summary>Decisions on what the agent asked to approve that it hasn't heard about yet.</summary>
+    private IEnumerable<(ChatChannel Channel, ChatMessage Message, ChatDecision Decision, string Key)> NewDecisions(McpSession session)
+    {
+        var since = DateTime.Now - AnswersKeptFor;
+        foreach (var channel in Chat.Visible(ActorOf(session)))
+            foreach (var m in channel.Messages)
+                if (m.Decision is { } decision && decision.At > since && string.Equals(m.By, session.AgentName, StringComparison.OrdinalIgnoreCase) &&
+                    $"approval:{m.Id}" is var key && !session.Noticed.Contains(key))
+                    yield return (channel, m, decision, key);
+    }
 
     /// <summary>👍 and 👎 on the agent's messages that it hasn't heard about yet (in one channel, or in all it sees).</summary>
     private IEnumerable<(ChatChannel Channel, ChatMessage Message, ChatReaction Reaction, string Key)> NewAnswers(McpSession session, ChatChannel? only = null)
@@ -466,7 +530,7 @@ public sealed partial class AgentTools
         foreach (var channel in Chat.Visible(ActorOf(session)).Where(c => only == null || c == only))
             foreach (var m in channel.Messages)
             {
-                if (m.Reactions == null || !string.Equals(m.By, session.AgentName, StringComparison.OrdinalIgnoreCase)) continue;
+                if (m.Reactions == null || m.Approval != null || !string.Equals(m.By, session.AgentName, StringComparison.OrdinalIgnoreCase)) continue;
                 foreach (var r in m.Reactions.Where(r => r.At > since))
                     if ($"answer:{m.Id}:{r.By}:{r.Up}:{r.At.Ticks}" is var key && !session.Noticed.Contains(key)) yield return (channel, m, r, key);
             }
@@ -559,6 +623,8 @@ public sealed partial class AgentTools
             ["mentionsYou"] = ChatRoom.Mentions(channel, m, you) ? true : null,
             ["yes"] = m.Reactions?.Any(r => r.Up) == true ? new JsonArray(m.Reactions.Where(r => r.Up).Select(r => (JsonNode)r.By).ToArray()) : null,
             ["no"] = m.Reactions?.Any(r => !r.Up) == true ? new JsonArray(m.Reactions.Where(r => !r.Up).Select(r => (JsonNode)r.By).ToArray()) : null,
+            ["asksApproval"] = m.Approval,
+            ["approval"] = m.Approval == null ? null : m.Decision is { } d ? (d.Approved ? "approved by " : "declined by ") + d.By : "waiting",
             ["attachments"] = m.Attachments is { Count: > 0 } files ? Paths(files) : null,
         };
     }

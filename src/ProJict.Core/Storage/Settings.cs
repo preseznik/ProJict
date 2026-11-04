@@ -275,6 +275,10 @@ public sealed class WorkspaceSettings
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public Dictionary<string, AgentFolder>? AgentFolders { get; set; }
 
+    /// <summary>Shared things agents take turns with, such as a test PC (claim_resource, #bb95b66d); null while none.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public List<SharedResource>? SharedResources { get; set; }
+
     /// <summary>Agents that can't make their own picture and asked another agent to (set_picture wanted=true); null while none.</summary>
     public List<string>? PicturesWanted { get; set; }
 

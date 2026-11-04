@@ -1226,6 +1226,14 @@ public sealed partial class ChatViewModel : ObservableObject
         }
     }
 
+    /// <summary>Approve or Decline what a message asks: your 👍 or 👎 on it, which a question takes as your answer (the first one decides).</summary>
+    internal void Decide(ChatMessageViewModel message, bool approve)
+    {
+        if (!message.CanDecide) return;
+        // A thumb the other way would be taken back by the same click, not given: give this one.
+        React(message, approve);
+    }
+
     /// <summary>👍 or 👎 on a message (the same again takes it back); an agent hears it as a yes or no to what it wrote.</summary>
     internal void React(ChatMessageViewModel message, bool up)
     {
@@ -1615,6 +1623,20 @@ public sealed partial class ChatMessageViewModel : ObservableObject
     public string DownsToolTip => "No: " + string.Join(", ", Model.Reactions?.Where(r => !r.Up).Select(r => r.By) ?? []);
     [RelayCommand] private void ThumbUp() => _owner.React(this, true);
     [RelayCommand] private void ThumbDown() => _owner.React(this, false);
+
+    // What the message asks to approve (ask_approval, #848d7643): Approve and Decline until a person answers, then who did.
+    public bool AsksApproval => Model.Approval != null && !Model.Deleted;
+    public string? Approval => Model.Approval;
+    /// <summary>It waits for an answer, and you may give it (it isn't yours, and you can write here).</summary>
+    public bool CanDecide => AsksApproval && Model.Decision == null && CanReact;
+    public bool WaitsForAnswer => AsksApproval && Model.Decision == null;
+    public string? DecisionText => Model.Decision is { } d
+        ? $"{(d.Approved ? "Approved" : "Declined")} by {d.By} · {d.At.ToString(d.At.Date == DateTime.Today ? "HH:mm" : "d MMM HH:mm", System.Globalization.CultureInfo.CurrentCulture)}"
+        : CanDecide ? null : "Waiting for an answer";
+    public bool IsApproved => Model.Decision is { Approved: true };
+    public bool IsDeclined => Model.Decision is { Approved: false };
+    [RelayCommand] private void Approve() => _owner.Decide(this, true);
+    [RelayCommand] private void Decline() => _owner.Decide(this, false);
 
     [RelayCommand] private void Reply() => _owner.StartReply(this);
     [RelayCommand] private void Edit() => _owner.StartEdit(this);
