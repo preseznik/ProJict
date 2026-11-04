@@ -37,7 +37,8 @@ public sealed partial class ProjectViewModel : ObservableObject
         Project = project;
         _sideBySide = state.Settings.SideBySide;
         _hideEmpty = state.Settings.HideEmptyCategories;
-        _sort = state.Settings.ItemSort;
+        _sortByPriority = state.Settings.SortByPriority;
+        _categorySort = state.Settings.CategorySort;
         RebuildAll();
         ReloadSideLists();
         RefreshPublish();
@@ -483,41 +484,54 @@ public sealed partial class ProjectViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(PriorityButtonText), nameof(IsPriorityViewActive))]
     private PriorityFilterOption _priorityFilter = PriorityFilters[0];
 
-    /// <summary>
-    /// How open items are listed: in their own order, most pressing first, by name, or newest or oldest first (only on
-    /// screen: their own order, used by exports, stays).
-    /// </summary>
+    /// <summary>Open items are listed most pressing first (only on screen: their own order, used by exports, stays).</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(PriorityButtonText), nameof(IsPriorityViewActive), nameof(SortByPriority))]
-    private BoardSort _sort;
+    [NotifyPropertyChangedFor(nameof(PriorityButtonText), nameof(IsPriorityViewActive))]
+    private bool _sortByPriority;
 
-    /// <summary>Open items are listed most pressing first.</summary>
-    public bool SortByPriority
-    {
-        get => Sort == BoardSort.Priority;
-        set => Sort = value ? BoardSort.Priority : BoardSort.Board;
-    }
+    /// <summary>The categories are shown by name, or newest or oldest added first (only on screen: their own order stays).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PriorityButtonText), nameof(IsPriorityViewActive))]
+    private CategorySort _categorySort;
 
     partial void OnPriorityFilterChanged(PriorityFilterOption value) => ApplyFilter();
 
-    partial void OnSortChanged(BoardSort value)
+    partial void OnSortByPriorityChanged(bool value)
     {
-        _state.Settings.ItemSort = value;
+        _state.Settings.SortByPriority = value;
         _state.MarkSettingsDirty();
         foreach (var c in Categories) c.Refresh();
         ApplyFilter();
     }
 
-    public bool IsPriorityViewActive => Sort != BoardSort.Board || PriorityFilter is { IsActive: true };
+    partial void OnCategorySortChanged(CategorySort value)
+    {
+        _state.Settings.CategorySort = value;
+        _state.MarkSettingsDirty();
+        RebuildAll();
+    }
 
-    /// <summary>The toolbar button's label: what the board is filtered or sorted by.</summary>
+    public bool IsPriorityViewActive => SortByPriority || CategorySort != CategorySort.Board || PriorityFilter is { IsActive: true };
+
+    /// <summary>The toolbar button's label: what the board is filtered or sorted by ("High and up, by priority, categories by name").</summary>
     public string PriorityButtonText
     {
         get
         {
-            var filter = PriorityFilter is { IsActive: true } f ? f.Label : null;
-            var sorted = Sort == BoardSort.Board ? null : BoardSorting.Label(Sort);
-            return filter != null ? sorted != null ? $"{filter}, {sorted.ToLowerInvariant()}" : filter : sorted ?? "Priority";
+            string?[] parts =
+            [
+                PriorityFilter is { IsActive: true } f ? f.Label : null,
+                SortByPriority ? "by priority" : null,
+                CategorySort switch
+                {
+                    CategorySort.Name => "categories by name",
+                    CategorySort.Newest => "newest categories first",
+                    CategorySort.Oldest => "oldest categories first",
+                    _ => null,
+                },
+            ];
+            var text = string.Join(", ", parts.OfType<string>());
+            return text.Length == 0 ? "Priority" : char.ToUpperInvariant(text[0]) + text[1..];
         }
     }
 
@@ -534,11 +548,19 @@ public sealed partial class ProjectViewModel : ObservableObject
         };
     }
 
-    /// <summary>Reordering by hand doesn't mix with a sorted board; true (with a hint) when it's sorted.</summary>
+    /// <summary>Reordering by hand doesn't mix with a board sorted by priority; true (with a hint) when it's sorted.</summary>
     private bool SortedByPriority()
     {
-        if (Sort == BoardSort.Board) return false;
-        _state.StatusText = $"The board is sorted ({BoardSorting.Label(Sort).ToLowerInvariant()}); pick Priority › Board order to reorder items.";
+        if (!SortByPriority) return false;
+        _state.StatusText = "The board is sorted by priority; turn that off (Priority › Sort items by priority) to reorder items.";
+        return true;
+    }
+
+    /// <summary>Moving categories by hand doesn't mix with sorted categories; true (with a hint) when they are.</summary>
+    private bool CategoriesSorted()
+    {
+        if (CategorySort == CategorySort.Board) return false;
+        _state.StatusText = $"The categories are sorted ({CategorySorting.Label(CategorySort).ToLowerInvariant()}); pick Priority › Sort categories › Board order to move them.";
         return true;
     }
 
@@ -586,7 +608,7 @@ public sealed partial class ProjectViewModel : ObservableObject
     public void RebuildAll()
     {
         var existing = Categories.ToDictionary(c => c.Model);
-        var list = Project.Categories.Select(c => existing.TryGetValue(c, out var vm) ? vm : new CategoryViewModel(this, c)).ToList();
+        var list = Project.Categories.Sorted(CategorySort).Select(c => existing.TryGetValue(c, out var vm) ? vm : new CategoryViewModel(this, c)).ToList();
         foreach (var vm in list.Where(v => existing.ContainsKey(v.Model))) vm.Refresh();
         if (!Categories.SequenceEqual(list))
         {
@@ -946,7 +968,7 @@ public sealed partial class ProjectViewModel : ObservableObject
     public void MoveCategory(CategoryViewModel category, int delta)
     {
         var target = Project.Categories.IndexOf(category.Model) + delta;
-        if (target < 0 || target >= Project.Categories.Count || Refused(EditKind.Edit)) return;
+        if (target < 0 || target >= Project.Categories.Count || CategoriesSorted() || Refused(EditKind.Edit)) return;
         Checkpoint();
         BoardEdits.MoveCategory(Project, category.Model, target);
         Touch();
@@ -958,7 +980,7 @@ public sealed partial class ProjectViewModel : ObservableObject
     {
         var index = Project.Categories.IndexOf(category.Model);
         var target = top ? 0 : Project.Categories.Count - 1;
-        if (index < 0 || index == target || Refused(EditKind.Edit)) return;
+        if (index < 0 || index == target || CategoriesSorted() || Refused(EditKind.Edit)) return;
         Checkpoint();
         BoardEdits.MoveCategory(Project, category.Model, target);
         Touch();
@@ -967,7 +989,7 @@ public sealed partial class ProjectViewModel : ObservableObject
 
     public void MoveCategoryTo(CategoryViewModel category, CategoryViewModel target)
     {
-        if (category == target || Refused(EditKind.Edit)) return;
+        if (category == target || CategoriesSorted() || Refused(EditKind.Edit)) return;
         Checkpoint();
         BoardEdits.MoveCategoryBefore(Project, category.Model, target.Model);
         Touch();

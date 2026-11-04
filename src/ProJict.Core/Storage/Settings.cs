@@ -215,23 +215,14 @@ public sealed class WorkspaceSettings
 
     /// <summary>The files posted in the groups' discussions (kept here, not in a project).</summary>
     public IEnumerable<Attachment> GroupAttachments() => (GroupComments ?? []).Values.SelectMany(threads => threads.Attachments());
-    /// <summary>The board lists open items by priority (most pressing first) instead of in their own order (kept for older ProJicts: see <see cref="BoardSort"/>).</summary>
+    /// <summary>The board lists open items by priority (most pressing first) instead of in their own order.</summary>
     public bool SortByPriority { get; set; }
-    /// <summary>How the board lists open items: in their own order, or by priority, name or date added.</summary>
+    /// <summary>How the board orders its categories: as you arranged them, or by name or when they were added.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public CategorySort CategorySort { get; set; }
+    /// <summary>0.1.41's one sort for the items; read once into <see cref="SortByPriority"/> and <see cref="CategorySort"/>.</summary>
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
     public BoardSort BoardSort { get; set; }
-
-    /// <summary>How the board lists open items now, also when an older ProJict only set <see cref="SortByPriority"/>.</summary>
-    [System.Text.Json.Serialization.JsonIgnore]
-    public BoardSort ItemSort
-    {
-        get => BoardSort == BoardSort.Board && SortByPriority ? BoardSort.Priority : BoardSort;
-        set
-        {
-            BoardSort = value;
-            SortByPriority = value == BoardSort.Priority;
-        }
-    }
     public bool MarkCopiedInProgress { get; set; }
     /// <summary>The priorities of items AI agents may work on (None = items without one); items on hold never. See AgentAccess.</summary>
     public List<Priority> AgentPriorities { get; set; } = [.. AgentAccess.DefaultPriorities];
@@ -298,6 +289,18 @@ public sealed class WorkspaceSettings
             HiddenProjects = HiddenProjects.Union(old).ToList();
             SidebarHiddenProjects = null;
         }
+        // 0.1.41 sorted the items by name or date too: those sort the categories now; by priority still sorts the items.
+        switch (BoardSort)
+        {
+            case BoardSort.Priority:
+                SortByPriority = true;
+                break;
+            case BoardSort.Name or BoardSort.Newest or BoardSort.Oldest:
+                SortByPriority = false;
+                CategorySort = BoardSort switch { BoardSort.Name => CategorySort.Name, BoardSort.Newest => CategorySort.Newest, _ => CategorySort.Oldest };
+                break;
+        }
+        BoardSort = BoardSort.Board;
     }
 
     /// <summary>Puts Personal and Work back if a hand-edited workspace.json dropped them, and drops blanks and duplicates.</summary>

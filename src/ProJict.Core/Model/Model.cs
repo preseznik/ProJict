@@ -243,8 +243,17 @@ public sealed class Attachment
 
 public sealed class Category
 {
+    /// <summary>A new category, added now.</summary>
+    public Category() => CreatedAt = DateTime.Now;
+
+    /// <summary>One read from a file: when it was added, if it says (categories from before 0.1.42 don't).</summary>
+    [JsonConstructor]
+    public Category(DateTime? createdAt) => CreatedAt = createdAt;
+
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Name { get; set; } = "";
+    /// <summary>When it was added; null for categories from before ProJict noted it (see CategorySorting.AddedAt).</summary>
+    public DateTime? CreatedAt { get; set; }
     /// <summary>Text after the header, e.g. "CHARACTERS - need to more prominently feature this".</summary>
     public string? Description { get; set; }
     public bool Collapsed { get; set; }

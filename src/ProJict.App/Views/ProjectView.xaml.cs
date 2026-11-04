@@ -193,13 +193,20 @@ public partial class ProjectView : UserControl
     {
         if (_vm is not { } vm) return;
         var menu = new ContextMenu { PlacementTarget = PriorityButton, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom };
-        // How open items are listed, then which priorities show.
-        foreach (var sort in Core.Features.BoardSorting.All)
-            menu.Items.Add(new MenuItem
+        // How the items and the categories are listed, then which priorities show.
+        menu.Items.Add(new MenuItem
+        {
+            Header = "Sort items by priority", IsChecked = vm.SortByPriority,
+            Command = new CommunityToolkit.Mvvm.Input.RelayCommand(() => vm.SortByPriority = !vm.SortByPriority),
+        });
+        var categories = new MenuItem { Header = "Sort categories" };
+        foreach (var sort in Core.Features.CategorySorting.All)
+            categories.Items.Add(new MenuItem
             {
-                Header = Core.Features.BoardSorting.Label(sort), IsChecked = vm.Sort == sort,
-                Command = new CommunityToolkit.Mvvm.Input.RelayCommand(() => vm.Sort = sort),
+                Header = Core.Features.CategorySorting.Label(sort), IsChecked = vm.CategorySort == sort,
+                Command = new CommunityToolkit.Mvvm.Input.RelayCommand(() => vm.CategorySort = sort),
             });
+        menu.Items.Add(categories);
         menu.Items.Add(new Separator());
         foreach (var option in ProjectViewModel.PriorityFilters)
             menu.Items.Add(new MenuItem

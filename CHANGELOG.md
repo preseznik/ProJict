@@ -2,6 +2,7 @@
 
 ## 0.1.43
 
+- **Sorting by name or date sorts the categories.** 0.1.41's **By name** and date sorts sorted the items inside each category, while the categories stayed in their order, so a board "sorted by name" didn't look it. Now the **Priority** button has **Sort categories** (Board order, By name (A–Z), Newest first, Oldest first), and **Sort items by priority** as before, separately; the button says both ("By priority, categories by name"). Categories now note when they're added; older ones go by their oldest item. A board sorted by name or date in 0.1.41 shows its categories so.
 - **A browser tool stays with an agent that renames itself.** An agent that opened Suno before it picked its name, then picked one, was refused its own browser ("Claude Code is using it"), and closing it didn't let it go. Now a tool's browser goes with the agent's connection, whatever it's called, and comes free when the agent closes it or disconnects.
 
 ## 0.1.42 (2026-11-03)
