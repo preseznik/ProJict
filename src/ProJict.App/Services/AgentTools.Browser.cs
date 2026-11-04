@@ -62,7 +62,7 @@ public sealed partial class AgentTools
     /// <summary>The tool's browser for the agent (started if it isn't running), or why it can't have it now.</summary>
     private async Task<BrowserSession> BrowserFor(McpSession session, ExternalTool tool)
     {
-        try { return await _main.Browsers.TakeAsync(tool, session.AgentName, DateTime.Now); }
+        try { return await _main.Browsers.TakeAsync(tool, session, DateTime.Now); }
         catch (BrowserException ex) { throw new McpToolException(ex.Message); }
     }
 
@@ -156,7 +156,7 @@ public sealed partial class AgentTools
     private string BrowserClose(McpSession session, Args args, List<Attachment> files)
     {
         var tool = BrowserTool(args);
-        if (_main.Browsers.SessionOf(tool) is { } browser && string.Equals(browser.Agent, session.AgentName, StringComparison.OrdinalIgnoreCase))
+        if (_main.Browsers.SessionOf(tool) is { } browser && BrowserService.IsHeldBy(browser, session))
             _main.Browsers.Release(browser);
         return Json(new JsonObject { ["tool"] = tool.Name, ["closed"] = true });
     }

@@ -5,6 +5,7 @@ using System.Text.Json.Nodes;
 using System.Windows.Interop;
 using System.Windows.Threading;
 using Microsoft.Web.WebView2.Core;
+using ProJict.Core.Agents;
 using ProJict.Core.Tools;
 
 namespace ProJict.App.Services;
@@ -12,7 +13,8 @@ namespace ProJict.App.Services;
 /// <summary>
 /// ProJict's browser for agents (Settings › Tools, a tool in the browser such as Suno or Tripo3D): for each tool a
 /// browser nobody sees, with the tool's own profile, where you signed in yourself (Sign in…). One agent at a time
-/// uses a tool's browser; it's let go after <see cref="IdleFor"/> without use, or when you Stop it. Used on the UI thread.
+/// uses a tool's browser, by its connection (so a name it picks meanwhile keeps it); it's let go when the agent closes it
+/// or disconnects, after <see cref="IdleFor"/> without use, or when you Stop it. Used on the UI thread.
 /// </summary>
 public sealed class BrowserService(ToolService tools, Dispatcher dispatcher)
 {
@@ -21,7 +23,7 @@ public sealed class BrowserService(ToolService tools, Dispatcher dispatcher)
 
     private readonly Dictionary<Guid, BrowserSession> _sessions = [];
     /// <summary>Agents whose browser you stopped, by tool: told once, on their next call.</summary>
-    private readonly Dictionary<Guid, string> _stopped = [];
+    private readonly Dictionary<Guid, McpSession> _stopped = [];
 
     public IReadOnlyCollection<BrowserSession> Sessions => _sessions.Values;
     /// <summary>A browser opened, closed, changed hands or finished a download.</summary>
@@ -31,25 +33,26 @@ public sealed class BrowserService(ToolService tools, Dispatcher dispatcher)
 
     public BrowserSession? SessionOf(ExternalTool tool) => _sessions.GetValueOrDefault(tool.Id);
 
+    /// <summary>The agent has it: the same connection, or the same name (it connected again since).</summary>
+    public static bool IsHeldBy(BrowserSession session, McpSession agent) =>
+        session.Holder == agent || string.Equals(session.Agent, agent.AgentName, StringComparison.OrdinalIgnoreCase);
+
     /// <summary>
     /// The tool's browser for this agent, started if it isn't running. Refused while another agent has used it within
     /// <see cref="IdleFor"/>; an agent whose browser you stopped hears so once.
     /// </summary>
-    public async Task<BrowserSession> TakeAsync(ExternalTool tool, string agent, DateTime now)
+    public async Task<BrowserSession> TakeAsync(ExternalTool tool, McpSession agent, DateTime now)
     {
-        if (_stopped.TryGetValue(tool.Id, out var stoppedFor) && string.Equals(stoppedFor, agent, StringComparison.OrdinalIgnoreCase))
+        if (_stopped.TryGetValue(tool.Id, out var stoppedFor) && (stoppedFor == agent || string.Equals(stoppedFor.AgentName, agent.AgentName, StringComparison.OrdinalIgnoreCase)))
         {
             _stopped.Remove(tool.Id);
             throw new BrowserException($"The user stopped your use of {tool.Name}'s browser. Ask them before using it again.");
         }
         if (_sessions.TryGetValue(tool.Id, out var session))
         {
-            if (!string.Equals(session.Agent, agent, StringComparison.OrdinalIgnoreCase))
-            {
-                if (now - session.LastUsed < IdleFor)
-                    throw new BrowserException($"{session.Agent} is using {tool.Name}'s browser right now. Try again later, or ask {session.Agent} in Chat when it's done.");
-                session.Agent = agent;
-            }
+            if (!IsHeldBy(session, agent) && now - session.LastUsed < IdleFor)
+                throw new BrowserException($"{session.Agent} is using {tool.Name}'s browser right now. Try again later, or ask {session.Agent} in Chat when it's done.");
+            session.Holder = agent;
             session.LastUsed = now;
             Changed?.Invoke();
             return session;
@@ -77,8 +80,14 @@ public sealed class BrowserService(ToolService tools, Dispatcher dispatcher)
     /// <summary>You stopped it (Stop on the bar): it's closed, and the agent is told on its next call.</summary>
     public void Stop(BrowserSession session)
     {
-        _stopped[session.Tool.Id] = session.Agent;
+        _stopped[session.Tool.Id] = session.Holder;
         Release(session);
+    }
+
+    /// <summary>The agent disconnected: the browsers it had are closed, for others to use.</summary>
+    public void ReleaseHeldBy(McpSession agent)
+    {
+        foreach (var session in _sessions.Values.Where(s => s.Holder == agent).ToList()) Release(session);
     }
 
     /// <summary>Closes the browsers nobody has used for <see cref="IdleFor"/>.</summary>
@@ -124,16 +133,19 @@ public sealed class BrowserSession : IDisposable
     private CoreWebView2Controller? _controller;
     private TaskCompletionSource<bool>? _loading;
 
-    internal BrowserSession(ExternalTool tool, string agent, string downloads, DateTime now)
+    internal BrowserSession(ExternalTool tool, McpSession holder, string downloads, DateTime now)
     {
         Tool = tool;
-        Agent = agent;
+        Holder = holder;
         DownloadFolder = downloads;
         LastUsed = now;
     }
 
     public ExternalTool Tool { get; }
-    public string Agent { get; set; }
+    /// <summary>The agent using it, by its connection: a name it picks meanwhile keeps the browser.</summary>
+    public McpSession Holder { get; internal set; }
+    /// <summary>The name that agent goes by now.</summary>
+    public string Agent => Holder.AgentName;
     public DateTime LastUsed { get; set; }
     public string DownloadFolder { get; }
     /// <summary>Where what's downloaded goes: the item it's for (set by browser_open), else the downloads folder.</summary>

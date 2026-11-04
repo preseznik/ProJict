@@ -350,7 +350,13 @@ public sealed partial class AgentTools : IMcpToolHost
     public void SessionEnded(McpSession session)
     {
         lock (_live) _live.Remove(session);
-        if (!_dispatcher.HasShutdownStarted) _dispatcher.InvokeAsync(() => _main.Agents.Disconnected(session));
+        if (!_dispatcher.HasShutdownStarted)
+            _dispatcher.InvokeAsync(() =>
+            {
+                _main.Agents.Disconnected(session);
+                // A tool's browser it had is free for others now.
+                _main.Browsers.ReleaseHeldBy(session);
+            });
     }
 
     /// <summary>What a frozen API token is told whatever it asks.</summary>

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.43
+
+- **A browser tool stays with an agent that renames itself.** An agent that opened Suno before it picked its name, then picked one, was refused its own browser ("Claude Code is using it"), and closing it didn't let it go. Now a tool's browser goes with the agent's connection, whatever it's called, and comes free when the agent closes it or disconnects.
+
 ## 0.1.42 (2026-11-03)
 
 - **A shared project's test build, on your other computer.** A project's test build is a file on the computer that built it, so a ProJict connected to it saw the path but couldn't run it. Now its test build under the project's name (and **Details → Test build**) has **Get it** there: the host's ProJict sends the file over, the way big Chat files go, with how far it got on the button, and then **Run** starts it. A folder comes as a zip of it. It's kept in `%LocalAppData%\ProJict\Test builds`, and a newer test build replaces the older one. The host sends only the test build of a project it shares with you, and says so when it isn't there any more. Both ProJicts need 0.1.42.
