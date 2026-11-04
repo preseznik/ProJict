@@ -679,7 +679,10 @@ public sealed class ApiServer
             _ => ApiToolSets.Always.Contains(name) || custom?.Contains(name) == true,
         };
 
-        public string Instructions => tools.InstructionsFor(remote: true) +
+        public string Instructions => tools.InstructionsFor(remote: true, more: ApiPart.Length) + ApiPart;
+
+        /// <summary>What an agent over the API is told besides ProJict's own instructions.</summary>
+        private string ApiPart =>
             " You're connected to the user's ProJict over the network with an API token, signing with its name: say which project with \"project\" " +
             "(there's no working directory), send files as objects with \"name\" and \"data\" (base64), and download attachments from their url " +
             "with the same Authorization header. Files on your computer aren't reachable from there: send them." + (!readOnly ? ""

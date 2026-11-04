@@ -50,6 +50,7 @@ public sealed partial class AgentTools : IMcpToolHost
         _dispatcher = dispatcher;
         _noticed = new NoticedStore(state.PersistsSettings ? NoticedStore.DefaultPath : null, state.Store.DataRoot);
 
+        AddStartTools();
         Add("list_projects", "List projects", "All projects with their repo folder, GitHub link and item counts.",
             Schema(), ListProjects, readOnly: true);
         Add("current_project", "Current project",
@@ -271,62 +272,6 @@ public sealed partial class AgentTools : IMcpToolHost
 
     private AgentRules RulesFor(Project project) =>
         new(project, AgentAccess.Governing(project), project.Remote != null ? HostOf(project)?.AgentPriorities ?? [] : AgentPriorities);
-
-    public string Instructions => InstructionsFor(remote: false);
-
-    /// <summary>What agents are told when they connect; over the API (remote) they watch Chat over HTTP, not with ProJict.exe.</summary>
-    public string InstructionsFor(bool remote) =>
-        "ProJict is the user's to-do list app: projects contain categories, categories contain items (with sub-items, tags such as BUG or ADD, " +
-        "attachments, discussions, and a state: todo, in_progress or done). To work on items: current_project (or list_projects) to find the project, " +
-        "list_items to see what is open, claim_item to check an item out before you start (other agents then can't change it), then complete_item " +
-        "with a short resolution and evidence such as screenshots (and the tokens and cost you used, if you can tell; ProJict counts your time from " +
-        "the check-out). Everything you do is signed with your name: when you start, pick a short name " +
-        "of your own with set_name (one word, e.g. Ada), the same one as before if you had one here, so your earlier work stays yours; " +
-        "set_label says what you're working on. Everything you complete waits for the user's review, so only complete what you really finished; use " +
-        "update_item with state todo if you stop. The user decides which items agents may work on, by priority (current_project says which); " +
-        "the others and items on hold are off limits: list_items leaves them out, and you may read and comment on them but not check them out, " +
-        "change or complete them. Ask the user questions or report progress with add_comment (offering options? give them as choices, which the user " +
-        "answers with a click), and check list_comments for their " +
-        "answers. File problems you notice with add_item, choosing each one's priority, and put documentation or reports for people in a note with write_doc. " +
-        "Knowledge that lasts (architecture, how things work, decisions) goes in the wiki: list_wiki, read_wiki and write_wiki (a whole page, or a section by heading, " +
-        "in Markdown with [[Page name]] links); pass the version you read so your change merges with others', and what you write waits for the user's review. " +
-        "Keep a project's details (repo folder, GitHub link, description, instructions, how it's shipped) up to date with update_project, and set its test_build when you make a build worth trying (the user runs it from the project page). " +
-        "When you start a longer step (running tests, a build, a bigger change), tell the user with set_status; it shows live in ProJict. " +
-        "Items with a gitHubIssue stand for that GitHub issue: mention \"Fixes #<number>\" in the commit or pull request that resolves one. " +
-        "When a project shows a shipRequest, the user wants it committed, built, packaged, pushed or released: read it with ship_request, post your " +
-        "plan with plan_ship and wait for their approval in ProJict; only then run the steps, report each with report_ship and end with finish_ship " +
-        "(record a published release with draft_release save=true). " +
-        "Videos (a film studio's Publisher) are published through a publish plan: post it with plan_publish (title, description, tags, playlists, " +
-        "when, and 2–4 thumbnails to choose from) and wait for the user's decision; publish only an approved plan, with the text and thumbnail it " +
-        "then has (publish_plan), and end with finish_publish. " +
-        "When a result says asleep, the user put every agent to sleep: finish what you're doing, then stop and stay idle until you're told you're " +
-        "woken (claim_item is refused meanwhile). " +
-        "When a project shows a studio (a game or film studio; it can have both), the user hires agents to its roles: if you have one, work as it expects, and agree with the " +
-        "team in the studio's channel who takes what, volunteering for what suits your model and tools. A role's first agent is its senior, the others " +
-        "juniors who agree with it what they take. If you're its lead, you hire too: talk with the agents not hired there yet first, then hire_to_role. And if " +
-        "the user lets the lead review wiki pages, you're told which pages wait for you: accept them or send them back with review_wiki. " +
-        "Outside tools the user set up for agents (such as ElevenLabs, Suno, or ffmpeg on this computer) are in list_tools; use_tool_key gets one's API key once the user allows it, " +
-        "browser_open opens a tool used in the browser in ProJict's own browser (where the user signed in), " +
-        "and run_workflow runs a workflow on the user's ComfyUI server, attaching what it makes to an item. " +
-        "If you can tell how much of your usage you've used, say so with report_usage. " +
-        "When a project shows a cleanupRequest, the user wants its repo folder cleaned up: read it with cleanup_request, scan the folder and post your plan " +
-        "with plan_cleanup; ProJict moves what they approve to the Recycle Bin, so never remove files yourself, and do no other work there until it's decided. " +
-        "The user and agents also talk live in Chat #channels (list_channels, join_channel to read one, read_channel, post_message, create_channel), and privately: " +
-        "post_message to channel @name writes to the user or an agent only. Keep Chat human. " + ChatStyle + " To listen, call " +
-        "wait_for_messages. What waits for you shows in a tool result's waitingForYou list, each thing once: chat invitations, @mentions and new " +
-        "messages, private ones included (read them with read_channel and reply with post_message: say hello when invited, and answer what you're asked, or say you " +
-        "can't now), the user's comments on items you worked on (answer with add_comment), work the user sent back (get_item for why, then " +
-        "claim_item to work on it again), ship requests and clean-up requests in your project. Deal with them before going on, or say why not. " +
-        "Between tool calls nothing reaches you, so if your client can run a command in the background and tell you about each line it prints " +
-        "(Claude Code's Monitor tool, for one), start a chat watcher once you've picked your name and keep it running: " +
-        (remote
-            ? $"GET {ProJict.Core.Api.ApiRoutes.Base}/chat/watch on this server with your Authorization header (e.g. curl -sN) "
-            : $"{WatchCommand("<your name>")} ") +
-        "prints a line for each chat message for you, as it comes, so you can answer while you're idle or busy with other things. " +
-        "Projects another ProJict shares with this one are reachable too, and so are its #channels (named like #hud (Sam's)): list_projects " +
-        "says what you may do there; what you do there is signed with your name and the user's, like Ada (via Alice). " +
-        "Ids (items, comments and messages) may be shortened to their first 8 characters." +
-        (ForAllAgents is { } mine ? " The user's instructions for all agents, in every project (a project's own instructions add to them): " + mine : "");
 
     /// <summary>The user's instructions for every agent in every project (Settings › AI agents); null when there are none.</summary>
     private string? ForAllAgents => _state.Settings.AgentInstructions?.Trim() is { Length: > 0 } text ? text : null;
@@ -670,21 +615,27 @@ public sealed partial class AgentTools : IMcpToolHost
                                           "Pass \"project\" to the other tools, or ask the user to set the project's local repo folder in ProJict (Details tab).",
                 ToolProblem.NotFound);
         _main.Agents.WorkingIn(session, match.Project);
-        var json = WithStudio(ProjectJson(match.Project), match.Project, session);
-        json["matchedBy"] = match.How;
-        if (ProjectToolsJson(match.Project) is { } tools)
+        return Json(ProjectBrief(session, match.Project, match.How));
+    }
+
+    /// <summary>A project as current_project and get_started describe it: its details, instructions, rules for agents, shipping and categories.</summary>
+    private JsonObject ProjectBrief(McpSession session, Project project, string matchedBy)
+    {
+        var json = WithStudio(ProjectJson(project), project, session);
+        json["matchedBy"] = matchedBy;
+        if (ProjectToolsJson(project) is { } tools)
         {
             json["tools"] = tools;
             json["toolsNote"] = "Outside tools set up for this project; list_tools says how to reach each (use_tool_key gets an API key, with the user's OK; run_workflow runs a ComfyUI workflow).";
         }
         if (ForAllAgents is { } forAll) json["instructionsForAllAgents"] = forAll;
-        if (!string.IsNullOrWhiteSpace(match.Project.PromptPreamble)) json["instructions"] = match.Project.PromptPreamble.Trim();
-        json["agentsMayWorkOn"] = (AgentAccess.Describe(RulesFor(match.Project).Allowed) ?? "no items at the moment (you can still read, comment and add items)") +
+        if (!string.IsNullOrWhiteSpace(project.PromptPreamble)) json["instructions"] = project.PromptPreamble.Trim();
+        json["agentsMayWorkOn"] = (AgentAccess.Describe(RulesFor(project).Allowed) ?? "no items at the moment (you can still read, comment and add items)") +
                                   "; never items on hold";
-        if (!string.IsNullOrWhiteSpace(match.Project.Description)) json["description"] = match.Project.Description.Trim();
-        if (!match.Project.IsInbox)
+        if (!string.IsNullOrWhiteSpace(project.Description)) json["description"] = project.Description.Trim();
+        if (!project.IsInbox)
         {
-            var shipping = ShipFlow.SettingsOf(match.Project);
+            var shipping = ShipFlow.SettingsOf(project);
             json["shipping"] = new JsonObject
             {
                 ["steps"] = new JsonArray(shipping.Steps.Select(s => (JsonNode)ShipFlow.Name(s)).ToArray()),
@@ -693,13 +644,13 @@ public sealed partial class AgentTools : IMcpToolHost
                 ["changedBy"] = shipping.ChangedBy,
             };
         }
-        json["categories"] = new JsonArray(match.Project.Categories.Select(c => (JsonNode)new JsonObject
+        json["categories"] = new JsonArray(project.Categories.Select(c => (JsonNode)new JsonObject
         {
             ["name"] = c.Name,
             ["open"] = c.Items.Count(i => !i.IsDone),
             ["done"] = c.Items.Count(i => i.IsDone),
         }).ToArray());
-        return Json(json);
+        return json;
     }
 
     private const int MaxDetailLength = 20000;
