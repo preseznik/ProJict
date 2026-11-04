@@ -37,7 +37,7 @@ public sealed partial class AgentTools
             _ => throw new McpToolException($"Nothing at {method} /api/v1/{string.Join('/', parts)}. A phone's token reaches: GET /me, GET /me/waiting, " +
                                              "POST /me/approvals/{message}, POST /me/ship/{project}, POST /me/reviews/{item}, GET /me/projects, " +
                                              "POST /me/projects/{project}/items, POST /me/items/{item}/comments, GET /me/channels, GET /me/channels/{channel}, " +
-                                             "POST /me/channels/{channel}/messages.", ToolProblem.NotFound),
+                                             "POST /me/channels/{channel}/messages, GET /me/watch.", ToolProblem.NotFound),
         };
     }
 

@@ -450,6 +450,12 @@ public sealed class ApiServer
             await Problem(context, 403, AgentTools.FrozenMessage);
             return;
         }
+        if (path.Equals("/me/watch", StringComparison.OrdinalIgnoreCase))
+        {
+            if (method != "GET") await NotAllowed(context, "GET");
+            else await WatchMeAsync(context, token);
+            return;
+        }
         if (method is not ("GET" or "POST"))
         {
             await NotAllowed(context, "GET, POST");
@@ -561,6 +567,34 @@ public sealed class ApiServer
         catch (Exception ex) when (ex is OperationCanceledException or IOException or ObjectDisposedException)
         {
             // The client went away, or the token can't watch any more.
+        }
+        finally
+        {
+            lock (_lock) _watches.Remove((token, watch));
+        }
+    }
+
+    /// <summary>/me/watch: a JSON line per thing that waits for you, until the phone goes away or the token is frozen, renewed or revoked.</summary>
+    private async Task WatchMeAsync(HttpContext context, ApiToken token)
+    {
+        var response = context.Response;
+        response.StatusCode = 200;
+        response.ContentType = "application/x-ndjson; charset=utf-8";
+        response.Headers.CacheControl = "no-store";
+        using var watch = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted);
+        var stop = watch.Token;
+        lock (_lock) _watches.Add((token, watch));
+        try
+        {
+            await _tools.WatchMeAsync(async line =>
+            {
+                await response.WriteAsync(line + "\n", stop);
+                await response.Body.FlushAsync(stop);
+            }, stop);
+        }
+        catch (Exception ex) when (ex is OperationCanceledException or IOException or ObjectDisposedException)
+        {
+            // The phone went away, or the token can't watch any more.
         }
         finally
         {

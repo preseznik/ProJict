@@ -151,6 +151,7 @@ claude mcp add --transport http projict http://127.0.0.1:47614/mcp --header "Aut
   - `POST /me/approvals/{message}` and `POST /me/ship/{project}` with `{"approve": true|false}`; `POST /me/reviews/{item}` with `{"accept": true}`, or `{"accept": false, "reason": "…"}` to send it back (the reason becomes your comment).
   - `GET /me/projects` (with their categories), `POST /me/projects/{project}/items` with `{"category", "text", "priority"}`, `POST /me/items/{item}/comments` with `{"text"}`.
   - `GET /me/channels` (yours, with what's unread), `GET /me/channels/{channel}?limit=&before=` (which marks it read), `POST /me/channels/{channel}/messages` with `{"text", "replyTo"}`. A channel is its id, `#name`, or `@name` for a private conversation.
+  - `GET /me/watch`: a stream, a JSON line per event (`{"type", "at", "data"}`). `waiting` gives the counts when it starts and whenever they change. `message` is a new message to you in one of your channels or private conversations, with its channel and whether it mentions you. `ping` comes after 30 quiet seconds, so the phone knows the stream is alive.
 
   It can't use agents' endpoints or MCP, and agents' tokens can't use `/me`.
 - **Protection:** web pages in a browser can't call the API, an address that sends 10 wrong tokens is locked out for 15 minutes, and a token may make up to 600 requests a minute.
