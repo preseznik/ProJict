@@ -233,7 +233,7 @@ public sealed partial class FeedViewModel : ObservableObject
         if (e.DiscussionTargetId is { } target && project.HasDiscussionTarget(target)) project.OpenDiscussion(target);
         if (e.Release != null)
         {
-            project.SelectedTab = 2;
+            project.SelectedTab = ProjectViewModel.ReleasesTab;
             project.SelectedRelease = project.Releases.FirstOrDefault(r => r.Id == e.Release.Id);
         }
         if (e.Note != null) project.RevealNote(e.Note);

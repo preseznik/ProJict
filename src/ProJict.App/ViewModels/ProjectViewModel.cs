@@ -42,6 +42,7 @@ public sealed partial class ProjectViewModel : ObservableObject
         RebuildAll();
         ReloadSideLists();
         RefreshPublish();
+        RefreshTests();
         state.ProjectReplaced += p =>
         {
             if (p != Project) return;
@@ -390,6 +391,7 @@ public sealed partial class ProjectViewModel : ObservableObject
         RefreshIssueSync();
         RefreshShip();
         RefreshPublish();
+        RefreshTests();
         RefreshTestBuild();
         RefreshCleanup();
         RefreshStudio();
@@ -403,6 +405,9 @@ public sealed partial class ProjectViewModel : ObservableObject
     [ObservableProperty] private bool _showDone;
     [ObservableProperty] private bool _sideBySide;
     [ObservableProperty] private int _selectedTab;
+
+    // The project's tabs, in their order (SelectedTab).
+    public const int BoardTab = 0, TestsTab = 1, NotesTab = 2, ReleasesTab = 3, ArchiveTab = 4, DetailsTab = 5, TimeTab = 6;
 
     partial void OnFilterTextChanged(string value) => ApplyFilter();
     partial void OnTagFilterChanged(string value) => ApplyFilter();
@@ -1976,7 +1981,7 @@ public sealed partial class ProjectViewModel : ObservableObject
     {
         if (!string.IsNullOrWhiteSpace(Project.RepoPath) && Directory.Exists(Project.RepoPath)) return true;
         _state.StatusText = "Set an existing local repo folder in the Details tab first.";
-        SelectedTab = 4;
+        SelectedTab = DetailsTab;
         return false;
     }
 
@@ -1990,7 +1995,7 @@ public sealed partial class ProjectViewModel : ObservableObject
         if (string.IsNullOrWhiteSpace(Project.GitHubUrl))
         {
             _state.StatusText = "Set the GitHub URL in the Details tab first.";
-            SelectedTab = 4;
+            SelectedTab = DetailsTab;
             return;
         }
         Try(() => ShellLauncher.OpenUrl(Project.GitHubUrl));
@@ -2081,7 +2086,7 @@ public sealed partial class ProjectViewModel : ObservableObject
         if (window.ShowDialog() != true) return;
         ReloadSideLists();
         RebuildAll();
-        SelectedTab = 2;
+        SelectedTab = ReleasesTab;
     }
 
     [RelayCommand]
@@ -2131,7 +2136,7 @@ public sealed partial class ProjectViewModel : ObservableObject
 
     public void RevealNote(NoteDoc note)
     {
-        SelectedTab = 1;
+        SelectedTab = NotesTab;
         SelectedNote = Notes.FirstOrDefault(n => n.Model == note);
     }
 

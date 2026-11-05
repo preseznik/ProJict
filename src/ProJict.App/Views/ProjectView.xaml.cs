@@ -38,6 +38,7 @@ public partial class ProjectView : UserControl
             _vm.FocusAddItemRequested -= OnFocusAddItem;
             _vm.FocusAddItemAtRequested -= OnFocusAddItemAt;
             _vm.PropertyChanged -= OnVmPropertyChanged;
+            _vm.TestRevealRequested -= OnTestReveal;
             _vm.CaretOf = null;
             _vm.TypingNewItem = null;
         }
@@ -48,6 +49,7 @@ public partial class ProjectView : UserControl
             _vm.FocusAddItemRequested += OnFocusAddItem;
             _vm.FocusAddItemAtRequested += OnFocusAddItemAt;
             _vm.PropertyChanged += OnVmPropertyChanged;
+            _vm.TestRevealRequested += OnTestReveal;
             _vm.CaretOf = id => FindRowTextBox(id) is { IsKeyboardFocused: true } box ? box.CaretIndex : null;
             _vm.TypingNewItem = () => Keyboard.FocusedElement is TextBox { Uid: "AddItem", DataContext: CategoryViewModel category } box && box.IsDescendantOf(this)
                 ? (category.Model.Id, box.CaretIndex) : null;
@@ -58,6 +60,41 @@ public partial class ProjectView : UserControl
     private void OnVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(ProjectViewModel.BigHeaderButtons)) ArrangeHeaderButtons();
+    }
+
+    // ───────────── To test (#09a108b5) ─────────────
+
+    /// <summary>From an item's "to test" chip: its test card comes into view once the tab shows.</summary>
+    private void OnTestReveal(TestCardViewModel card) =>
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () => (TestList.ItemContainerGenerator.ContainerFromItem(card) as FrameworkElement)?.BringIntoView());
+
+    private void TestAddFiles_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not TestCardViewModel card) return;
+        var dialog = new Microsoft.Win32.OpenFileDialog { Title = "Files for your answer", Multiselect = true };
+        if (dialog.ShowDialog(Window.GetWindow(this)) == true) _ = card.AddFiles(dialog.FileNames);
+    }
+
+    /// <summary>In the note: Ctrl+V with a screenshot or files adds them, Ctrl+Enter sends, Esc cancels.</summary>
+    private void TestNote_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not TestCardViewModel card) return;
+        if (e.Key == Key.V && Keyboard.Modifiers == ModifierKeys.Control && card.CanAddFiles && !Clipboard.ContainsText() &&
+            (Clipboard.ContainsImage() || Clipboard.ContainsFileDropList()))
+        {
+            card.PasteFilesCommand.Execute(null);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Enter && Keyboard.Modifiers == ModifierKeys.Control)
+        {
+            card.SendDoesntWorkCommand.Execute(null);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape)
+        {
+            card.CancelNoteCommand.Execute(null);
+            e.Handled = true;
+        }
     }
 
     // ───────────── Header buttons ─────────────

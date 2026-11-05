@@ -111,7 +111,9 @@ public sealed partial class AgentTools : IMcpToolHost
             Schema(IdArg, ("resolution", "string", "What you did, for the user.", true),
                 ("attachments", "string[]", "Files to attach, e.g. screenshots or logs (absolute paths or relative to your working directory).", false),
                 ("tokens", "integer", "Tokens you used on it, if you can tell (they add up in the project's Time tab).", false),
-                ("cost", "string", "What it cost in dollars, if you can tell, e.g. 1.40.", false), ForceArg),
+                ("cost", "string", "What it cost in dollars, if you can tell, e.g. 1.40.", false),
+                ("test", "string", "Optional: ask the user to try it by hand, in a few short steps (as ask_to_test: it shows in the project's To test tab).", false),
+                ("test_expected", "string", "What should happen in that test.", false), ForceArg),
             CompleteItem, filesArgument: "attachments");
         Add("add_item", "Add item", "Adds a new item, e.g. a bug you found. The category is created if it doesn't exist.",
             Schema(ProjectArg, ("text", "string", "The item text; a prefix like \"BUG: \" becomes its tag.", true),
@@ -194,6 +196,7 @@ public sealed partial class AgentTools : IMcpToolHost
         AddComfyTools();
         AddCleanupTools();
         AddPublishTools();
+        AddTestTools();
         AddMediaTools();
         AddPictureTools();
         AddStudioTools();
@@ -577,6 +580,9 @@ public sealed partial class AgentTools : IMcpToolHost
             "plan_publish" => $"Planned publishing “{Short(args.String("title") ?? "")}”",
             "publish_plan" => "Read a publish plan",
             "finish_publish" => args.String("outcome") == "published" ? "Published a video" : "Couldn't publish a video",
+            "ask_to_test" => $"Asked you to test {what}",
+            "list_tests" => "Looked at the tests",
+            "close_test" => "Closed a test",
             _ => tool.Replace('_', ' '),
         };
         Remember(session, new AgentAction(DateTime.Now, text, project?.Id, item?.Id, tool));
@@ -940,6 +946,17 @@ public sealed partial class AgentTools : IMcpToolHost
         session.Claimed.Remove(loc.Item.Id);
         _state.StatusText = $"{agent} finished “{Short(loc.Item.Text)}” ({project.Name}); it waits for your review.";
         var result = new JsonObject { ["id"] = ShortId(loc.Item.Id), ["state"] = "done", ["needsReview"] = true, ["attached"] = files.Count };
+        // And a test for the user to try by hand (#09a108b5), in this ProJict's own projects.
+        if (args.String("test") is { Length: > 0 } steps)
+        {
+            if (project.Remote != null) result["test"] = "Not asked: tests are for the user of the ProJict a project belongs to, and this one is shared with you.";
+            else
+            {
+                // It's finished either way: a test that can't be asked says why, without failing the finish.
+                try { result["test"] = ShortId(AskTest(session, project, loc.Item, steps, args.String("test_expected"), []).Id); }
+                catch (McpToolException ex) { result["test"] = "Not asked: " + ex.Message; }
+            }
+        }
         var open = loc.Item.Descendants().Count(d => !d.IsDone);
         if (open > 0) result["note"] = $"{open} sub-item(s) are still open; complete or update them separately.";
         return Json(result);

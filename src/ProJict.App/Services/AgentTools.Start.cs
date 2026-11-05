@@ -172,7 +172,8 @@ public sealed partial class AgentTools
             "What waits for you shows in a tool result's waitingForYou list, each thing once: chat invitations, @mentions and new messages, private " +
             "ones included (read them with read_channel and reply with post_message: say hello when invited, and answer what you're asked, or say " +
             "you can't now), the user's comments on items you worked on (answer with add_comment), work the user sent back (get_item for why, then " +
-            "claim_item to work on it again), ship requests and clean-up requests in your project. Deal with them before going on, or say why not.",
+            "claim_item to work on it again), the user's answers to your tests, ship requests and clean-up requests in your project. Deal with them " +
+            "before going on, or say why not.",
         ["chat"] =
             "The user and agents also talk live in Chat #channels (list_channels, join_channel to read one, read_channel, post_message, " +
             "create_channel), and privately: post_message to channel @name writes to the user or an agent only. Only one agent answers a " +
@@ -184,6 +185,11 @@ public sealed partial class AgentTools
             "To get the user's go-ahead for one change (a commit, a push, deleting or spending something), ask with ask_approval in Chat, naming " +
             "exactly that change; the message gets Approve and Decline. Do nothing of it before you're told \"approved\" (in a result, or [approval] " +
             "from your chat watcher). A 👍 on any other message is only agreement, not approval. One change per question.",
+        ["testing"] =
+            "When something needs a person to try it by hand (a UI change, a build on their machine), ask with ask_to_test on the item you have " +
+            "checked out or finished (or complete_item's test): a few short steps, what should happen, and files if they help. It waits in the " +
+            "project's To test tab; the user's answer (it works, or it doesn't with a note and files) comes to you like an approval, and if it doesn't " +
+            "work on finished work, the item comes back to you. list_tests shows them; if one is settled elsewhere (in Chat), close it with close_test.",
         ["sharedMachines"] =
             "Shared things only one agent should use at a time (a test PC, a GPU, a game install, a device) are claimed with claim_resource, by " +
             "the name others use (list_resources shows them), for about how long you need it; claim it again to extend it, and release_resource " +

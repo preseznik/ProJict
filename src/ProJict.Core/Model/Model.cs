@@ -396,6 +396,9 @@ public sealed class Project
     public List<ShipRequest>? Ships { get; set; }
     /// <summary>Videos' publish plans, oldest first (the last few are kept); null while there were none. Not part of undo.</summary>
     public List<PublishPlan>? Publishes { get; set; }
+    /// <summary>What agents ask you to try by hand (#09a108b5), oldest first; null while none. Not part of undo.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<TestRequest>? Tests { get; set; }
     /// <summary>On a guest: the ProJict this project is shown from. Such projects live only in memory and are never saved here.</summary>
     [JsonIgnore] public RemoteOrigin? Remote { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.Now;
@@ -455,6 +458,7 @@ public sealed class Project
             Shipping = snapshot.Shipping;
             Ships = snapshot.Ships;
             Publishes = snapshot.Publishes;
+            Tests = snapshot.Tests;
             TestBuild = snapshot.TestBuild;
             Cleanups = snapshot.Cleanups;
             Studio = snapshot.Studio;

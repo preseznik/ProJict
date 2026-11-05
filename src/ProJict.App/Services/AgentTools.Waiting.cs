@@ -104,6 +104,11 @@ public sealed partial class AgentTools
                               "claim_item to work on it again, or add_comment to ask.");
             }
 
+        // Your answers to its tests (#09a108b5), in any of this ProJict's projects.
+        foreach (var project in LocalProjects)
+            foreach (var (key, line) in TestLines(session, project))
+                if (session.Noticed.Add(key)) lines.Add(line);
+
         foreach (var id in projects ?? _main.Agents.ProjectsOf(session))
         {
             if (LocalProjects.FirstOrDefault(p => p.Id == id) is not { } project) continue;

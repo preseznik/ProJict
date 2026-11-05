@@ -220,6 +220,13 @@
                                 <TextBlock Text="review" Style="{StaticResource ChipText}" />
                             </Border>
                         </Button>
+                        <!-- An agent asks you to try it by hand (#09a108b5): the To test tab -->
+                        <Button x:Name="TestChip" Style="{StaticResource SubtleButton}" Padding="0" Command="{Binding ShowTestCommand}" ToolTip="{Binding TestToolTip}"
+                                AutomationProperties.Name="To test" Visibility="{Binding HasTest, Converter={StaticResource BoolToVis}}">
+                            <Border Style="{StaticResource TagChip}" Background="{DynamicResource AccentFillColorDefaultBrush}" Margin="0">
+                                <TextBlock Text="to test" Style="{StaticResource ChipText}" />
+                            </Border>
+                        </Button>
                         <Border Style="{StaticResource TagChip}" Background="{DynamicResource AccentFillColorDefaultBrush}"
                                 Visibility="{Binding ReleaseText, Converter={StaticResource EmptyToVis}}" ToolTip="Included in this release">
                             <TextBlock Text="{Binding ReleaseText}" Style="{StaticResource ChipText}" />
@@ -1001,6 +1008,115 @@
                     <TextBlock Grid.Row="2" Style="{StaticResource MutedText}" FontSize="11" Margin="6,6,0,0" TextWrapping="Wrap"
                                Text="Right-click an item, or point at it for its discussion and ⋯ buttons · Enter new item · Shift+Enter new line · Tab / Shift+Tab indent · Ctrl+Enter done · Ctrl+I in progress · Alt+1…5 priority · Alt+↑↓ move · Ctrl+Space select for prompt · Ctrl+Shift+Del delete · Ctrl+Z undo" />
                 </Grid>
+            </TabItem>
+
+            <!-- To test (#09a108b5): what agents ask you to try by hand; Works or Doesn't work (with a note and files) tells them -->
+            <TabItem x:Name="TestsTab">
+                <TabItem.Header>
+                    <TextBlock Text="{Binding TestsHeader}" />
+                </TabItem.Header>
+                <ScrollViewer x:Name="TestsScroll" VerticalScrollBarVisibility="Auto" Margin="0,8,0,0" Padding="0,0,8,0">
+                    <StackPanel MaxWidth="900" HorizontalAlignment="Left">
+                        <TextBlock Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="2,0,0,10" FontSize="13"
+                                   Visibility="{Binding HasTests, Converter={StaticResource InvBoolToVis}}"
+                                   Text="Nothing to test. When an AI agent asks you to try something by hand, it shows here: what to do, and what should happen." />
+                        <ItemsControl x:Name="TestList" ItemsSource="{Binding TestCards}" Focusable="False">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:TestCardViewModel}">
+                                    <Border Style="{StaticResource Card}" Padding="14,10" Margin="0,0,0,10">
+                                        <StackPanel>
+                                            <DockPanel>
+                                                <TextBlock DockPanel.Dock="Right" Text="{Binding AskedText}" Style="{StaticResource MutedText}" Margin="12,0,0,0" VerticalAlignment="Top" />
+                                                <Button Style="{StaticResource SubtleButton}" Padding="0" HorizontalAlignment="Left" Command="{Binding ShowItemCommand}"
+                                                        ToolTip="Show it on the board" AutomationProperties.Name="Show the item">
+                                                    <TextBlock Text="{Binding ItemText}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                                </Button>
+                                            </DockPanel>
+                                            <TextBlock Text="Try this" Style="{StaticResource MutedText}" Margin="0,8,0,2" />
+                                            <TextBox Text="{Binding Steps, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" BorderThickness="0" Background="Transparent" Padding="0"
+                                                     AutomationProperties.Name="What to try" />
+                                            <StackPanel Visibility="{Binding HasExpected, Converter={StaticResource BoolToVis}}">
+                                                <TextBlock Text="It should" Style="{StaticResource MutedText}" Margin="0,8,0,2" />
+                                                <TextBox Text="{Binding Expected, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" BorderThickness="0" Background="Transparent" Padding="0"
+                                                         AutomationProperties.Name="What should happen" />
+                                            </StackPanel>
+                                            <ItemsControl ItemsSource="{Binding Files}" ItemTemplateSelector="{StaticResource AttachmentTemplate}" ItemsPanel="{StaticResource WrapItems}"
+                                                          Focusable="False" Margin="0,8,0,0" Visibility="{Binding HasFiles, Converter={StaticResource BoolToVis}}" />
+                                            <!-- Your answer -->
+                                            <StackPanel Orientation="Horizontal" Margin="0,10,0,0" Visibility="{Binding ShowsButtons, Converter={StaticResource BoolToVis}}">
+                                                <Button x:Name="WorksButton" Content="Works" Style="{StaticResource AccentButtonStyle}" MinWidth="90" Command="{Binding MarkWorksCommand}"
+                                                        ToolTip="Tell the agent it works (the work's review stays yours)" />
+                                                <Button x:Name="DoesntWorkButton" Content="Doesn't work…" MinWidth="110" Margin="8,0,0,0" Command="{Binding StartDoesntWorkCommand}"
+                                                        ToolTip="Say what went wrong, with screenshots if they help" />
+                                            </StackPanel>
+                                            <Border Margin="0,10,0,0" Padding="10,8" CornerRadius="6" Background="{DynamicResource SubtleFillColorSecondaryBrush}"
+                                                    Visibility="{Binding IsWritingNote, Converter={StaticResource BoolToVis}}">
+                                                <StackPanel>
+                                                    <TextBlock Text="What went wrong?" FontWeight="SemiBold" />
+                                                    <TextBox x:Name="TestNote" Text="{Binding NoteDraft, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" TextWrapping="Wrap"
+                                                             MinHeight="60" MaxHeight="200" VerticalScrollBarVisibility="Auto" Margin="0,6,0,0" AutomationProperties.Name="What went wrong"
+                                                             PreviewKeyDown="TestNote_PreviewKeyDown" />
+                                                    <TextBlock Text="{Binding DraftFilesText}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,6,0,0"
+                                                               Visibility="{Binding HasDraftFiles, Converter={StaticResource BoolToVis}}" />
+                                                    <TextBlock Text="{Binding DoesntWorkHint}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,6,0,0" />
+                                                    <DockPanel Margin="0,8,0,0">
+                                                        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Visibility="{Binding CanAddFiles, Converter={StaticResource BoolToVis}}">
+                                                            <Button Content="Add files…" Click="TestAddFiles_Click" ToolTip="Screenshots, logs: they go with your answer" />
+                                                            <Button Content="Paste" Margin="6,0,0,0" Command="{Binding PasteFilesCommand}" ToolTip="A screenshot or files you copied (Ctrl+V in the box does it too)" />
+                                                            <Button Content="Clear files" Margin="6,0,0,0" Command="{Binding ClearFilesCommand}"
+                                                                    Visibility="{Binding HasDraftFiles, Converter={StaticResource BoolToVis}}" />
+                                                        </StackPanel>
+                                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                                            <Button Content="Cancel" MinWidth="80" Command="{Binding CancelNoteCommand}" />
+                                                            <Button x:Name="SendDoesntWork" Content="Send: doesn't work" Style="{StaticResource AccentButtonStyle}" Margin="8,0,0,0"
+                                                                    Command="{Binding SendDoesntWorkCommand}" />
+                                                        </StackPanel>
+                                                    </DockPanel>
+                                                </StackPanel>
+                                            </Border>
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <!-- Answered, and closed by agents (settled elsewhere): newest first, folded -->
+                        <Expander x:Name="DoneTestsExpander" Header="{Binding DoneTestsHeader}" Margin="0,6,0,0" Visibility="{Binding HasDoneTests, Converter={StaticResource BoolToVis}}">
+                            <ItemsControl ItemsSource="{Binding DoneTests}" Focusable="False" Margin="0,6,0,0">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:TestCardViewModel}">
+                                        <Border Padding="10,8" Margin="0,0,0,6" CornerRadius="6" Background="{DynamicResource SubtleFillColorSecondaryBrush}">
+                                            <StackPanel>
+                                                <DockPanel>
+                                                    <Border x:Name="Outcome" DockPanel.Dock="Left" Style="{StaticResource TagChip}" Background="{DynamicResource ControlStrongFillColorDefaultBrush}"
+                                                            Margin="0,0,8,0" VerticalAlignment="Top">
+                                                        <TextBlock Text="{Binding StateText}" Style="{StaticResource ChipText}" />
+                                                    </Border>
+                                                    <TextBlock DockPanel.Dock="Right" Text="{Binding AnsweredText}" Style="{StaticResource MutedText}" Margin="12,0,0,0" VerticalAlignment="Top" />
+                                                    <Button Style="{StaticResource SubtleButton}" Padding="0" HorizontalAlignment="Left" Command="{Binding ShowItemCommand}"
+                                                            ToolTip="Show it on the board">
+                                                        <TextBlock Text="{Binding ItemText}" TextTrimming="CharacterEllipsis" />
+                                                    </Button>
+                                                </DockPanel>
+                                                <TextBlock Text="{Binding Steps}" Style="{StaticResource MutedText}" TextWrapping="Wrap" MaxHeight="40" TextTrimming="CharacterEllipsis" Margin="0,4,0,0" />
+                                                <TextBlock Text="{Binding Note}" TextWrapping="Wrap" Margin="0,4,0,0" Visibility="{Binding HasNote, Converter={StaticResource BoolToVis}}" />
+                                                <ItemsControl ItemsSource="{Binding AnswerFiles}" ItemTemplateSelector="{StaticResource AttachmentTemplate}" ItemsPanel="{StaticResource WrapItems}"
+                                                              Focusable="False" Margin="0,6,0,0" Visibility="{Binding HasAnswerFiles, Converter={StaticResource BoolToVis}}" />
+                                            </StackPanel>
+                                        </Border>
+                                        <DataTemplate.Triggers>
+                                            <DataTrigger Binding="{Binding Works}" Value="True">
+                                                <Setter TargetName="Outcome" Property="Background" Value="{DynamicResource SystemFillColorSuccessBrush}" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding DoesntWork}" Value="True">
+                                                <Setter TargetName="Outcome" Property="Background" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                                            </DataTrigger>
+                                        </DataTemplate.Triggers>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Expander>
+                    </StackPanel>
+                </ScrollViewer>
             </TabItem>
 
             <!-- Notes -->

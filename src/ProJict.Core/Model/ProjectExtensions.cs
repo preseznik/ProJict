@@ -99,5 +99,6 @@ public static class ProjectExtensions
             .Concat(project.Categories.SelectMany(c => c.Comments.Attachments()))
             .Concat(project.Notes.SelectMany(n => n.Attachments ?? []))
             .Concat((project.Publishes ?? []).SelectMany(p => p.Thumbnails))
+            .Concat((project.Tests ?? []).SelectMany(t => (t.Files ?? []).Concat(t.AnswerFiles ?? [])))
             .Concat(project.Icon is { } icon ? [icon] : []);
 }

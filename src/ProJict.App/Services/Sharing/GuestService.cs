@@ -417,6 +417,9 @@ public sealed partial class GuestService
             case "shipError":
                 ShipFailed(connection, message);
                 break;
+            case "testError":
+                TestFailed(connection, message);
+                break;
             case "callRing" or "callAnswer" or "callHangUp" or "callAudio":
                 HandleCall(connection, message);
                 break;
