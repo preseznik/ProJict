@@ -36,6 +36,9 @@ public sealed class PhraseSplitter(int bytesPerSecond = 32000)
     /// <summary>In a phrase now.</summary>
     public bool InPhrase { get; private set; }
 
+    /// <summary>The room's own hum (RMS), as followed while nobody speaks.</summary>
+    public double Hum => _hum;
+
     /// <summary>Someone started speaking.</summary>
     public event Action? Started;
     /// <summary>A phrase, all of it (with the sound from just before); or nothing, when it was too short to be one.</summary>

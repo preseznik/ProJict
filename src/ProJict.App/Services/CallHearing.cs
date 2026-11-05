@@ -44,6 +44,30 @@ public sealed class PhraseSpeechIn(ISoundIn sound, ISpeechToText recognizer, str
     /// <summary>Phrases dropped as the speakers' own sound.</summary>
     public int EchoesDropped { get; private set; }
 
+    // ── Speaking over an answer (#4ede2c7e) ──
+    /// <summary>The speakers' sound at the microphone while an answer plays (RMS), followed as it plays.</summary>
+    private double _echoLevel;
+    /// <summary>Sound heard since the answer started playing, in bytes: the first moment only measures the echo.</summary>
+    private long _heardWhilePlaying;
+    /// <summary>Frames in a row clearly louder than the echo.</summary>
+    private int _louderFrames;
+    /// <summary>You spoke over the answer: the phrase you're in is yours, not the echo.</summary>
+    private bool _bargedIn;
+
+    /// <summary>This much louder than the speakers' echo is you speaking over it.</summary>
+    public const double OverEcho = 3;
+    /// <summary>And at least this loud (RMS), so a quiet room's hum never counts.</summary>
+    public const double LoudEnough = 0.024;
+    /// <summary>For this long, so a click or a cough doesn't stop an answer.</summary>
+    public static readonly TimeSpan Over = TimeSpan.FromMilliseconds(200);
+    /// <summary>
+    /// The first moment of an answer only measures the speakers' echo: speech starts after a little silence, and only
+    /// then does the echo show how loud it is. Stop (or Esc) cuts an answer off from its start.
+    /// </summary>
+    public static readonly TimeSpan Settle = TimeSpan.FromMilliseconds(1200);
+
+    public event Action? Interrupted;
+
     public bool DropsEcho => true;
 
     public void SpeakersPlaying(bool playing)
@@ -51,6 +75,12 @@ public sealed class PhraseSpeechIn(ISoundIn sound, ISpeechToText recognizer, str
         lock (_splitter)
         {
             if (_playing && !playing) _heardSincePlaying = 0;
+            if (!_playing && playing)
+            {
+                _echoLevel = Math.Max(_splitter.Hum, 0.002);
+                _heardWhilePlaying = 0;
+                _louderFrames = 0;
+            }
             _playing = playing;
         }
     }
@@ -68,11 +98,12 @@ public sealed class PhraseSpeechIn(ISoundIn sound, ISpeechToText recognizer, str
         // One you started first goes on as said, even when an answer starts playing over its end.
         _splitter.Started += () =>
         {
-            _echo = _playing || _heardSincePlaying < (long)(EchoTail.TotalSeconds * CallVoice.Rate * 2);
+            _echo = !_bargedIn && (_playing || _heardSincePlaying < (long)(EchoTail.TotalSeconds * CallVoice.Rate * 2));
             if (!_echo) Hearing?.Invoke(true);
         };
         _splitter.Ended += phrase =>
         {
+            _bargedIn = false;
             if (_echo)
             {
                 _echo = false;
@@ -86,13 +117,45 @@ public sealed class PhraseSpeechIn(ISoundIn sound, ISpeechToText recognizer, str
         sound.Captured += frame =>
         {
             Level?.Invoke(CallVoice.Loudness(frame));
+            var interrupted = false;
             lock (_splitter)
             {
                 if (!_playing) _heardSincePlaying += frame.Length;
+                else interrupted = SpeakingOver(frame);
                 _splitter.Add(frame);
+            }
+            if (interrupted)
+            {
+                Interrupted?.Invoke();
+                Hearing?.Invoke(true); // the phrase you're in is yours now
             }
         };
         return sound.Start();
+    }
+
+    /// <summary>
+    /// While an answer plays: follows how loud the speakers' echo is at the microphone, and says when you speak over it,
+    /// clearly louder, for a moment. The phrase you're in is then yours, not the echo (with a headset the echo is next
+    /// to nothing, so speaking at all interrupts; with loud speakers you have to be clearly louder than them).
+    /// </summary>
+    private bool SpeakingOver(byte[] frame)
+    {
+        var level = PhraseSplitter.Level(frame);
+        _heardWhilePlaying += frame.Length;
+        var settling = _heardWhilePlaying < (long)(Settle.TotalSeconds * CallVoice.Rate * 2);
+        var louder = !settling && !_bargedIn && level > Math.Max(LoudEnough, _echoLevel * OverEcho);
+        if (!louder)
+        {
+            // The echo's loud moments, followed: up fast, down slowly (speech goes up and down from syllable to syllable,
+            // and the loud ones mustn't count as you speaking over it).
+            _echoLevel = level > _echoLevel ? _echoLevel * 0.5 + level * 0.5 : _echoLevel * 0.98 + level * 0.02;
+            _louderFrames = 0;
+            return false;
+        }
+        if (++_louderFrames * frame.Length < (long)(Over.TotalSeconds * CallVoice.Rate * 2)) return false;
+        _bargedIn = true;
+        _echo = false; // the phrase going on is yours
+        return true;
     }
 
     private async Task Transcribe(byte[] phrase)

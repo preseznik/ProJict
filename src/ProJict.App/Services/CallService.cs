@@ -460,6 +460,10 @@ public sealed partial class CallService(AppState state, MainViewModel main, Disp
         {
             if (_in == heard) FallBack(why);
         });
+        heard.Interrupted += () => dispatcher.InvokeAsync(() =>
+        {
+            if (_in == heard) StopSpeaking(byVoice: true);
+        });
         _in = heard;
     }
 
@@ -519,9 +523,27 @@ public sealed partial class CallService(AppState state, MainViewModel main, Disp
             catch (Exception again) when (again is InvalidOperationException or ObjectDisposedException or OperationCanceledException) { }
         }
         catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException or OperationCanceledException) { }
-        SpeakersPlaying(false);
         _busySaying = false;
+        SpeakersPlaying(false);
+        Changed?.Invoke(); // Stop goes, also when it was cut off before it played
         await SayNext();
+    }
+
+    /// <summary>An answer is on its way or playing: Stop (or Esc, or speaking over it) cuts it off.</summary>
+    public bool CanStopSpeaking => IsOn && (_busySaying || _toSay.Count > 0);
+
+    /// <summary>
+    /// Cuts the agents' answers off: the one playing (or being fetched) stops at once, and the ones waiting aren't read
+    /// (they're in the conversation). <paramref name="byVoice"/>: you spoke over it.
+    /// </summary>
+    public void StopSpeaking(bool byVoice = false)
+    {
+        if (!CanStopSpeaking) return;
+        var agent = _sayingAgent;
+        _toSay.Clear();
+        _stopSaying?.Cancel();
+        if (agent != null) Captions.Add(("ProJict", byVoice ? $"You spoke over {agent}: the answer stopped." : $"You stopped {agent}."));
+        Changed?.Invoke();
     }
 
     /// <summary>An answer plays (its agent's tile glows) or stopped; the recognizer is told, so it knows what's the speakers' sound.</summary>

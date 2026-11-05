@@ -4,6 +4,10 @@
         xmlns:vm="clr-namespace:ProJict.App.ViewModels"
         Title="{Binding Title}" Width="820" Height="600" MinWidth="520" MinHeight="420" WindowStartupLocation="CenterOwner"
         Background="{DynamicResource SolidBackgroundFillColorBaseBrush}">
+    <!-- Esc cuts the agent's answer off (#4ede2c7e) -->
+    <Window.InputBindings>
+        <KeyBinding Key="Escape" Command="{Binding StopSpeakingCommand}" />
+    </Window.InputBindings>
     <DockPanel Margin="20">
         <!-- Who's on the call and how long; why it can't hear you, if so -->
         <StackPanel DockPanel.Dock="Top" Margin="0,0,0,14">
@@ -48,6 +52,14 @@
                     <TextBlock Text="Mute" Margin="8,0,0,0" VerticalAlignment="Center" />
                 </StackPanel>
             </ToggleButton>
+            <Button x:Name="StopSpeakingButton" Command="{Binding StopSpeakingCommand}" Padding="16,8" Margin="0,0,10,0"
+                    Visibility="{Binding CanStopSpeaking, Converter={StaticResource BoolToVis}}"
+                    ToolTip="Stop: cuts the answer off (Esc). Speaking over it, clearly louder than your speakers, stops it too." AutomationProperties.Name="Stop the answer">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Style="{StaticResource Icon}" Text="&#xE71A;" FontSize="16" VerticalAlignment="Center" />
+                    <TextBlock Text="Stop" Margin="8,0,0,0" VerticalAlignment="Center" />
+                </StackPanel>
+            </Button>
             <Button x:Name="HangUpButton" Command="{Binding HangUpCommand}" Padding="16,8" Background="#D13438" Foreground="White" BorderThickness="0"
                     ToolTip="Hang up: the call ends for everyone" AutomationProperties.Name="Hang up">
                 <StackPanel Orientation="Horizontal">

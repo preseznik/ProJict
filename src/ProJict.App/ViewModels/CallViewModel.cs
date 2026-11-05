@@ -56,6 +56,10 @@ public sealed partial class CallViewModel : ObservableObject
     public event Action? Over;
 
     [RelayCommand] private void HangUp() => _calls.HangUp();
+    /// <summary>Cuts the agent's answer off (the Stop button, or Esc).</summary>
+    [RelayCommand] private void StopSpeaking() => _calls.StopSpeaking();
+    /// <summary>An answer is on its way or playing.</summary>
+    public bool CanStopSpeaking => _calls.CanStopSpeaking;
     [RelayCommand] private void Accept() => _calls.Accept();
     [RelayCommand] private void Decline() => _calls.Decline();
 

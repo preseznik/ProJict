@@ -27,6 +27,8 @@ public interface ISpeechIn : IDisposable
     void SpeakersPlaying(bool playing) { }
     /// <summary>It drops what starts while the speakers play itself, so what it hears may be posted any time.</summary>
     bool DropsEcho => false;
+    /// <summary>You speak over an answer, clearly louder than the speakers' own sound: the answer should stop (any thread).</summary>
+    event Action? Interrupted { add { } remove { } }
     /// <summary>Starts listening; the problem when it can't (no microphone, no speech recognition), or null.</summary>
     string? Start();
     void Stop();
