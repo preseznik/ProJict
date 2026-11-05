@@ -73,7 +73,8 @@ public sealed partial class HostService
         call.Session.Send(Wire.Message("agentCallAnswer", ("channelId", call.Channel.ToString()), ("agent", agent), ("answer", word)));
         var who = NameOf(call.Session.Account);
         var channel = _state.Chat.Channels.FirstOrDefault(c => c.Id == call.Channel);
-        var where = channel == null ? "the channel" : "#" + channel.Name;
+        // A private conversation is "@" its person, as the agent writes in it (#ae8d5cd1); a channel its "#name".
+        var where = channel == null ? "the channel" : channel.Direct ? "@" + who : "#" + channel.Name;
         if (word is "no" or "hang_up" or "hangup" or "leave") _guestCalls.Remove(agent);
         return word switch
         {

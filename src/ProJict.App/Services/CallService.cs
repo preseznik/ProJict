@@ -195,7 +195,13 @@ public sealed partial class CallService(AppState state, MainViewModel main, Disp
             ? $"\"#{channel.Name} ({Me}'s)\"" : Where;
 
     /// <summary>Where the call is, as an agent names it in post_message: "@Tester" or "#general".</summary>
-    private string Where => _channel is { Direct: true } ? "@" + Me : "#" + _channel?.Name;
+    private string Where => _channel is { Direct: true } ? "@" + Caller : "#" + _channel?.Name;
+
+    /// <summary>
+    /// You, as the agents in the call know you: in a host's channel, the name you have there (your other computer's
+    /// ProJict knows you as itself, not as this computer's name, #ae8d5cd1); in yours, your own.
+    /// </summary>
+    private string Caller => _host?.MyName is { Length: > 0 } there ? there : Me;
 
     /// <summary>Calls the agents in the channel; the problem when it can't, or null.</summary>
     public string? Start(ChatChannel channel, IReadOnlyList<string> agents)
@@ -225,8 +231,8 @@ public sealed partial class CallService(AppState state, MainViewModel main, Disp
         Room.Changed += OnChat;
         foreach (var agent in call.Agents)
             if (agent.State == CallState.Ringing)
-                Line($"📞 {Me} is calling {agent.Name}…", agent.Name,
-                    $"{Me} is calling you: a voice call in {WhereFor(agent.Name)}. Pick up with answer_call answer=yes (or answer=no). In the call, what {Me} says " +
+                Line($"📞 {Caller} is calling {agent.Name}…", agent.Name,
+                    $"{Caller} is calling you: a voice call in {WhereFor(agent.Name)}. Pick up with answer_call answer=yes (or answer=no). In the call, what {Caller} says " +
                     $"comes to you as messages in {WhereFor(agent.Name)}; answer there with post_message, a sentence or two at a time in plain spoken words " +
                     "(no lists, code or links), and ProJict reads it aloud. answer_call answer=hang_up leaves the call.");
             else Captions.Add(("ProJict", $"{agent.Name} {ChatCall.Describe(agent.State)} (it doesn't hear Chat right away)."));
@@ -303,7 +309,7 @@ public sealed partial class CallService(AppState state, MainViewModel main, Disp
             return;
         }
         foreach (var agent in call.Agents.Where(a => a.State is CallState.Joined or CallState.Ringing))
-            Line($"📞 {Me} hung up on {agent.Name}.", agent.Name, $"{Me} hung up: the call in {Where} is over.");
+            Line($"📞 {Caller} hung up on {agent.Name}.", agent.Name, $"{Caller} hung up: the call in {Where} is over.");
         End();
     }
 
@@ -324,7 +330,7 @@ public sealed partial class CallService(AppState state, MainViewModel main, Disp
         }
         CheckHeard();
         foreach (var missed in call.TimeOut(DateTime.Now))
-            Line($"📞 {missed.Name} didn't answer.", missed.Name, $"You missed {Me}'s call in {Where}.");
+            Line($"📞 {missed.Name} didn't answer.", missed.Name, $"You missed {Caller}'s call in {Where}.");
         EndIfEmpty();
         Changed?.Invoke();
     }
