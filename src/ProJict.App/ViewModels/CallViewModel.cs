@@ -90,8 +90,9 @@ public sealed partial class CallViewModel : ObservableObject
     private void Refresh()
     {
         if (_calls.Current is not { } call) return;
-        var where = _calls.Channel is { Direct: true } direct ? ChatRoom.Title(direct, _calls.Me) : "#" + _calls.Channel?.Name;
-        Title = _calls.Channel is { Direct: true } ? $"Call with {where}" : $"Call in {where}";
+        var origin = _calls.Origin;
+        var where = origin is { Direct: true } direct ? ChatRoom.Title(direct, _calls.Me) : "#" + origin?.Name;
+        Title = origin is { Direct: true } ? $"Call with {where}" : $"Call in {where}";
         var tiles = new List<CallTile> { Tile(_calls.Me, _calls.Muted ? "muted" : "you", away: false) with { IsYou = true } };
         tiles.AddRange(call.Agents.Select(a => Tile(a.Name, a.IsPerson && call.Incoming && a.State == CallState.Ringing ? "calling you" : ChatCall.Describe(a.State),
             away: a.State != CallState.Joined)));

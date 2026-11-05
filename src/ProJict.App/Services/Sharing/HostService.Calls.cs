@@ -48,6 +48,18 @@ public sealed partial class HostService
         }
         // The guest's call: its lines go in the channel as notices, and the agents it rings here answer back to it.
         if (actor.Agent || !GuestAccess.CanComment(RoleOf(session.Account))) return refuse("Only a person here calls agents.");
+        // Its own chat, with the id and name the guest picked (#28be649a): what's said in the call goes there.
+        if (op == "callChat")
+        {
+            if (!Guid.TryParse((string?)message["id"], out var chatId)) return refuse("That call has no id.");
+            var known = _main.AgentTools.KnownAgentNames();
+            var with = ((string?)message["with"] ?? "").Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                .Where(a => known.Contains(a, StringComparer.OrdinalIgnoreCase) || ChatRoom.Member(channel, a) is { Agent: true })
+                .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            if (with.Count == 0) return refuse("There's no agent here to call.");
+            _state.Chat.CreateCall(actor, channel, [.. with.Select(a => (a, true))], chatId, (string?)message["name"]);
+            return null;
+        }
         var text = ((string?)message["text"] ?? "").Trim();
         if (!text.StartsWith("📞 ", StringComparison.Ordinal) || text.Length > 300) return refuse("That isn't a line about a call.");
         var about = (string?)message["about"];

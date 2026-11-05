@@ -570,6 +570,8 @@
                         <ContentControl x:Name="YourChannelList" Content="{Binding Yours}" ContentTemplate="{StaticResource ChatSectionView}" Focusable="False" />
                         <ContentControl x:Name="OtherChannelList" Content="{Binding Others}" ContentTemplate="{StaticResource ChatSectionView}" Focusable="False" />
                         <ContentControl x:Name="PrivateList" Content="{Binding Private}" ContentTemplate="{StaticResource ChatSectionView}" Focusable="False" />
+                        <!-- Each call's own chat (#28be649a) -->
+                        <ContentControl x:Name="CallList" Content="{Binding Calls}" ContentTemplate="{StaticResource ChatSectionView}" Focusable="False" />
                         <!-- The agents' private conversations with each other, while the toggle above is on. -->
                         <StackPanel x:Name="AgentChatsPanel" Visibility="{Binding ShowAgentChats, Converter={StaticResource BoolToVis}}">
                             <TextBlock Text="{Binding AgentChatsTitle}" Style="{StaticResource MutedText}" FontSize="12" Margin="8,14,0,4"

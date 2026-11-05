@@ -42,6 +42,7 @@ public sealed partial class ChatViewModel : ObservableObject
         Yours = new ChatSection(state, "yours", "Channels", "The channels you're in");
         Others = new ChatSection(state, "others", "Other channels", "Channels you're not in");
         Private = new ChatSection(state, "private", "Private messages", "One on one: right-click someone › Private message");
+        Calls = new ChatSection(state, "calls", "Calls", "Each call's own chat: what was said in it, newest first (#28be649a)");
         Archive = new ChatSection(state, "archive", "Archive",
             "Private conversations you archived: nothing new in them counts or notifies you until you open one, or take it out (right-click)", foldedAtFirst: true);
         Room.Changed += OnChanged;
@@ -160,6 +161,9 @@ public sealed partial class ChatViewModel : ObservableObject
     public bool HasPrivateChats => PrivateChats.Count > 0;
     /// <summary>Your private conversations in the archive, at the bottom.</summary>
     public List<ChannelRowViewModel> ArchivedChats { get; private set; } = [];
+    /// <summary>Each call's own chat, newest first (#28be649a).</summary>
+    public List<ChannelRowViewModel> CallChats { get; private set; } = [];
+    public ChatSection Calls { get; }
     public bool HasNoChannels => !AllChannels.Any();
     /// <summary>The channels of each ProJict you're connected to, under its owner's name.</summary>
     public List<ChatSection> HostChats { get; private set; } = [];
@@ -413,7 +417,8 @@ public sealed partial class ChatViewModel : ObservableObject
         var order = _state.AppSettings.ChatOrder;
         // As the sidebar's Showing box says: your own channels, one connected ProJict's, or everything.
         List<ChatChannel> own = _main.ShowsOwn ? Room.Channels : [];
-        foreach (var channel in ChatSorting.Sort(own.Where(c => !c.Direct), order, c => c.Name))
+        // A call's chat is listed under Calls, not with the channels (#28be649a).
+        foreach (var channel in ChatSorting.Sort(own.Where(c => !c.Direct && !c.IsCall), order, c => c.Name))
             (ChatRoom.Member(channel, MyName) != null ? mine : others).Add(new ChannelRowViewModel(channel, this));
         YourChannels = mine;
         OtherChannels = others;
@@ -425,7 +430,7 @@ public sealed partial class ChatViewModel : ObservableObject
         AgentChats = own.Where(c => c.Direct && ChatRoom.Member(c, MyName) == null)
             .OrderByDescending(c => c.Messages.LastOrDefault()?.At ?? c.CreatedAt)
             .Select(c => new AgentChatRow(c, this)).ToList();
-        BrowseRows = own.Where(c => !c.Direct).OrderBy(c => c.Name, StringComparer.Ordinal).Select(c => new BrowseRowViewModel(c, this)).ToList();
+        BrowseRows = own.Where(c => !c.Direct && !c.IsCall).OrderBy(c => c.Name, StringComparer.Ordinal).Select(c => new BrowseRowViewModel(c, this)).ToList();
         // Each host's: channels you're in, the others you could join, then private conversations.
         // And each guest's that shares its own channels back with you.
         // Its private conversations fold on their own, under the channels (#39a84d31).
@@ -435,12 +440,18 @@ public sealed partial class ChatViewModel : ObservableObject
             {
                 var sorted = ChatSorting.Sort(c.Chat!.Channels, order, ch => ChatRoom.Title(ch, c.MyName ?? "")).ToList();
                 return new ChatSection(_state, "host:" + c.OwnerName, $"{c.OwnerName}'s ProJict", "Shared with you: it's kept there, not here", shared: true)
-                    .Set([.. sorted.Where(ch => !ch.Direct).OrderByDescending(ch => ChatRoom.Member(ch, c.MyName ?? "") != null).Select(ch => new ChannelRowViewModel(ch, this))])
+                    .Set([.. sorted.Where(ch => !ch.Direct && !ch.IsCall).OrderByDescending(ch => ChatRoom.Member(ch, c.MyName ?? "") != null).Select(ch => new ChannelRowViewModel(ch, this))])
                     .WithSub(new ChatSection(_state, "host:" + c.OwnerName + ":private", "Private messages", $"Your private conversations in {c.OwnerName}'s ProJict")
                         .Set([.. sorted.Where(ch => ch.Direct).Select(ch => new ChannelRowViewModel(ch, this))]));
             }).ToList();
+        // Calls: each call's chat, yours and those in the ProJicts you're connected to, newest first.
+        CallChats = own.Where(c => c.IsCall && ChatRoom.Member(c, MyName) != null)
+            .Concat(_main.Guest.Connections.Where(c => c.Chat != null && _main.ShowsChat(c))
+                .SelectMany(c => c.Chat!.Channels.Where(ch => ch.IsCall && ChatRoom.Member(ch, c.MyName ?? "") != null)))
+            .OrderByDescending(c => c.CreatedAt).Select(c => new ChannelRowViewModel(c, this)).ToList();
         OnPropertyChanged(nameof(OrderText));
         OnPropertyChanged(nameof(OrderToolTip));
+        Calls.Set(CallChats);
         Yours.Set(YourChannels);
         Others.Set(OtherChannels);
         Private.Set(PrivateChats);

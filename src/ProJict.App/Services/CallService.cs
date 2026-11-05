@@ -16,7 +16,10 @@ public sealed partial class CallService(AppState state, MainViewModel main, Disp
     private readonly DispatcherTimer _clock = new(DispatcherPriority.Background, dispatcher) { Interval = TimeSpan.FromSeconds(1) };
     private readonly HashSet<Guid> _seen = [];
     private readonly Queue<(string Agent, string Text)> _toSay = new();
+    /// <summary>Where what's said goes: the call's own chat (a call with agents, #28be649a), or the conversation with a person.</summary>
     private ChatChannel? _channel;
+    /// <summary>The conversation the call was started from (its chat points back to it).</summary>
+    private ChatChannel? _origin;
     private ISpeechIn? _in;
     private ISpeechOut? _out;
     private CancellationTokenSource? _stopSaying;
@@ -146,6 +149,8 @@ public sealed partial class CallService(AppState state, MainViewModel main, Disp
 
     public ChatCall? Current { get; private set; }
     public ChatChannel? Channel => _channel;
+    /// <summary>The conversation the call was started from: a private conversation, or a channel.</summary>
+    public ChatChannel? Origin => _origin ?? _channel;
     public bool IsOn => Current is { IsOver: false };
     public bool Muted { get; private set; }
     /// <summary>Who's speaking now: an agent read aloud, or you while you're heard.</summary>
@@ -268,18 +273,42 @@ public sealed partial class CallService(AppState state, MainViewModel main, Disp
         if (!call.HasSomeone)
             return (agents.Count == 1 ? $"{agents[0]} can't" : "None of them can") +
                    " take a call now: an agent takes calls only while it hears Chat right away (a chat watcher runs for it, or it's waiting for messages).";
-        Current = call;
-        _channel = channel;
-        Language = CallLanguage.For(state.AppSettings.CallLanguage)?.Code;
-        PreloadWhisper();
         _host = main.Guest.ConnectionOf(channel);
         _room = _host?.Chat ?? state.Chat;
+        // The call's own chat: what's said goes there, and the conversation it's started from gets one line about it (#28be649a).
+        // In a host's channel, the host makes it, with the id and name picked here, so the call can write there at once.
+        var called = call.Agents.Select(a => (a.Name, true)).ToList();
+        ChatChannel chat;
+        if (_host == null)
+        {
+            try { chat = state.Chat.CreateCall(state.ChatMe, channel, called); }
+            catch (ChatException ex)
+            {
+                _room = state.Chat;
+                return ex.Message;
+            }
+        }
+        else
+        {
+            // A name the host doesn't have yet, as far as this ProJict sees it: the host keeps it, and the ring can say it.
+            var name = ChatRoom.CallName(called.Select(c => c.Name), DateTime.Now);
+            for (var n = 2; _host.Chat?.Channels.Any(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase)) == true; n++)
+                name = $"{ChatRoom.CallName(called.Select(c => c.Name), DateTime.Now)}-{n}";
+            chat = new ChatChannel { Id = Guid.NewGuid(), Name = name, CallFrom = channel.Id };
+            main.Guest.ChatOp(_host, "callChat", ("channel", channel.Id.ToString()), ("id", chat.Id.ToString()), ("name", chat.Name),
+                ("with", string.Join("\n", called.Select(c => c.Name))));
+        }
+        Current = call;
+        _origin = channel;
+        _channel = chat;
+        Language = CallLanguage.For(state.AppSettings.CallLanguage)?.Code;
+        PreloadWhisper();
         Captions.Clear();
         Muted = false;
         Problem = null;
         Speaking = null;
         _seen.Clear();
-        foreach (var message in channel.Messages) _seen.Add(message.Id);
+        foreach (var message in chat.Messages) _seen.Add(message.Id);
         Room.Changed += OnChat;
         foreach (var agent in call.Agents)
             if (agent.State == CallState.Ringing)
@@ -537,7 +566,9 @@ public sealed partial class CallService(AppState state, MainViewModel main, Disp
     /// <summary>What's new in the call's conversation: yours in the captions, an agent's in it read aloud.</summary>
     private void OnChat(ChatChannel channel)
     {
-        if (channel != _channel || Current is not { IsOver: false } call) return;
+        // A host's call chat: its copy here arrives after the call started (by its id).
+        if (channel.Id != _channel?.Id || Current is not { IsOver: false } call) return;
+        _channel = channel;
         foreach (var message in channel.Messages.Where(m => !_seen.Contains(m.Id)).ToList())
         {
             _seen.Add(message.Id);
