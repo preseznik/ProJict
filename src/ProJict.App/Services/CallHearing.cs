@@ -13,6 +13,8 @@ public interface ISpeechToText : IDisposable
 {
     /// <summary>The text of <paramref name="pcm"/> (16 kHz, 16-bit mono); empty when it heard no words.</summary>
     Task<string> TranscribeAsync(byte[] pcm, CancellationToken stop);
+    /// <summary>Done when it can transcribe (Whisper: its model loaded); faulted with why when it can't.</summary>
+    Task Ready => Task.CompletedTask;
 }
 
 /// <summary>
@@ -20,8 +22,12 @@ public interface ISpeechToText : IDisposable
 /// a recognizer that takes a recording (ElevenLabs, Whisper), one after the other, so what you say arrives in order.
 /// When the recognizer fails (no credits, no network), <see cref="ISpeechIn.Failed"/> says why.
 /// </summary>
-public sealed class PhraseSpeechIn(ISoundIn sound, ISpeechToText recognizer) : ISpeechIn
+public sealed class PhraseSpeechIn(ISoundIn sound, ISpeechToText recognizer, string name = "It") : ISpeechIn
 {
+    /// <summary>Done when the recognizer can transcribe; phrases said before wait for it.</summary>
+    public Task Ready => recognizer.Ready;
+    public string? GettingReady => $"{name} is getting ready: it loads its model (the first time on a computer takes longer). What you say meanwhile waits for it.";
+
     private readonly PhraseSplitter _splitter = new(CallVoice.Rate * 2);
     private readonly CancellationTokenSource _stop = new();
     private Task _queue = Task.CompletedTask;
@@ -201,6 +207,9 @@ public sealed class WhisperSpeechToText : ISpeechToText
 
     /// <summary>Where Whisper runs, once loaded: the graphics card or the processor.</summary>
     public static string? RunsOn => RuntimeOptions.LoadedLibrary?.ToString();
+
+    /// <summary>Done when the model is loaded and warmed up, and this call's processor made.</summary>
+    public Task Ready => _loading;
 
     public async Task<string> TranscribeAsync(byte[] pcm, CancellationToken stop)
     {

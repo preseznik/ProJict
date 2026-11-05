@@ -34,10 +34,10 @@ public sealed partial class CallService(AppState state, MainViewModel main, Disp
         switch (state.AppSettings.CallRecognizer)
         {
             case CallRecognizer.ElevenLabs when ElevenLabsKey() is { } key:
-                return new PhraseSpeechIn(SoundIn(), new ElevenLabsSpeechToText(key, api: ElevenLabsApi));
+                return new PhraseSpeechIn(SoundIn(), new ElevenLabsSpeechToText(key, api: ElevenLabsApi), "ElevenLabs");
             case CallRecognizer.Whisper when WhisperModel.For(state.AppSettings.WhisperModel) is var model && WhisperModels.Has(model):
                 return new PhraseSpeechIn(SoundIn(), new WhisperSpeechToText(WhisperModels.PathOf(model),
-                    [.. Current?.Agents.Select(a => a.Name) ?? [], .. main.AgentTools.ConnectedAgentNames(), "ProJict"]));
+                    [.. Current?.Agents.Select(a => a.Name) ?? [], .. main.AgentTools.ConnectedAgentNames(), "ProJict"]), "Whisper");
             case CallRecognizer.WindowsOnline:
                 return new WindowsOnlineSpeechIn(SoundIn());
         }
@@ -108,6 +108,8 @@ public sealed partial class CallService(AppState state, MainViewModel main, Disp
     public event Action? LevelChanged;
     /// <summary>Not hearing you: which microphone it listens to and where to change it; null once it hears you.</summary>
     public string? Hint { get; private set; }
+    /// <summary>The recognizer is getting ready (Whisper loading its model): what the call says meanwhile.</summary>
+    public string? Preparing { get; private set; }
     /// <summary>How long a call hears nothing from your microphone before it says so.</summary>
     public static TimeSpan QuietFor { get; set; } = TimeSpan.FromSeconds(12);
     /// <summary>This loud (0 to 1) counts as hearing sound.</summary>
@@ -146,7 +148,7 @@ public sealed partial class CallService(AppState state, MainViewModel main, Disp
     /// <summary>Every second: a while without a sound from the microphone (not muted), and the call says which one it listens to.</summary>
     private void CheckHeard()
     {
-        if (_heardSound || Hint != null || Muted || _listeningSince is not { } since || DateTime.Now - since < QuietFor) return;
+        if (_heardSound || Hint != null || Preparing != null || Muted || _listeningSince is not { } since || DateTime.Now - since < QuietFor) return;
         var microphone = _in is WindowsOnlineSpeechIn ? Microphones.DefaultName + " (Windows' online dictation always uses it)" : Microphones.Describe(state.AppSettings.CallMicrophone);
         Hint = $"Not hearing you? ProJict listens to {microphone}, and the bar under your name moves when it " +
                "hears sound. Pick the one you talk into in Settings › Chat › Microphone for calls, and check that Windows lets desktop apps use the " +
@@ -158,6 +160,7 @@ public sealed partial class CallService(AppState state, MainViewModel main, Disp
         _listeningSince = null;
         _heardSound = false;
         Hint = null;
+        Preparing = null;
         MicLevel = 0;
     }
     public string Me => state.ChatMe.Name;
@@ -380,7 +383,31 @@ public sealed partial class CallService(AppState state, MainViewModel main, Disp
         {
             if (SpeechIn == null) Problem = RecognizerNote();
             StartedListening();
+            Prepare(heard);
         }
+    }
+
+    /// <summary>
+    /// The recognizer isn't ready yet (Whisper loading its model, #23739299): the call says so until it is, and what
+    /// you say meanwhile waits for it. Ready, a line says so; when it can't get ready, the old recognizer takes over.
+    /// </summary>
+    private void Prepare(ISpeechIn heard)
+    {
+        if (heard.Ready.IsCompletedSuccessfully) return;
+        if (!heard.Ready.IsCompleted) Preparing = heard.GettingReady ?? "Getting ready…";
+        _ = heard.Ready.ContinueWith(t => dispatcher.InvokeAsync(() =>
+        {
+            if (_in != heard || !IsOn) return;
+            Preparing = null;
+            if (t.Exception?.InnerException is { } problem)
+            {
+                FallBack(problem.Message);
+                return;
+            }
+            Captions.Add(("ProJict", "Ready: what you say is understood now."));
+            _listeningSince = DateTime.Now; // the wait for a sound starts now
+            Changed?.Invoke();
+        }), TaskScheduler.Default);
     }
 
     /// <summary>
@@ -397,6 +424,7 @@ public sealed partial class CallService(AppState state, MainViewModel main, Disp
             return;
         }
         _in.Dispose();
+        Preparing = null;
         var old = NewOldSpeechIn();
         Hear(old);
         Problem = why + " Windows' offline recognizer hears you for now.";

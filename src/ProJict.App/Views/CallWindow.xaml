@@ -11,6 +11,9 @@
             <TextBlock x:Name="Status" Text="{Binding StatusText}" Style="{StaticResource MutedText}" Margin="0,2,0,0" />
             <TextBlock Text="{Binding Problem}" Foreground="{DynamicResource SystemFillColorCautionBrush}" TextWrapping="Wrap" Margin="0,6,0,0"
                        Visibility="{Binding Problem, Converter={StaticResource EmptyToVis}}" />
+            <!-- The recognizer is getting ready: Whisper loading its model (#23739299) -->
+            <TextBlock x:Name="PreparingText" Text="{Binding Preparing}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Margin="0,6,0,0"
+                       Visibility="{Binding Preparing, Converter={StaticResource EmptyToVis}}" />
             <!-- It hears nothing from your microphone: which one it listens to, and where to change it (#b39e8f23) -->
             <TextBlock x:Name="HintText" Text="{Binding Hint}" Foreground="{DynamicResource SystemFillColorCautionBrush}" TextWrapping="Wrap" Margin="0,6,0,0"
                        Visibility="{Binding Hint, Converter={StaticResource EmptyToVis}}" />

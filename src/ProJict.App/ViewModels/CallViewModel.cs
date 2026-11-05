@@ -29,6 +29,8 @@ public sealed partial class CallViewModel : ObservableObject
     public double MicLevel => _calls.MicLevel;
     /// <summary>Not hearing you: which microphone and where to change it.</summary>
     public string? Hint => _calls.Hint;
+    /// <summary>The recognizer is getting ready (Whisper loading its model).</summary>
+    public string? Preparing => _calls.Preparing;
 
     private void LevelChanged() => OnPropertyChanged(nameof(MicLevel));
 

@@ -16,6 +16,10 @@ public interface ISpeechIn : IDisposable
     event Action<double>? Level;
     /// <summary>It can't go on (dictation off, no credits, no network): why, in words (any thread).</summary>
     event Action<string>? Failed;
+    /// <summary>Done when it understands you (Whisper loads its model first); what you say meanwhile waits for it.</summary>
+    Task Ready => Task.CompletedTask;
+    /// <summary>What the call says while it isn't ready yet.</summary>
+    string? GettingReady => null;
     /// <summary>Starts listening; the problem when it can't (no microphone, no speech recognition), or null.</summary>
     string? Start();
     void Stop();

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.47
+
+- **Calls with Whisper say when it's getting ready.** Whisper's first load on a computer can take a while (a big model, and the graphics card preparing itself the first time), and calls made meanwhile seemed not to hear you. Now the call window says Whisper is getting ready until it is, and what you say meanwhile waits for it. A line says when it's ready. If it can't get ready, the call says why, and the old recognizer hears you.
+
 ## 0.1.46 (2026-11-05)
 
 - **Your phone hears what waits for you at once.** A "You, on your phone" token can keep `GET /api/v1/me/watch` open. It gets a line for each new message to you, the counts of what waits whenever they change (questions, ship plans, work to review, unread), and a ping every 30 quiet seconds.
