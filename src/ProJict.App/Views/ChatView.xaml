@@ -346,6 +346,13 @@
                                     <TextBlock TextWrapping="Wrap">
                                         <Run Text="Asks to approve: " Foreground="{DynamicResource TextFillColorSecondaryBrush}" /><Run Text="{Binding Approval, Mode=OneWay}" FontWeight="SemiBold" />
                                     </TextBlock>
+                                    <!-- Asked with the PIN (#8793323e): it can't be taken back -->
+                                    <StackPanel x:Name="PinNote" Orientation="Horizontal" Margin="0,4,0,0" Visibility="{Binding WithPin, Converter={StaticResource BoolToVis}}">
+                                        <TextBlock Style="{StaticResource Icon}" Text="&#xE72E;" FontSize="12" VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource SystemFillColorCautionBrush}" />
+                                        <TextBlock Text="It can't be taken back: approving it asks if you're sure, then the PIN." FontSize="12" Margin="6,0,0,0"
+                                                   TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                    </StackPanel>
                                     <StackPanel Orientation="Horizontal" Margin="0,7,0,0" Visibility="{Binding CanDecide, Converter={StaticResource BoolToVis}}">
                                         <Button x:Name="ApproveButton" Style="{StaticResource AccentButtonStyle}" Content="Approve" Padding="14,4" Command="{Binding ApproveCommand}"
                                                 ToolTip="Lets the agent do exactly this" />

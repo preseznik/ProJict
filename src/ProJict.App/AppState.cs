@@ -92,6 +92,18 @@ public sealed partial class AppState : ObservableObject
     /// <summary>You in Chat: the owner of the workspace, who moderates every channel.</summary>
     public ChatActor ChatMe => new(UserName, false, Owner: true);
 
+    // The PIN you approve what can't be taken back with, on this computer (#8793323e).
+    private readonly ProJict.Core.Agents.PinTries _pinTries = new();
+    public bool HasApprovalPin => AppSettings.ApprovalPin != null;
+    /// <summary>Null when it's this computer's PIN; else why not (wrong, or too many wrong ones: it waits a while).</summary>
+    public string? CheckApprovalPin(string? typed) => _pinTries.Check(AppSettings.ApprovalPin, typed);
+    /// <summary>Sets (or changes) the PIN; throws ArgumentException when it isn't 4 to 8 digits.</summary>
+    public void SetApprovalPin(string pin)
+    {
+        AppSettings.ApprovalPin = ProJict.Core.Agents.ApprovalPin.Create(pin);
+        SaveAppSettings();
+    }
+
     [ObservableProperty] private string _statusText = "";
 
     /// <summary>How you sign comments and history entries (Settings › Comments &amp; history, else the Windows user name).</summary>

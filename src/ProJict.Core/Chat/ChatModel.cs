@@ -59,6 +59,12 @@ public sealed class ChatMessage
     /// other messages. The first person to answer it (Approve or Decline, or a 👍 or 👎 on it) decides.
     /// </summary>
     public string? Approval { get; set; }
+    /// <summary>
+    /// What it asks can't be taken back (ask_approval pin=true, #8793323e): only the workspace's owner answers it, a
+    /// 👍 or 👎 doesn't, and approving it takes "Are you sure?" and their PIN.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool WithPin { get; set; }
     /// <summary>Who approved or declined what the message asks, and when; null while nobody has.</summary>
     public ChatDecision? Decision { get; set; }
     /// <summary>

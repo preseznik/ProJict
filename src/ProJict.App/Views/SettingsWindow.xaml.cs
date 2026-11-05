@@ -49,6 +49,7 @@ public partial class SettingsWindow : Window
         ApproveInChat.IsChecked = state.AppSettings.ApproveInChat;
         HookCommand.Text = App.Current.MainVm.AgentTools.PermissionHookCommand ?? "(it needs ProJictBridge.exe, which comes with ProJict's installer)";
         ShowClaudeHook();
+        ShowPin();
         ReadOnlyTokensUseChat.IsChecked = state.AppSettings.ReadOnlyTokensUseChat;
         foreach (var box in AgentPriorities.Children.OfType<CheckBox>())
             box.IsChecked = s.AgentPriorities.Contains(Enum.Parse<Priority>((string)box.Tag));
@@ -546,6 +547,20 @@ public partial class SettingsWindow : Window
     private string ClaudeSettings => ProJict.Core.Agents.ClaudeHookSetup.SettingsPath(ClaudeHome());
 
     /// <summary>Whether Claude Code has ProJict's hook: the button sets it up or takes it out.</summary>
+    /// <summary>The PIN for what can't be taken back, on this computer (#8793323e).</summary>
+    private void ShowPin()
+    {
+        PinButton.Content = _state.HasApprovalPin ? "Change PIN…" : "Set PIN…";
+        PinStatus.Text = _state.AppSettings.ApprovalPin is { } pin
+            ? $"Set on {pin.SetAt.ToString("d MMM yyyy", System.Globalization.CultureInfo.CurrentCulture)}."
+            : "No PIN on this computer yet: you'll set it when you first need it.";
+    }
+
+    private void Pin_Click(object sender, RoutedEventArgs e)
+    {
+        if (PinDialog.SetUp(this, _state)) ShowPin();
+    }
+
     private void ShowClaudeHook(string? said = null)
     {
         string? json = null;

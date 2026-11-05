@@ -99,6 +99,13 @@
                         <TextBox x:Name="HookCommand" IsReadOnly="True" TextWrapping="Wrap" FontFamily="{StaticResource MonoFont}" FontSize="12"
                                  AutomationProperties.Name="The permission hook's command" />
                     </DockPanel>
+                    <!-- The PIN for what can't be taken back (#8793323e). -->
+                    <WrapPanel Margin="0,12,0,0">
+                        <Button x:Name="PinButton" Content="Set PIN…" Click="Pin_Click" />
+                        <TextBlock x:Name="PinStatus" Style="{StaticResource MutedText}" VerticalAlignment="Center" Margin="10,0,0,0" TextWrapping="Wrap" />
+                    </WrapPanel>
+                    <TextBlock Style="{StaticResource MutedText}" Margin="2,6,0,0" TextWrapping="Wrap"
+                               Text="An agent can ask to do something that can't be taken back (publish a release, say) with your PIN: approving it in ProJict asks if you're sure, then this PIN, and a 👍 doesn't count. Only you answer these, here or on your other computer with its own PIN; you can still answer the agent where it runs (Claude Code, Codex). The PIN is kept on this computer only, hashed." />
                 </StackPanel>
                 <!-- How to add ProJict to each agent; folded away once it's set up. -->
                 <Expander x:Name="ConnectAgent" Header="Connect an AI agent (Claude Code, Codex, OpenCode, …)" Margin="0,8,0,0">

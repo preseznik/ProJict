@@ -1350,7 +1350,8 @@ public sealed partial class AgentTools : IMcpToolHost
             ShipState.Requested => "Prepare a plan following howTo (version, what's in it, the items still waiting for review, the commands you'll run) " +
                                    "and post it with plan_ship. Run nothing yet.",
             ShipState.Planned => "Your plan waits for the user's approval in ProJict. Run nothing yet; ask them to look at it if they're around.",
-            _ => "Approved: run the steps following howTo, report each with report_ship, then finish_ship.",
+            _ => "Approved: run the steps following howTo, report each with report_ship, then finish_ship. Right before a step that publishes " +
+                 "(push, release), you can ask for it with ask_approval pin=true: the user approves it in ProJict with \"Are you sure?\" and their PIN.",
         };
         return Json(json);
     }

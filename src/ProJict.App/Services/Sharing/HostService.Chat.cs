@@ -172,6 +172,8 @@ public sealed partial class HostService
                 return Refuse("That channel isn't there any more.");
             // Calls across the connection (#546dab2b): a guest's agent answers a call from here; a guest's call rings agents here.
             if (op is "callAnswer" or "callLine" or "callChat") return CallOp(session, channel, actor, op, message, Refuse);
+            // What an agent asks with the PIN (#8793323e) only you answer: from your other computer (linked as you), as the owner.
+            if (op == "decide" && account.Self && !actor.Agent) actor = actor with { Owner = true };
             RemoteChatOps.OnChannel(room, channel, actor, message, GuestAccess.CanComment(RoleOf(account)),
                 who => _main.AgentTools.KnownAgentNames().Contains(who, StringComparer.OrdinalIgnoreCase), () =>
                 {

@@ -1,0 +1,35 @@
+<Window x:Class="ProJict.App.Views.PinDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Width="460" SizeToContent="Height" ResizeMode="NoResize" WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+    <!-- Approving what can't be taken back (#8793323e): "Are you sure?", then the PIN; or setting the PIN. -->
+    <StackPanel Margin="22,18,22,20">
+        <StackPanel x:Name="SurePage">
+            <TextBlock Text="Are you sure?" FontSize="18" FontWeight="SemiBold" />
+            <TextBlock x:Name="SureWho" TextWrapping="Wrap" Margin="0,8,0,0" />
+            <Border Margin="0,6,0,0" Padding="10,8" CornerRadius="6" Background="{DynamicResource SubtleFillColorSecondaryBrush}"
+                    BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}" BorderThickness="1">
+                <TextBlock x:Name="SureWhat" FontWeight="SemiBold" TextWrapping="Wrap" />
+            </Border>
+            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                <TextBlock Style="{StaticResource Icon}" Text="&#xE7BA;" FontSize="13" VerticalAlignment="Center" Foreground="{DynamicResource SystemFillColorCautionBrush}" />
+                <TextBlock Text="It can't be taken back. Next, your PIN." Margin="8,0,0,0" TextWrapping="Wrap" />
+            </StackPanel>
+        </StackPanel>
+        <StackPanel x:Name="PinPage" Visibility="Collapsed">
+            <TextBlock x:Name="PinTitle" FontSize="18" FontWeight="SemiBold" />
+            <TextBlock x:Name="PinText" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,6,0,4" />
+            <TextBlock x:Name="CurrentLabel" Text="Your PIN now" Margin="0,8,0,4" />
+            <PasswordBox x:Name="Current" MaxLength="8" AutomationProperties.Name="Your PIN now" />
+            <TextBlock x:Name="PinLabel" Text="PIN" Margin="0,8,0,4" />
+            <PasswordBox x:Name="Pin" MaxLength="8" AutomationProperties.Name="PIN" />
+            <TextBlock x:Name="RepeatLabel" Text="The same PIN again" Margin="0,8,0,4" />
+            <PasswordBox x:Name="Repeat" MaxLength="8" AutomationProperties.Name="The same PIN again" />
+            <TextBlock x:Name="Problem" TextWrapping="Wrap" Margin="0,10,0,0" Foreground="{DynamicResource SystemFillColorCriticalBrush}" Visibility="Collapsed" />
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
+            <Button x:Name="OkButton" IsDefault="True" Style="{StaticResource AccentButtonStyle}" MinWidth="120" Click="Ok_Click" />
+            <Button x:Name="CancelButton" Content="Cancel" IsCancel="True" MinWidth="90" Margin="8,0,0,0" />
+        </StackPanel>
+    </StackPanel>
+</Window>

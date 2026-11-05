@@ -13,6 +13,26 @@
         </DockPanel>
         <TextBlock x:Name="Existing" Style="{StaticResource MutedText}" Margin="2,6,0,0" Visibility="Collapsed"
                    Text="This folder already contains ProJict data — it will be opened." />
+        <!-- The PIN you approve what can't be taken back with (#8793323e); it can wait for your first ship or Settings. -->
+        <TextBlock Text="A PIN for approving what can't be taken back" FontSize="15" FontWeight="SemiBold" Margin="0,20,0,0" />
+        <TextBlock Style="{StaticResource MutedText}" FontSize="13" TextWrapping="Wrap" Margin="0,6,0,10"
+                   Text="When an AI agent asks to do something that can't be undone (publish a release, say), approving it in ProJict asks if you're sure, then this PIN. 4 to 8 digits, kept on this computer only. You can also set it later, in Settings." />
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition />
+                <ColumnDefinition Width="12" />
+                <ColumnDefinition />
+            </Grid.ColumnDefinitions>
+            <StackPanel>
+                <TextBlock Text="PIN" Margin="0,0,0,4" />
+                <PasswordBox x:Name="Pin" MaxLength="8" AutomationProperties.Name="PIN" />
+            </StackPanel>
+            <StackPanel Grid.Column="2">
+                <TextBlock Text="The same PIN again" Margin="0,0,0,4" />
+                <PasswordBox x:Name="Repeat" MaxLength="8" AutomationProperties.Name="The same PIN again" />
+            </StackPanel>
+        </Grid>
+        <TextBlock x:Name="PinProblem" TextWrapping="Wrap" Margin="2,8,0,0" Foreground="{DynamicResource SystemFillColorCriticalBrush}" Visibility="Collapsed" />
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
             <Button Content="Start" Style="{StaticResource AccentButtonStyle}" IsDefault="True" MinWidth="110" Click="Start_Click" />
         </StackPanel>

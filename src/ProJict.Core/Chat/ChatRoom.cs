@@ -506,7 +506,9 @@ public sealed class ChatRoom
 
     /// <summary>Posts a message; posting in an Open channel joins it.</summary>
     /// <param name="approval">The one change the message asks a person to approve (ask_approval), e.g. "commit #9113ea6a".</param>
-    public ChatMessage Post(ChatChannel channel, ChatActor actor, string text, Guid? replyTo = null, List<Attachment>? files = null, string? approval = null)
+    /// <param name="withPin">It can't be taken back: only the owner answers it, approving with their PIN (#8793323e).</param>
+    public ChatMessage Post(ChatChannel channel, ChatActor actor, string text, Guid? replyTo = null, List<Attachment>? files = null, string? approval = null,
+        bool withPin = false)
     {
         text = text.Trim();
         if (text.Length == 0 && files is not { Count: > 0 }) throw new ChatException("The message is empty.");
@@ -527,10 +529,11 @@ public sealed class ChatRoom
         approval = approval?.Trim();
         if (approval is { Length: 0 }) approval = null;
         if (approval is { Length: > MaxApproval }) throw new ChatException($"Say what you ask to do in {MaxApproval} characters at most.");
+        if (withPin && approval == null) throw new ChatException("Only a request for approval asks for the PIN.");
         var message = new ChatMessage
         {
             By = actor.Name, Agent = actor.Agent, At = NextTime(channel), Text = text, ReplyTo = replyTo, Attachments = files is { Count: > 0 } ? files : null,
-            Approval = approval,
+            Approval = approval, WithPin = withPin,
         };
         channel.Messages.Add(message);
         if (answered is { Agent: false, Notice: false })
@@ -578,9 +581,31 @@ public sealed class ChatRoom
         {
             (message.Reactions ??= []).Add(new ChatReaction { By = actor.Name, Up = yes, At = Now });
             // On a message asking for approval, a person's 👍 or 👎 is their answer; the first one decides, and an agent's never does.
-            if (message.Approval != null && message.Decision == null && !actor.Agent) message.Decision = new ChatDecision { By = actor.Name, Approved = yes, At = Now };
+            // One asking with the PIN is answered only with Approve or Decline (Decide).
+            if (message is { Approval: not null, Decision: null, WithPin: false } && !actor.Agent) message.Decision = new ChatDecision { By = actor.Name, Approved = yes, At = Now };
         }
         if (message.Reactions is { Count: 0 }) message.Reactions = null;
+        Changed?.Invoke(channel);
+    }
+
+    /// <summary>
+    /// Approve or Decline on a message asking for approval: the first person's answer decides. One asking with the PIN
+    /// (#8793323e) only the workspace's owner answers (on any of their computers), and approving it needs
+    /// <paramref name="pinChecked"/>: their PIN, checked where they clicked.
+    /// </summary>
+    public void Decide(ChatChannel channel, ChatActor actor, Guid id, bool approve, bool pinChecked = false)
+    {
+        var message = Message(channel, id);
+        if (message.Approval == null || message.Deleted) throw new ChatException("That message doesn't ask for approval.");
+        if (!CanSee(channel, actor)) throw new ChatException($"You can't answer in #{channel.Name}.");
+        if (actor.Agent) throw new ChatException("Only people answer what agents ask to do.");
+        if (message.Decision is { } decided) throw new ChatException($"{decided.By} already {(decided.Approved ? "approved" : "declined")} it.");
+        if (message.WithPin)
+        {
+            if (!actor.Owner || actor.Guest) throw new ChatException($"Only {OwnerName} answers this one: it's approved with their PIN.");
+            if (approve && !pinChecked) throw new ChatException("Approving this one takes your PIN.");
+        }
+        message.Decision = new ChatDecision { By = actor.Name, Approved = approve, At = Now };
         Changed?.Invoke(channel);
     }
 

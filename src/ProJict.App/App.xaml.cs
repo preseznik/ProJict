@@ -48,9 +48,11 @@ public partial class App : Application
         var appSettings = AppSettings.Load();
         if (dataArg == null && appSettings.DataRoot == null)
         {
-            // First start: let the user pick the data folder, and remember it.
+            // First start: let the user pick the data folder (and set the PIN for approvals, if they do it now), and remember it.
             ThemeMode = ThemeMode.System;
-            appSettings.DataRoot = FirstRunWindow.Ask(AppSettings.DefaultDataRoot()) ?? AppSettings.DefaultDataRoot();
+            var first = FirstRunWindow.Ask(AppSettings.DefaultDataRoot());
+            appSettings.DataRoot = first?.Folder ?? AppSettings.DefaultDataRoot();
+            if (first?.Pin is { } pin) appSettings.ApprovalPin = ProJict.Core.Agents.ApprovalPin.Create(pin);
             try { appSettings.Save(); }
             catch (Exception) { /* asked again next time */ }
         }

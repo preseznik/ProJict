@@ -25,7 +25,7 @@ public sealed partial class AgentTools
         {
             ("GET", 1, _) => Json(MeWho()),
             ("GET", 2, "waiting") => Json(MeWaiting()),
-            ("POST", 3, "approvals") => Json(MeDecideQuestion(Part(2), Approve(body))),
+            ("POST", 3, "approvals") => Json(MeDecideQuestion(Part(2), Approve(body), Optional(body, "pin"))),
             ("POST", 3, "ship") => Json(MeDecideShip(Part(2), Approve(body))),
             ("POST", 3, "reviews") => Json(MeReview(Part(2), body)),
             ("GET", 2, "projects") => Json(MeProjects()),
@@ -85,6 +85,7 @@ public sealed partial class AgentTools
                 ["at"] = x.Message.At,
                 ["asks"] = x.Message.Approval,
                 ["text"] = x.Message.Text,
+                ["pin"] = x.Message.WithPin ? true : null,
             });
         var ships = LocalProjects.Where(p => p.OpenShip is { State: ShipState.Planned })
             .Select(p => (JsonNode)new JsonObject
@@ -117,14 +118,27 @@ public sealed partial class AgentTools
 
     // ───────────── Deciding ─────────────
 
-    private JsonObject MeDecideQuestion(string id, bool approve)
+    /// <summary>
+    /// Your answer to what an agent asks. One asked with the PIN (#8793323e) is approved only with this computer's PIN
+    /// ("pin" in the body; wrong ones in a row make it wait a while), which the phone asks you for after "Are you sure?".
+    /// </summary>
+    private JsonObject MeDecideQuestion(string id, bool approve, string? pin)
     {
         var (channel, message) = FindMessage(id);
         if (message.Approval == null) throw new McpToolException("That message doesn't ask for approval.", ToolProblem.Conflict);
         if (message.Decision is { } decided)
             throw new McpToolException($"{decided.By} already {(decided.Approved ? "approved" : "declined")} it.", ToolProblem.Conflict);
-        // Your 👍 or 👎 on it, as in Chat: the first person's answer decides.
-        try { Chat.React(channel, _state.ChatMe, message.Id, approve); }
+        try
+        {
+            if (message.WithPin)
+            {
+                if (approve && pin == null) throw new McpToolException("This one can't be taken back: approving it takes your PIN (\"pin\").", ToolProblem.Forbidden);
+                if (approve && _state.CheckApprovalPin(pin) is { } wrong) throw new McpToolException(wrong, ToolProblem.Forbidden);
+                Chat.Decide(channel, _state.ChatMe, message.Id, approve, pinChecked: approve);
+            }
+            // Your 👍 or 👎 on it, as in Chat: the first person's answer decides.
+            else Chat.React(channel, _state.ChatMe, message.Id, approve);
+        }
         catch (ChatException ex) { throw new McpToolException(ex.Message, ToolProblem.Forbidden); }
         return new JsonObject { ["message"] = message.Id.ToString(), ["asks"] = message.Approval, ["approved"] = approve, ["by"] = YourName };
     }

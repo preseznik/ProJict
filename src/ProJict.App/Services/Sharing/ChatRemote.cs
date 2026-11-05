@@ -54,6 +54,8 @@ internal static class RemoteChatOps
             case "post": room.Post(channel, actor, Text("text") ?? "", Guid.TryParse(Text("replyTo"), out var r) ? r : null, files()); break;
             case "edit": room.Edit(channel, actor, messageId ?? Guid.Empty, Text("text") ?? ""); break;
             case "react": room.React(channel, actor, messageId ?? Guid.Empty, (bool?)message["up"]); break;
+            // Approve or Decline; "pin": the PIN was checked on the computer you clicked on (#8793323e), which only counts from yours.
+            case "decide": room.Decide(channel, actor, messageId ?? Guid.Empty, (bool?)message["approve"] == true, (bool?)message["pin"] == true); break;
             case "delete": room.DeleteMessage(channel, actor, messageId ?? Guid.Empty); break;
             case "join": room.Join(channel, actor); break;
             case "leave": room.Leave(channel, actor); break;

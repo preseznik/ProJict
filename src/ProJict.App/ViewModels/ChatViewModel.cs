@@ -1290,13 +1290,41 @@ public sealed partial class ChatViewModel : ObservableObject
         }
     }
 
-    /// <summary>Approve or Decline what a message asks: your 👍 or 👎 on it, which a question takes as your answer (the first one decides).</summary>
+    /// <summary>
+    /// Approve or Decline what a message asks: your 👍 or 👎 on it, which a question takes as your answer (the first one
+    /// decides). One asking with the PIN (#8793323e) is approved only after "Are you sure?" and this computer's PIN.
+    /// </summary>
     internal void Decide(ChatMessageViewModel message, bool approve)
     {
         if (!message.CanDecide) return;
-        // A thumb the other way would be taken back by the same click, not given: give this one.
-        React(message, approve);
+        if (!message.Model.WithPin)
+        {
+            // A thumb the other way would be taken back by the same click, not given: give this one.
+            React(message, approve);
+            return;
+        }
+        if (Channel is not { } channel) return;
+        if (approve && !(ConfirmWithPin?.Invoke(message)
+                         ?? Views.PinDialog.Approve(Application.Current.MainWindow, _state, message.Model.By, message.Model.Approval ?? ""))) return;
+        if (Act(channel, (r, me) => r.Decide(channel, me, message.Model.Id, approve, pinChecked: approve), "decide",
+                ("message", message.Model.Id.ToString()), ("approve", approve), ("pin", approve)))
+            RebuildMessages();
     }
+
+    /// <summary>"Are you sure?" and your PIN, before approving what can't be taken back; tests answer for you (null: the dialog).</summary>
+    public Func<ChatMessageViewModel, bool>? ConfirmWithPin { get; set; }
+
+    /// <summary>
+    /// You answer what's asked with the PIN in this channel: as the owner here, on a host that's you on another computer,
+    /// or in the channels your other computer shares back as you. Not in someone else's ProJict.
+    /// </summary>
+    internal bool AnswersWithPin(ChatChannel? channel) => PlaceOf(channel).Host switch
+    {
+        null => true,
+        HostConnection host => host.IsSelf,
+        BackChat back => back.AsOwner,
+        _ => false,
+    };
 
     /// <summary>👍 or 👎 on a message (the same again takes it back); an agent hears it as a yes or no to what it wrote.</summary>
     internal void React(ChatMessageViewModel message, bool up)
@@ -1721,12 +1749,15 @@ public sealed partial class ChatMessageViewModel : ObservableObject
     // What the message asks to approve (ask_approval, #848d7643): Approve and Decline until a person answers, then who did.
     public bool AsksApproval => Model.Approval != null && !Model.Deleted;
     public string? Approval => Model.Approval;
-    /// <summary>It waits for an answer, and you may give it (it isn't yours, and you can write here).</summary>
-    public bool CanDecide => AsksApproval && Model.Decision == null && CanReact;
+    /// <summary>It waits for an answer, and you may give it (it isn't yours, and you can write here; with the PIN, it's yours to answer).</summary>
+    public bool CanDecide => AsksApproval && Model.Decision == null && CanReact && (!Model.WithPin || _owner.AnswersWithPin(_owner.Channel));
     public bool WaitsForAnswer => AsksApproval && Model.Decision == null;
+    /// <summary>It can't be taken back: approving takes "Are you sure?" and the PIN (#8793323e).</summary>
+    public bool WithPin => AsksApproval && Model.WithPin;
     public string? DecisionText => Model.Decision is { } d
-        ? $"{(d.Approved ? "Approved" : "Declined")} by {d.By} · {d.At.ToString(d.At.Date == DateTime.Today ? "HH:mm" : "d MMM HH:mm", System.Globalization.CultureInfo.CurrentCulture)}"
-        : CanDecide ? null : "Waiting for an answer";
+        ? $"{(d.Approved ? "Approved" : "Declined")} by {d.By}{(d.Approved && Model.WithPin ? " with the PIN" : "")} · " +
+          d.At.ToString(d.At.Date == DateTime.Today ? "HH:mm" : "d MMM HH:mm", System.Globalization.CultureInfo.CurrentCulture)
+        : CanDecide ? null : Model.WithPin ? $"Waiting for {_owner.RoomFor.OwnerName}: approving it takes their PIN" : "Waiting for an answer";
     public bool IsApproved => Model.Decision is { Approved: true };
     public bool IsDeclined => Model.Decision is { Approved: false };
     [RelayCommand] private void Approve() => _owner.Decide(this, true);

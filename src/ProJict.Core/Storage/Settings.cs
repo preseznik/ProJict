@@ -67,6 +67,12 @@ public sealed class AppSettings
     /// </summary>
     public bool ApproveInChat { get; set; } = true;
     /// <summary>
+    /// The PIN you approve with what can't be taken back on this computer (ask_approval pin=true, #8793323e), hashed;
+    /// null until you set it (at the first start, your first ship that publishes, or in Settings).
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public Agents.ApprovalPin? ApprovalPin { get; set; }
+    /// <summary>
     /// The Chat cache on this computer (Settings › Chat): files nobody used for this many days are cleaned out (0 keeps
     /// them). It holds private conversations' files, and channels' big ones.
     /// </summary>

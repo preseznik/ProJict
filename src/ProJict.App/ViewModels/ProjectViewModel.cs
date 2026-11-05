@@ -1708,11 +1708,24 @@ public sealed partial class ProjectViewModel : ObservableObject
 
     [RelayCommand] private void CancelShipRequest() => IsComposingShip = false;
 
+    /// <summary>Sets the PIN before your first ship that publishes; tests answer for you (null: the dialog).</summary>
+    public Func<bool>? SetUpPinForShip { get; set; }
+
     [RelayCommand]
     private void RequestShip()
     {
         if (!CanShip) return;
         var steps = ShipChoices.Where(c => c.IsChecked).Select(c => c.Step).ToList();
+        // Your first ship that publishes: set the PIN you'll approve the push or release with (#8793323e), unless it's set already.
+        if (steps.Any(ShipFlow.Publishes) && !_state.HasApprovalPin &&
+            !(SetUpPinForShip?.Invoke() ?? Views.PinDialog.SetUp(System.Windows.Application.Current.MainWindow, _state,
+                $"{Project.Name} is pushed or released in this ship. When the agent asks to publish, you approve it in ProJict with your PIN " +
+                $"(after \"Are you sure?\"), or where it runs. Set it now: {ProJict.Core.Agents.ApprovalPin.MinDigits} to " +
+                $"{ProJict.Core.Agents.ApprovalPin.MaxDigits} digits, kept on this computer only.")))
+        {
+            _state.StatusText = "Not asked yet: set your PIN first, for approving what this ship publishes.";
+            return;
+        }
         if (Project.Remote is { } remote)
         {
             if (steps.Count == 0)

@@ -60,11 +60,14 @@ public sealed partial class AgentTools
             "Asks a person in Chat to approve one change you name, before you make it (commit, push, delete, spend…). The message gets Approve and Decline " +
             "buttons; a 👍 or 👎 on it answers too, and the first person to answer decides. You're told \"approved\" or \"declined\" for exactly what you " +
             "named (your chat watcher prints [approval] …), and nothing else counts as approval: a 👍 on any other message is just agreement with it. " +
-            "Do nothing of it before you're told. One change per question.",
+            "Do nothing of it before you're told. One change per question. With pin=true, for what can't be taken back (publishing a release, " +
+            "say): only the user answers it, a 👍 doesn't, and approving it asks them \"Are you sure?\" and their PIN.",
             Schema(ChannelArg, ("asks", "string", $"Exactly what you'll do once approved, as a short line (up to {ChatRoom.MaxApproval} characters), " +
                                                   "e.g. \"commit #9113ea6a (not pushed)\" or \"delete the 3 old test builds\".", true),
                 ("text", "string", "The message, if you want to say more than the request (it's shown above it).", false),
-                ("reply_to", "string", "Id of the message you answer; it's quoted.", false)),
+                ("reply_to", "string", "Id of the message you answer; it's quoted.", false),
+                ("pin", "boolean", "It can't be taken back (a release, a push to the main branch, deleting for good): the user approves it with " +
+                                   "\"Are you sure?\" and their PIN.", false)),
             AskApproval);
         Add("claim_reply", "Say you're answering a message",
             "Before you answer a person's message that other agents could answer too (it @mentions nobody, several of you, or @everyone), claim it: " +
@@ -318,15 +321,21 @@ public sealed partial class AgentTools
             ? (ChatRoom.FindMessage(channel, r.Trim()) ?? throw new McpToolException($"No message {r} in #{channel.Name}.", ToolProblem.NotFound)).Id
             : null;
         var text = args.String("text") is { } said && said.Trim().Length > 0 ? said : $"May I {asks}?";
-        var message = Chatting(() => Chat.Post(channel, ActorOf(session), text, replyTo, approval: asks));
+        var withPin = args.Bool("pin") == true;
+        var message = Chatting(() => Chat.Post(channel, ActorOf(session), text, replyTo, approval: asks, withPin: withPin));
         session.Noticed.Add($"chat:{message.Id}");
-        return Json(new JsonObject
+        var json = new JsonObject
         {
             ["id"] = ShortId(message.Id),
             ["channel"] = Display(channel, session),
             ["asks"] = message.Approval,
-            ["next"] = "Wait for the answer: you'll be told when it's approved or declined (your chat watcher prints [approval] …). Do nothing of it before.",
-        });
+            ["next"] = withPin
+                ? $"Wait for the answer: {_state.UserName} approves it with their PIN, in ProJict (your chat watcher prints [approval] …). " +
+                  "Do nothing of it before. If they tell you their answer where you run (Claude Code, Codex), that counts too."
+                : "Wait for the answer: you'll be told when it's approved or declined (your chat watcher prints [approval] …). Do nothing of it before.",
+        };
+        if (withPin) json["pin"] = true;
+        return Json(json);
     }
 
     private static bool IsWallOfText(string text) =>
@@ -551,7 +560,7 @@ public sealed partial class AgentTools
         foreach (var (channel, message, decision, key) in NewDecisions(session).ToList())
             if (session.Noticed.Add(key))
                 news.Add((true, decision.Approved
-                    ? $"{decision.By} approved what you asked in {Display(channel, session)} (id {ShortId(message.Id)}): “{message.Approval}”. Go ahead with that, and only that."
+                    ? $"{decision.By} approved{(message.WithPin ? " with their PIN" : "")} what you asked in {Display(channel, session)} (id {ShortId(message.Id)}): “{message.Approval}”. Go ahead with that, and only that."
                     : $"{decision.By} declined what you asked in {Display(channel, session)} (id {ShortId(message.Id)}): “{message.Approval}”. Don't do it; ask them what they'd like instead if it isn't clear."));
         foreach (var a in NewAnswers(session).ToList())
             if (session.Noticed.Add(a.Key))
@@ -677,6 +686,7 @@ public sealed partial class AgentTools
             ["no"] = m.Reactions?.Any(r => !r.Up) == true ? new JsonArray(m.Reactions.Where(r => !r.Up).Select(r => (JsonNode)r.By).ToArray()) : null,
             ["asksApproval"] = m.Approval,
             ["approval"] = m.Approval == null ? null : m.Decision is { } d ? (d.Approved ? "approved by " : "declined by ") + d.By : "waiting",
+            ["withPin"] = m.WithPin ? true : null,
             ["attachments"] = m.Attachments is { Count: > 0 } files ? Paths(files) : null,
         };
     }
