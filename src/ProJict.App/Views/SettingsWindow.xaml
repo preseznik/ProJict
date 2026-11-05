@@ -376,6 +376,12 @@
                         </StackPanel>
                     </StackPanel>
                 </DockPanel>
+                <!-- Calls: the language you speak (#a06cd2e0) -->
+                <DockPanel Margin="0,8,0,0">
+                    <TextBlock Text="Language in calls" Width="170" VerticalAlignment="Center" />
+                    <ComboBox x:Name="CallLanguagePicker" Width="320" HorizontalAlignment="Left" AutomationProperties.Name="Language you speak in calls"
+                              ToolTip="The language you speak in calls: the recognizer is told it, and agents answer in it. Change it for one call in the call window." />
+                </DockPanel>
                 <!-- Calls: whose voices read the agents' answers aloud -->
                 <DockPanel Margin="0,8,0,0">
                     <TextBlock Text="Voices in calls" Width="170" VerticalAlignment="Top" Margin="0,2,0,0" />
@@ -383,6 +389,11 @@
                         <RadioButton x:Name="WindowsVoices" GroupName="CallVoices" Content="Windows' voices (on this computer, free)" />
                         <RadioButton x:Name="ElevenLabsVoices" GroupName="CallVoices" Content="ElevenLabs' voices" Margin="0,4,0,0" />
                         <TextBlock x:Name="ElevenLabsVoicesNote" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="28,0,0,0" />
+                        <!-- ElevenLabs' model: by the call's language, or one you pick (#f021ff25) -->
+                        <ComboBox x:Name="ElevenLabsModelPicker" MaxWidth="420" HorizontalAlignment="Stretch" Margin="28,6,0,0" AutomationProperties.Name="ElevenLabs model"
+                                  ToolTip="The ElevenLabs model that reads answers. Flash is fastest; Eleven v3 speaks the most languages, Slovenian too." />
+                        <TextBlock Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="28,4,0,0"
+                                   Text="Right-click an agent's tile in a call to pick its voice." />
                     </StackPanel>
                 </DockPanel>
             </StackPanel>

@@ -56,6 +56,21 @@ public sealed partial class CallViewModel : ObservableObject
     public event Action? Over;
 
     [RelayCommand] private void HangUp() => _calls.HangUp();
+    /// <summary>The languages to pick for this call (Detect first).</summary>
+    public IReadOnlyList<string> LanguageNames { get; } = ["Detect", .. ProJict.Core.Chat.CallLanguage.All.Select(l => l.Name)];
+
+    /// <summary>The language this call is in; picking another tells the recognizer and asks the agents to answer in it.</summary>
+    public string SelectedLanguage
+    {
+        get => ProJict.Core.Chat.CallLanguage.NameOf(_calls.Language);
+        set => _calls.SetLanguage(ProJict.Core.Chat.CallLanguage.All.FirstOrDefault(l => l.Name == value)?.Code);
+    }
+
+    /// <summary>The voices an agent can read with (its tile's Voice menu), the one picked for it, and picking one.</summary>
+    public Task<IReadOnlyList<string>> VoicesAsync() => _calls.VoicesAsync();
+    public string? VoicePickedFor(string agent) => _calls.VoicePickedFor(agent);
+    public void PickVoice(string agent, string? voice) => _calls.PickVoice(agent, voice);
+
     /// <summary>Cuts the agent's answer off (the Stop button, or Esc).</summary>
     [RelayCommand] private void StopSpeaking() => _calls.StopSpeaking();
     /// <summary>An answer is on its way or playing.</summary>

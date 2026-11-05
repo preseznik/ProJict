@@ -99,6 +99,15 @@ public sealed class AppSettings
     /// <summary>The Whisper model calls use (<see cref="Chat.WhisperModel"/>'s id); null for Small.</summary>
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public string? WhisperModel { get; set; }
+    /// <summary>The language you speak in calls (<see cref="Chat.CallLanguage"/>'s code); null to have it detected (#a06cd2e0).</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? CallLanguage { get; set; }
+    /// <summary>ElevenLabs' model for reading answers; null to pick it by the call's language (#f021ff25).</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? ElevenLabsModel { get; set; }
+    /// <summary>The voice each agent reads with in calls, as you picked it (right-click its tile); others get one by their name.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public Dictionary<string, string>? AgentVoices { get; set; }
     /// <summary>Whether a file of this size, posted in such a channel, goes to the Chat cache.</summary>
     public bool GoesToChatCache(bool direct, long size) => direct || (BigChannelFileMb > 0 && size > (long)BigChannelFileMb * 1024 * 1024);
     /// <summary>Read-only API tokens may still use Chat fully: post, start channels, invite (Settings › API).</summary>

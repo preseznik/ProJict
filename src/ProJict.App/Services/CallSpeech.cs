@@ -1,4 +1,6 @@
+using System.Globalization;
 using System.IO;
+using ProJict.Core.Chat;
 using System.Speech.AudioFormat;
 using System.Speech.Recognition;
 using System.Speech.Synthesis;
@@ -29,6 +31,8 @@ public interface ISpeechIn : IDisposable
     bool DropsEcho => false;
     /// <summary>You speak over an answer, clearly louder than the speakers' own sound: the answer should stop (any thread).</summary>
     event Action? Interrupted { add { } remove { } }
+    /// <summary>The language you speak now (a <see cref="CallLanguage"/> code), or null to have it detected.</summary>
+    void UseLanguage(string? code) { }
     /// <summary>Starts listening; the problem when it can't (no microphone, no speech recognition), or null.</summary>
     string? Start();
     void Stop();
@@ -41,13 +45,15 @@ public interface ISpeechOut : IDisposable
     Task<IReadOnlyList<string>> VoicesAsync(CancellationToken stop);
     /// <summary>Says it, in the voice named (or the first); done when it's said or stopped.</summary>
     Task SpeakAsync(string voice, string text, CancellationToken stop);
+    /// <summary>The voices for answers in <paramref name="language"/> (a <see cref="CallLanguage"/> code); all of them when none speaks it.</summary>
+    Task<IReadOnlyList<string>> VoicesAsync(string? language, CancellationToken stop) => VoicesAsync(stop);
 }
 
 /// <summary>
 /// Windows speech recognition (offline): dictation from Windows' default microphone, or from the one you picked
 /// (<paramref name="sound"/>: its sound goes to the recognizer as it comes, #b39e8f23).
 /// </summary>
-public sealed class WindowsSpeechIn(ISoundIn? sound = null) : ISpeechIn
+public sealed class WindowsSpeechIn(ISoundIn? sound = null, string? language = null) : ISpeechIn
 {
     /// <summary>Below this confidence a phrase is taken as noise.</summary>
     private const float Sure = 0.35f;
@@ -65,7 +71,10 @@ public sealed class WindowsSpeechIn(ISoundIn? sound = null) : ISpeechIn
         if (_engine != null) return null;
         try
         {
-            var engine = new SpeechRecognitionEngine();
+            // Its recognizer for the call's language when Windows has one (often only English); else Windows' own.
+            var info = language == null ? null
+                : SpeechRecognitionEngine.InstalledRecognizers().FirstOrDefault(r => r.Culture.TwoLetterISOLanguageName == language);
+            var engine = info != null ? new SpeechRecognitionEngine(info) : new SpeechRecognitionEngine();
             engine.LoadGrammar(new DictationGrammar());
             if (sound == null) engine.SetInputToDefaultAudioDevice();
             else
@@ -196,6 +205,14 @@ public sealed class WindowsSpeechOut : ISpeechOut
     public IReadOnlyList<string> Voices => [.. _synth.GetInstalledVoices().Where(v => v.Enabled).Select(v => v.VoiceInfo.Name)];
 
     public Task<IReadOnlyList<string>> VoicesAsync(CancellationToken stop) => Task.FromResult(Voices);
+
+    /// <summary>Windows' voices that speak the language (one with a Slovenian voice installed reads Slovenian); all when none does.</summary>
+    public Task<IReadOnlyList<string>> VoicesAsync(string? language, CancellationToken stop)
+    {
+        IReadOnlyList<string> speaking = language == null ? [] :
+            [.. _synth.GetInstalledVoices().Where(v => v.Enabled && v.VoiceInfo.Culture.TwoLetterISOLanguageName == language).Select(v => v.VoiceInfo.Name)];
+        return Task.FromResult(speaking.Count > 0 ? speaking : Voices);
+    }
 
     public Task SpeakAsync(string voice, string text, CancellationToken stop)
     {
