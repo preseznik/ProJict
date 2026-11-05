@@ -1,0 +1,112 @@
+<UserControl x:Class="ProJict.App.Views.ProfileCard"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:ProJict.App.ViewModels"
+             Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+    <!--
+        A person's or agent's profile card (#490e5810), in a popup where you clicked their name, picture or @mention in Chat:
+        picture, name, what they are and whether they're online; their channels; their numbers; what they're on now and
+        the projects they worked on (each opens); and Message privately.
+    -->
+    <UserControl.Resources>
+        <ItemsPanelTemplate x:Key="WrapLinks">
+            <WrapPanel />
+        </ItemsPanelTemplate>
+        <Style x:Key="LinkButton" TargetType="Button" BasedOn="{StaticResource SubtleButton}">
+            <Setter Property="Padding" Value="6,2" />
+            <Setter Property="Margin" Value="0,0,4,2" />
+            <Setter Property="HorizontalAlignment" Value="Left" />
+            <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+        </Style>
+        <DataTemplate x:Key="Link" DataType="{x:Type vm:ProfileLink}">
+            <Button Style="{StaticResource LinkButton}" Command="{Binding OpenCommand}" ToolTip="{Binding ToolTip}" AutomationProperties.Name="{Binding Text}">
+                <TextBlock Text="{Binding Text}" TextTrimming="CharacterEllipsis" />
+            </Button>
+        </DataTemplate>
+        <Style x:Key="Heading" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11.5" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+            <Setter Property="Margin" Value="0,10,0,3" />
+        </Style>
+    </UserControl.Resources>
+
+    <Border x:Name="CardRoot" Width="310" Padding="16,14,16,12" CornerRadius="8" BorderThickness="1"
+            Background="{DynamicResource SolidBackgroundFillColorBaseBrush}" BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="14" ShadowDepth="3" Opacity="0.25" />
+        </Border.Effect>
+        <StackPanel>
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Style="{StaticResource SubtleIconButton}" Content="&#xE711;" FontSize="10" Padding="5" VerticalAlignment="Top"
+                        Margin="0,-6,-8,0" Command="{Binding CloseCommand}" ToolTip="Close" AutomationProperties.Name="Close the card" />
+                <!-- Their picture (or initials), with a dot for online, away or offline -->
+                <Grid DockPanel.Dock="Left" Width="56" Height="56" Margin="0,0,12,0" VerticalAlignment="Top" ToolTip="{Binding PresenceText}">
+                    <Border CornerRadius="28" Background="{Binding Badge.Background}">
+                        <TextBlock Text="{Binding Badge.Initials}" Foreground="White" FontWeight="SemiBold" FontSize="19" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <Ellipse x:Name="CardPicture" Visibility="{Binding HasPicture, Converter={StaticResource BoolToVis}}">
+                        <Ellipse.Fill>
+                            <ImageBrush ImageSource="{Binding Picture}" Stretch="UniformToFill" />
+                        </Ellipse.Fill>
+                    </Ellipse>
+                    <Ellipse Width="14" Height="14" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,1,1" StrokeThickness="2.5"
+                             Stroke="{DynamicResource SolidBackgroundFillColorBaseBrush}" AutomationProperties.Name="{Binding PresenceText}">
+                        <Ellipse.Style>
+                            <Style TargetType="Ellipse">
+                                <Setter Property="Fill" Value="{DynamicResource SystemFillColorSuccessBrush}" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsAway}" Value="True">
+                                        <Setter Property="Fill" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding IsOffline}" Value="True">
+                                        <Setter Property="Fill" Value="{DynamicResource TextFillColorTertiaryBrush}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Ellipse.Style>
+                    </Ellipse>
+                </Grid>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock x:Name="CardName" Text="{Binding Name}" FontSize="17" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="{Binding KindText}" Style="{StaticResource MutedText}" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="{Binding PresenceText}" FontSize="11.5" Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                </StackPanel>
+            </DockPanel>
+
+            <TextBlock Text="Channels" Style="{StaticResource Heading}" />
+            <ItemsControl x:Name="CardChannels" ItemsSource="{Binding Channels}" ItemTemplate="{StaticResource Link}" ItemsPanel="{StaticResource WrapLinks}" Focusable="False"
+                          Margin="-6,0,0,0" Visibility="{Binding HasChannels, Converter={StaticResource BoolToVis}}" />
+            <TextBlock Text="Not in any channel." Style="{StaticResource MutedText}" Visibility="{Binding HasChannels, Converter={StaticResource InvBoolToVis}}" />
+
+            <ItemsControl x:Name="CardStats" ItemsSource="{Binding Stats}" Focusable="False" Margin="0,10,0,0">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="{x:Type vm:ProfileStat}">
+                        <Grid Margin="0,0,0,3" ToolTip="{Binding ToolTip}" Background="Transparent">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="100" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="{Binding Label}" Style="{StaticResource MutedText}" VerticalAlignment="Top" />
+                            <TextBlock Grid.Column="1" Text="{Binding Value}" FontSize="12.5" TextWrapping="Wrap" />
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <StackPanel Visibility="{Binding HasWorking, Converter={StaticResource BoolToVis}}">
+                <TextBlock Text="Working on" Style="{StaticResource Heading}" />
+                <ItemsControl x:Name="CardWorking" ItemsSource="{Binding Working}" ItemTemplate="{StaticResource Link}" Focusable="False" Margin="-6,0,0,0" />
+            </StackPanel>
+            <StackPanel Visibility="{Binding HasProjects, Converter={StaticResource BoolToVis}}">
+                <TextBlock Text="Worked on" Style="{StaticResource Heading}" />
+                <ItemsControl x:Name="CardProjects" ItemsSource="{Binding Projects}" ItemTemplate="{StaticResource Link}" ItemsPanel="{StaticResource WrapLinks}" Focusable="False"
+                              Margin="-6,0,0,0" />
+            </StackPanel>
+
+            <Button x:Name="CardMessage" Style="{StaticResource AccentButtonStyle}" Content="{Binding PrivateMessageText}" HorizontalAlignment="Left" Margin="0,12,0,0" Padding="14,5"
+                    Command="{Binding PrivateMessageCommand}" Visibility="{Binding CanMessage, Converter={StaticResource BoolToVis}}"
+                    ToolTip="Write to them in Chat, just the two of you" />
+        </StackPanel>
+    </Border>
+</UserControl>

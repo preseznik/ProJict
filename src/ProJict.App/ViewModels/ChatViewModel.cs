@@ -1111,6 +1111,9 @@ public sealed partial class ChatViewModel : ObservableObject
             case ChatSegmentKind.Link:
                 ShellLauncher.OpenUrl(segment.Target!);
                 break;
+            case ChatSegmentKind.Mention when segment.Target is { } name:
+                ShowMentioned(name);
+                break;
             case ChatSegmentKind.Action when segment.Target?.Split(':') is [var id, var word] && Guid.TryParse(id, out var projectId):
                 if (_state.Projects.FirstOrDefault(p => p.Id == projectId) is not { OpenShip.State: ShipState.Planned } shipping)
                 {
@@ -1575,6 +1578,8 @@ public sealed partial class ChatMemberViewModel(ChatMember model, ChatChannel ch
     public bool CanMessage => !IsMe && owner.MayWrite(channel);
 
     [RelayCommand] private void PrivateMessage() => owner.OpenDirectIn(channel, model.Name, model.Agent);
+    /// <summary>Click a member: their profile card (#490e5810).</summary>
+    [RelayCommand] private void ShowProfile() => owner.ShowProfile(channel, model.Name, model.Agent);
 
     [RelayCommand]
     private void Mute(string? minutes)
@@ -1596,6 +1601,8 @@ public sealed partial class ChatSegmentViewModel(ChatSegment segment, ChatViewMo
     public string Text => segment.Text;
     public bool IsLink => segment.Kind is ChatSegmentKind.Channel or ChatSegmentKind.Item or ChatSegmentKind.Link;
     public bool IsMention => segment.Kind == ChatSegmentKind.Mention;
+    /// <summary>An @mention of someone (not @everyone): a click shows their profile card.</summary>
+    public bool IsPersonMention => IsMention && !string.Equals(segment.Target, "everyone", StringComparison.OrdinalIgnoreCase);
     public bool IsAction => segment.Kind == ChatSegmentKind.Action;
     /// <summary>Inside **…** in the message.</summary>
     public bool IsBold => segment.Bold;
@@ -1606,6 +1613,7 @@ public sealed partial class ChatSegmentViewModel(ChatSegment segment, ChatViewMo
         ChatSegmentKind.Channel => "Open the channel",
         ChatSegmentKind.Item => "Show the item on its board",
         ChatSegmentKind.Link => segment.Target,
+        ChatSegmentKind.Mention when IsPersonMention => "Show their profile card",
         _ => null,
     };
 
@@ -1720,6 +1728,11 @@ public sealed partial class ChatMessageViewModel : ObservableObject
     /// <summary>Right-click the author › Private message.</summary>
     public bool CanMessageAuthor => !Model.Notice && !IsMine && _owner.MayWrite(_owner.Channel);
     [RelayCommand] private void PrivateMessage() => _owner.OpenDirectIn(_owner.Channel, Model.By, Model.Agent);
+    /// <summary>Click the author's name or picture: their profile card (#490e5810).</summary>
+    [RelayCommand] private void ShowProfile()
+    {
+        if (!Model.Notice) _owner.ShowProfile(_owner.Channel, Model.By, Model.Agent);
+    }
 
     [RelayCommand] private void ShowReplied()
     {

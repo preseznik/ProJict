@@ -291,7 +291,7 @@
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <Border x:Name="Badge" Width="30" Height="30" CornerRadius="15" Background="{Binding Badge.Background}" VerticalAlignment="Top" HorizontalAlignment="Left"
-                                Margin="0,4,0,0">
+                                Margin="0,4,0,0" Cursor="Hand" ToolTip="Show their profile card" MouseLeftButtonUp="Person_MouseUp">
                             <Grid>
                                 <TextBlock Text="{Binding Badge.Initials}" Foreground="White" FontWeight="SemiBold" FontSize="11.5" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                 <Ellipse x:Name="AuthorPicture" Width="30" Height="30" Visibility="{Binding HasPicture, Converter={StaticResource BoolToVis}}">
@@ -310,7 +310,18 @@
                                         <MenuItem Header="Private message" Command="{Binding PrivateMessageCommand}" />
                                     </ContextMenu>
                                 </TextBlock.ContextMenu>
-                                <Run x:Name="ByRun" Text="{Binding By, Mode=OneWay}" FontWeight="SemiBold" /><Run Text="  " /><Run Text="{Binding Time, Mode=OneWay}" FontSize="11" Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                                <Hyperlink x:Name="ByLink" Command="{Binding ShowProfileCommand}" ToolTip="Show their profile card"><Hyperlink.Style>
+                                        <Style TargetType="Hyperlink">
+                                            <Setter Property="TextDecorations" Value="{x:Null}" />
+                                            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+                                            <Setter Property="Cursor" Value="Hand" />
+                                            <Style.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter Property="TextDecorations" Value="Underline" />
+                                                </Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Hyperlink.Style><Run x:Name="ByRun" Text="{Binding By, Mode=OneWay}" FontWeight="SemiBold" /></Hyperlink><Run Text="  " /><Run Text="{Binding Time, Mode=OneWay}" FontSize="11" Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
                             </TextBlock>
                             <Button Style="{StaticResource SubtleButton}" HorizontalAlignment="Left" Padding="0" Margin="0,1,0,3" Command="{Binding ShowRepliedCommand}"
                                     ToolTip="Show the message it answers" Visibility="{Binding HasReply, Converter={StaticResource BoolToVis}}">
@@ -422,7 +433,7 @@
 
         <!-- A member: badge, name, role, muted; moderators get a ⋯ menu (mute, remove, moderator). -->
         <DataTemplate x:Key="Member" DataType="{x:Type vm:ChatMemberViewModel}">
-            <DockPanel Margin="0,0,0,8" Background="Transparent">
+            <DockPanel Margin="0,0,0,8" Background="Transparent" Cursor="Hand" MouseLeftButtonUp="Person_MouseUp">
                 <DockPanel.ContextMenu>
                     <ContextMenu Visibility="{Binding HasMenu, Converter={StaticResource BoolToVis}}">
                         <MenuItem Header="Private message" Command="{Binding PrivateMessageCommand}" Visibility="{Binding CanMessage, Converter={StaticResource BoolToVis}}" />
@@ -997,5 +1008,11 @@
                 </ScrollViewer>
             </DockPanel>
         </Border>
+
+        <!-- Someone's profile card (#490e5810), where you clicked their name, picture or @mention; a click elsewhere closes it -->
+        <Popup x:Name="ProfilePopup" Placement="MousePoint" StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade"
+               IsOpen="{Binding HasProfile, Mode=TwoWay}">
+            <local:ProfileCard x:Name="ProfileCardView" DataContext="{Binding Profile}" Margin="2,2,14,14" />
+        </Popup>
     </Grid>
 </UserControl>

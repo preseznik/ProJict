@@ -320,6 +320,23 @@ public partial class ChatView : UserControl
         menu.IsOpen = true;
     }
 
+    /// <summary>Click someone's picture beside a message, or a member: their profile card (#490e5810).</summary>
+    private void Person_MouseUp(object sender, MouseButtonEventArgs e)
+    {
+        switch ((sender as FrameworkElement)?.DataContext)
+        {
+            case ChatMessageViewModel message:
+                message.ShowProfileCommand.Execute(null);
+                break;
+            case ChatMemberViewModel member:
+                member.ShowProfileCommand.Execute(null);
+                break;
+            default:
+                return;
+        }
+        e.Handled = true;
+    }
+
     /// <summary>Esc clears the search (and the channels come back); Enter opens the first message found.</summary>
     private void SearchBox_PreviewKeyDown(object sender, KeyEventArgs e)
     {

@@ -87,6 +87,15 @@ public sealed class ChatMessageText : Decorator
                 if (segment.IsPrimaryAction) button.SetResourceReference(StyleProperty, "AccentButtonStyle");
                 inlines.Add(new InlineUIContainer(button) { BaselineAlignment = BaselineAlignment.Center });
             }
+            else if (segment.IsPersonMention)
+            {
+                // @someone: their profile card with a click (#490e5810); looks as before, underlined under the mouse.
+                var link = new Hyperlink(new Run(segment.Text)) { Command = segment.OpenCommand, ToolTip = segment.ToolTip, FontWeight = FontWeights.SemiBold, TextDecorations = null };
+                link.SetResourceReference(TextElement.ForegroundProperty, "AccentTextFillColorPrimaryBrush");
+                link.MouseEnter += (_, _) => link.TextDecorations = TextDecorations.Underline;
+                link.MouseLeave += (_, _) => link.TextDecorations = null;
+                inlines.Add(link);
+            }
             else if (segment.IsMention)
             {
                 var run = new Run(segment.Text) { FontWeight = FontWeights.SemiBold };
