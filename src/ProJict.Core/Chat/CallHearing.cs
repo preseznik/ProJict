@@ -14,14 +14,14 @@ public enum CallRecognizer { Windows, WindowsOnline, ElevenLabs, Whisper }
 /// </summary>
 public sealed class PhraseSplitter(int bytesPerSecond = 32000)
 {
-    /// <summary>Louder than this (RMS, 0 to 1), over the room's own hum, is someone speaking.</summary>
-    public const double Speaking = 0.02;
+    /// <summary>Louder than this (RMS, 0 to 1), and well over the room's own hum, is someone speaking (quiet speech too).</summary>
+    public const double Speaking = 0.012;
     /// <summary>This much quiet ends a phrase.</summary>
     public static readonly TimeSpan Pause = TimeSpan.FromMilliseconds(800);
     /// <summary>Sound from just before the start that goes with the phrase.</summary>
     public static readonly TimeSpan Before = TimeSpan.FromMilliseconds(300);
-    /// <summary>Shorter than this is a cough or a click, not said.</summary>
-    public static readonly TimeSpan Shortest = TimeSpan.FromMilliseconds(400);
+    /// <summary>Shorter than this is a click, not said; a quick "da", "yes" or "no" is longer.</summary>
+    public static readonly TimeSpan Shortest = TimeSpan.FromMilliseconds(200);
     /// <summary>A phrase this long goes as it is, and the next one starts.</summary>
     public static readonly TimeSpan Longest = TimeSpan.FromSeconds(20);
 

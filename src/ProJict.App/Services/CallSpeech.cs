@@ -20,6 +20,13 @@ public interface ISpeechIn : IDisposable
     Task Ready => Task.CompletedTask;
     /// <summary>What the call says while it isn't ready yet.</summary>
     string? GettingReady => null;
+    /// <summary>
+    /// The speakers play an answer (true) or stopped (false). A recognizer that takes phrases drops the ones that start
+    /// meanwhile (the speakers' own sound); the others are told nothing, and the call doesn't use what they hear then.
+    /// </summary>
+    void SpeakersPlaying(bool playing) { }
+    /// <summary>It drops what starts while the speakers play itself, so what it hears may be posted any time.</summary>
+    bool DropsEcho => false;
     /// <summary>Starts listening; the problem when it can't (no microphone, no speech recognition), or null.</summary>
     string? Start();
     void Stop();

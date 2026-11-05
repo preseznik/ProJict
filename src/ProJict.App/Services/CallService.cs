@@ -20,7 +20,11 @@ public sealed partial class CallService(AppState state, MainViewModel main, Disp
     private ISpeechIn? _in;
     private ISpeechOut? _out;
     private CancellationTokenSource? _stopSaying;
+    /// <summary>The speakers play an answer now: what the old recognizer hears meanwhile isn't used.</summary>
     private bool _saying;
+    /// <summary>An answer is on its way to the speakers (ElevenLabs fetching it) or playing: the next waits.</summary>
+    private bool _busySaying;
+    private string? _sayingAgent;
     private bool _clockSet;
 
     /// <summary>Hears you: the recognizer Settings › Chat picked, from the microphone it picked (off-screen tests put in their own).</summary>
@@ -348,6 +352,7 @@ public sealed partial class CallService(AppState state, MainViewModel main, Disp
         _fallback?.Dispose();
         _fallback = null;
         _saying = false;
+        _busySaying = false;
         StopSound();
         StoppedListening();
         Speaking = null;
@@ -461,7 +466,7 @@ public sealed partial class CallService(AppState state, MainViewModel main, Disp
     /// <summary>A phrase of yours: posted in the conversation (not while muted, or while an agent is read aloud).</summary>
     private void OnHeard(string text)
     {
-        if (!IsOn || Muted || _saying || _channel is not { } channel) return;
+        if (!IsOn || Muted || (_saying && _in?.DropsEcho != true) || _channel is not { } channel) return;
         // In the host's channel, as you write there; in yours, as you.
         if (_host != null) main.Guest.ChatPost(_host, channel, text, null, [], null);
         else Room.Post(channel, state.ChatMe, text);
@@ -490,12 +495,17 @@ public sealed partial class CallService(AppState state, MainViewModel main, Disp
     /// <summary>Reads the next answer aloud; one at a time, and you aren't heard meanwhile (so the speakers don't answer for you).</summary>
     private async Task SayNext()
     {
-        if (_saying || _toSay.Count == 0 || !IsOn) return;
+        if (_busySaying || _toSay.Count == 0 || !IsOn) return;
         var (agent, text) = _toSay.Dequeue();
-        _saying = true;
-        Speaking = agent;
-        Changed?.Invoke();
-        _out ??= (SpeechOut ?? NewSpeechOut)();
+        _busySaying = true;
+        _sayingAgent = agent;
+        if (_out == null)
+        {
+            _out = (SpeechOut ?? NewSpeechOut)();
+            // ElevenLabs fetches the speech first: you're heard until it really plays (#dcfeab4b).
+            if (_out is ElevenLabsSpeechOut eleven) eleven.Playing += () => dispatcher.InvokeAsync(() => SpeakersPlaying(true));
+        }
+        if (_out is not ElevenLabsSpeechOut) SpeakersPlaying(true);
         _stopSaying = new CancellationTokenSource();
         try { await _out.SpeakAsync(await VoiceOfAsync(agent), text, _stopSaying.Token); }
         catch (InvalidOperationException ex) when (_out is ElevenLabsSpeechOut && IsOn)
@@ -504,14 +514,25 @@ public sealed partial class CallService(AppState state, MainViewModel main, Disp
             Problem = ex.Message + " Its answers are read in a Windows voice for now.";
             Changed?.Invoke();
             _fallback ??= Fallback();
+            SpeakersPlaying(true);
             try { await _fallback.SpeakAsync(await VoiceOfAsync(agent, _fallback), text, _stopSaying.Token); }
             catch (Exception again) when (again is InvalidOperationException or ObjectDisposedException or OperationCanceledException) { }
         }
         catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException or OperationCanceledException) { }
-        _saying = false;
-        if (Speaking == agent) Speaking = null;
-        Changed?.Invoke();
+        SpeakersPlaying(false);
+        _busySaying = false;
         await SayNext();
+    }
+
+    /// <summary>An answer plays (its agent's tile glows) or stopped; the recognizer is told, so it knows what's the speakers' sound.</summary>
+    private void SpeakersPlaying(bool playing)
+    {
+        if (playing == _saying) return;
+        _saying = playing;
+        if (playing) Speaking = _sayingAgent;
+        else if (Speaking == _sayingAgent) Speaking = null;
+        _in?.SpeakersPlaying(playing);
+        Changed?.Invoke();
     }
 
     /// <summary>Each agent's own voice, the same every call (of the voices it reads with: Settings' choice, unless <paramref name="from"/> says).</summary>

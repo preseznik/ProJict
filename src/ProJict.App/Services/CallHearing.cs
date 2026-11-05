@@ -33,6 +33,27 @@ public sealed class PhraseSpeechIn(ISoundIn sound, ISpeechToText recognizer, str
     private Task _queue = Task.CompletedTask;
     private bool _started;
     private bool _failed;
+    private bool _playing;
+    /// <summary>Sound heard since the speakers stopped, in bytes (the echo's tail is measured in sound, not on the clock).</summary>
+    private long _heardSincePlaying = long.MaxValue / 2;
+    private bool _echo;
+
+    /// <summary>After the speakers stop, their sound still reaches the microphone for a moment (the room).</summary>
+    public static readonly TimeSpan EchoTail = TimeSpan.FromMilliseconds(300);
+
+    /// <summary>Phrases dropped as the speakers' own sound.</summary>
+    public int EchoesDropped { get; private set; }
+
+    public bool DropsEcho => true;
+
+    public void SpeakersPlaying(bool playing)
+    {
+        lock (_splitter)
+        {
+            if (_playing && !playing) _heardSincePlaying = 0;
+            _playing = playing;
+        }
+    }
 
     public event Action<string>? Heard;
     public event Action<bool>? Hearing;
@@ -43,9 +64,21 @@ public sealed class PhraseSpeechIn(ISoundIn sound, ISpeechToText recognizer, str
     {
         if (_started) return null;
         _started = true;
-        _splitter.Started += () => Hearing?.Invoke(true);
+        // A phrase that starts while the speakers play (or just after) is their own sound: dropped, not even transcribed.
+        // One you started first goes on as said, even when an answer starts playing over its end.
+        _splitter.Started += () =>
+        {
+            _echo = _playing || _heardSincePlaying < (long)(EchoTail.TotalSeconds * CallVoice.Rate * 2);
+            if (!_echo) Hearing?.Invoke(true);
+        };
         _splitter.Ended += phrase =>
         {
+            if (_echo)
+            {
+                _echo = false;
+                if (phrase != null) EchoesDropped++;
+                return;
+            }
             Hearing?.Invoke(false);
             if (phrase == null || _failed) return;
             _queue = _queue.ContinueWith(_ => Transcribe(phrase), TaskScheduler.Default).Unwrap();
@@ -53,7 +86,11 @@ public sealed class PhraseSpeechIn(ISoundIn sound, ISpeechToText recognizer, str
         sound.Captured += frame =>
         {
             Level?.Invoke(CallVoice.Loudness(frame));
-            lock (_splitter) _splitter.Add(frame);
+            lock (_splitter)
+            {
+                if (!_playing) _heardSincePlaying += frame.Length;
+                _splitter.Add(frame);
+            }
         };
         return sound.Start();
     }

@@ -2,6 +2,7 @@
 
 ## 0.1.47
 
+- **Calls miss less of what you say.** Listening paused for the whole time an answer was read out, including the moment ElevenLabs took to fetch it, before anything could be heard. A short "da", "yes" or "no" was too short to count, and quiet speech could stay under the threshold. Now you're heard until the answer actually plays. Only what starts while it plays is dropped as the speakers' own sound, and it isn't even sent to be transcribed. Something you started saying first still comes through, quick replies count, and quieter speech is heard.
 - **Calls with Whisper say when it's getting ready.** Whisper's first load on a computer can take a while (a big model, and the graphics card preparing itself the first time), and calls made meanwhile seemed not to hear you. Now the call window says Whisper is getting ready until it is, and what you say meanwhile waits for it. A line says when it's ready. If it can't get ready, the call says why, and the old recognizer hears you.
 
 ## 0.1.46 (2026-11-05)

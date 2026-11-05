@@ -26,6 +26,9 @@ public sealed class ElevenLabsSpeechOut(string key, HttpClient? http = null, str
     /// <summary>Plays the speech it made (an MP3).</summary>
     public Func<byte[], CancellationToken, Task> Play { get; set; } = Player;
 
+    /// <summary>The speech is fetched and starts playing now (until then nothing is heard from the speakers).</summary>
+    public event Action? Playing;
+
     public async Task<IReadOnlyList<string>> VoicesAsync(CancellationToken stop)
     {
         if (_voices == null)
@@ -54,6 +57,7 @@ public sealed class ElevenLabsSpeechOut(string key, HttpClient? http = null, str
         request.Headers.Add("Accept", "audio/mpeg");
         using var response = await SendRawAsync(request, stop);
         var mp3 = await response.Content.ReadAsByteArrayAsync(stop);
+        Playing?.Invoke();
         await Play(mp3, stop);
     }
 
