@@ -345,6 +345,47 @@ public sealed class BrowserSession : IDisposable
         await Settle();
     }
 
+    /// <summary>
+    /// Puts files into a page's file field (#ae854b1c): straight into it when [ref] is one; otherwise [ref] (a "Select files"
+    /// button, say) is clicked and the file picker it opens gets them instead of showing. False when no picker opened.
+    /// </summary>
+    public async Task<bool> UploadAsync(int reference, IReadOnlyList<string> files)
+    {
+        if (await Locate(reference) is null)
+            throw new BrowserException($"[{reference}] isn't on the page any more: read it again (browser_read).");
+        if (Element(reference).Kind == "file")
+        {
+            var document = JsonNode.Parse(await Input("DOM.getDocument", new { depth = 0 }))!;
+            var found = JsonNode.Parse(await Input("DOM.querySelector", new { nodeId = (int)document["root"]!["nodeId"]!, selector = $"[data-projict-ref=\"{reference}\"]" }))!;
+            if ((int?)found["nodeId"] is not (> 0 and var nodeId))
+                throw new BrowserException($"[{reference}] isn't on the page any more: read it again (browser_read).");
+            await Input("DOM.setFileInputFiles", new { files, nodeId });
+            await Settle();
+            return true;
+        }
+        var opened = new TaskCompletionSource<int?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var receiver = Live.GetDevToolsProtocolEventReceiver("Page.fileChooserOpened");
+        void Chosen(object? sender, CoreWebView2DevToolsProtocolEventReceivedEventArgs e) =>
+            opened.TrySetResult(JsonNode.Parse(e.ParameterObjectAsJson)?["backendNodeId"] is JsonValue id && id.TryGetValue<int>(out var node) ? node : null);
+        receiver.DevToolsProtocolEventReceived += Chosen;
+        await Input("Page.enable", new { });
+        await Input("Page.setInterceptFileChooserDialog", new { enabled = true });
+        try
+        {
+            await ClickAsync(reference);
+            if (await Task.WhenAny(opened.Task, Task.Delay(4000)) != opened.Task || await opened.Task is not { } picked) return false;
+            await Input("DOM.setFileInputFiles", new { files, backendNodeId = picked });
+            await Settle();
+            return true;
+        }
+        finally
+        {
+            receiver.DevToolsProtocolEventReceived -= Chosen;
+            // The file picker is the user's again (when they watch, say).
+            await Input("Page.setInterceptFileChooserDialog", new { enabled = false });
+        }
+    }
+
     /// <summary>Waits until the page's text has <paramref name="text"/> (or until the time's up); true when it came.</summary>
     public async Task<bool> WaitForAsync(string text, TimeSpan within)
     {

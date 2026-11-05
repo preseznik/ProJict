@@ -38,6 +38,14 @@ public sealed partial class AgentTools
             "Types into a field by its number, replacing what's in it, as a person would; submit presses Enter after. Then reads the page again. " + rules,
             Schema(("tool", "string", "The tool, e.g. Suno.", true), ("ref", "integer", "The number in [ ] of the field.", true),
                 ("text", "string", "What to type.", true), ("submit", "boolean", "Press Enter after typing.", false)), BrowserType);
+        AddAsync("browser_upload", "Upload a file in ProJict's browser",
+            "Puts files into a page's file field, by its number from the page as you last read it: a file field itself, or the button that opens the " +
+            "file picker (\"Select files\", \"Upload\"). The files must be in your project's folder or ProJict's attachments (an item's or a chat's " +
+            "files): nothing else on this computer goes to a website. Then reads the page again. " + rules,
+            Schema(("tool", "string", "The tool, e.g. YouTube.", true),
+                ("ref", "integer", "The number in [ ] of the file field, or of the button that opens the file picker.", true),
+                ("paths", "string[]", "The files: full paths, or relative to your working directory.", true)),
+            BrowserUpload);
         AddAsync("browser_wait", "Wait in ProJict's browser",
             "Waits until the page shows a text (a song or model being ready, say), for up to 300 seconds, then reads the page. Wait again if it isn't there yet.",
             Schema(("tool", "string", "The tool, e.g. Suno.", true), ("text", "string", "Text to wait for, e.g. Download.", true),
@@ -151,6 +159,42 @@ public sealed partial class AgentTools
         var came = false;
         await Step(async () => came = await browser.WaitForAsync(text, TimeSpan.FromSeconds(seconds)));
         return await PageAnswer(browser, came ? $"“{text}” is on the page." : $"“{text}” isn't on the page after {seconds} seconds: read it, or wait again.");
+    }
+
+    /// <summary>Puts files from the agent's project folder or ProJict's attachments into a page's file field (#ae854b1c).</summary>
+    private async Task<string> BrowserUpload(McpSession session, Args args)
+    {
+        var tool = BrowserTool(args);
+        if (session.Remote)
+            throw new McpToolException("Over the API you can't upload files that are on ProJict's computer to a website: ask the user to do it.", ToolProblem.Forbidden);
+        var reference = args.Int("ref") ?? throw new McpToolException("Say which with ref: the number in [ ] of the file field, or of the button that opens the file picker.");
+        var paths = args.Strings("paths");
+        if (paths.Count == 0) throw new McpToolException("Give the files to upload in paths.");
+        var browser = await BrowserFor(session, tool);
+        var element = ElementOf(browser, reference);
+        if (element.Kind is not ("file" or "button" or "link"))
+            throw new McpToolException($"[{reference}] is a {element.Kind}: give the file field, or the button that opens the file picker.");
+        if (BrowserRules.LooksLikeSpending($"{element.Text} {element.Label} {element.Href}"))
+            throw new McpToolException($"[{reference}] “{element.Text}” looks like paying, which is the user's to do: ask them if it's needed.", ToolProblem.Forbidden);
+        if (element.Disabled) throw new McpToolException($"[{reference}] “{element.Text}” can't be used right now (it's disabled): something on the page may be missing.");
+        // Your project's folders, the agent's working folder, and what ProJict keeps: an item's files and Chat's.
+        string?[] roots = [session.WorkingDirectory, _state.Store.AttachmentsDir, _state.Store.CacheRoot, .. LocalProjects.Select(p => p.RepoPath)];
+        var files = new List<string>();
+        foreach (var path in paths)
+        {
+            var full = Path.IsPathRooted(path) || session.WorkingDirectory == null ? path : Path.Combine(session.WorkingDirectory, path);
+            if (BrowserRules.UploadProblem(full, roots) is { } problem) throw new McpToolException(problem, ToolProblem.Forbidden);
+            files.Add(Path.GetFullPath(full));
+        }
+        var done = false;
+        await Step(async () => done = await browser.UploadAsync(reference, files));
+        if (!done)
+            throw new McpToolException($"[{reference}] “{element.Text}” didn't open a file picker: read the page (browser_read) for its file field, or the button that opens one.");
+        var names = string.Join(", ", files.Select(Path.GetFileName));
+        if (browser.Item is { } target && _state.Projects.FirstOrDefault(p => p.Id == target.ProjectId) is { } project && project.Find(target.ItemId) != null)
+            Edit(project, target.ItemId, i => i.AddActivity(browser.Agent, $"Uploaded {names} to {tool.Name} in ProJict's browser.", agent: true));
+        _state.StatusText = $"{browser.Agent} uploaded {names} to {tool.Name}.";
+        return await PageAnswer(browser, $"Put {names} into [{reference}]{(element.Text.Length > 0 || element.Label.Length > 0 ? $" “{(element.Text.Length > 0 ? element.Text : element.Label)}”" : "")}.");
     }
 
     private string BrowserClose(McpSession session, Args args, List<Attachment> files)
