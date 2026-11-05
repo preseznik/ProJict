@@ -57,6 +57,7 @@ public sealed partial class CallService
     {
         Current = call;
         _channel = channel;
+        _origin = null; // a call with a person stays in your conversation with them
         _link = link;
         Captions.Clear();
         Muted = false;

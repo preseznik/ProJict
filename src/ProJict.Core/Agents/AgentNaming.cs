@@ -37,6 +37,10 @@ public static partial class AgentNaming
     /// <summary>"Ada (via Alice)": an agent working in a project shared with Alice's ProJict, through her connection.</summary>
     public static string Via(string agent, string guest) => $"{agent} (via {guest})";
 
+    /// <summary>The guest in "Ada (via Alice)" ("Alice"), whose ProJict the agent works through; else null.</summary>
+    public static string? ViaWhom(string name) =>
+        name.EndsWith(')') && name.LastIndexOf(" (via ", StringComparison.Ordinal) is > 0 and var at ? name[(at + 6)..^1] : null;
+
     /// <summary>
     /// The agent in "Ada (via Alice)" ("Ada"), when the name is signed that way (through <paramref name="guest"/>, if
     /// given); else null.

@@ -78,7 +78,7 @@ public sealed class ChatRoom
     /// <summary>What a guest gets of a channel: its newest messages, without who was kicked or what agents were given.</summary>
     public static ChatChannel ForGuest(ChatChannel channel, int messages = 300) => new()
     {
-        Id = channel.Id, Name = channel.Name, Topic = channel.Topic, Access = channel.Access, Direct = channel.Direct, Link = channel.Link, Icon = channel.Icon,
+        Id = channel.Id, Name = channel.Name, Topic = channel.Topic, Access = channel.Access, Direct = channel.Direct, Link = channel.Link, Icon = channel.Icon, CallFrom = channel.CallFrom,
         CreatedBy = channel.CreatedBy, CreatedByAgent = channel.CreatedByAgent, CreatedAt = channel.CreatedAt,
         Members = channel.Members, Messages = channel.Messages.Skip(Math.Max(0, channel.Messages.Count - messages)).ToList(),
     };
@@ -236,6 +236,58 @@ public sealed class ChatRoom
         Channels.Add(channel);
         Changed?.Invoke(channel);
         return channel;
+    }
+
+    /// <summary>
+    /// A call's own chat (#28be649a): what's said in the call goes here, not into the conversation it was started from
+    /// (<paramref name="from"/>), which gets one line pointing to it. Invite-only, with whoever calls and the agents called;
+    /// named for them and the time ("call-ada-1105-1032"), its topic says with whom and when. <paramref name="id"/>: the
+    /// one a connected ProJict picked for its call, so it can write there at once.
+    /// </summary>
+    public ChatChannel CreateCall(ChatActor by, ChatChannel from, IReadOnlyList<(string Name, bool Agent)> called, Guid? id = null, string? name = null)
+    {
+        if (called.Count == 0) throw new ChatException("Say whom the call is with.");
+        if (id is { } wanted && Channels.Any(c => c.Id == wanted)) throw new ChatException("That call's chat is there already.");
+        var now = Now;
+        name = name != null && NameProblem(name) == null ? name : CallName(called.Select(c => c.Name), now);
+        for (var n = 2; NameProblem(name) != null; n++)
+        {
+            var numbered = $"{CallName(called.Select(c => c.Name), now)}-{n}";
+            name = numbered.Length <= MaxNameLength ? numbered : numbered[^MaxNameLength..];
+        }
+        var names = string.Join(", ", called.Select(c => c.Name));
+        var channel = new ChatChannel
+        {
+            Id = id ?? Guid.NewGuid(), Name = name, Access = ChannelAccess.InviteOnly, Link = from.Link, CallFrom = from.Id,
+            Topic = $"Call with {names}, {now.ToString("d MMM HH:mm", System.Globalization.CultureInfo.InvariantCulture)}",
+            CreatedBy = by.Name, CreatedByAgent = by.Agent, CreatedAt = now,
+            Members = [new ChatMember { Name = by.Name, Agent = by.Agent, Moderator = true, JoinedAt = now, LastRead = now }],
+        };
+        if (!by.Owner && !IsOwner(by.Name)) channel.Members.Add(new ChatMember { Name = OwnerName, JoinedAt = now });
+        foreach (var (member, agent) in called)
+        {
+            if (Member(channel, member) == null) channel.Members.Add(new ChatMember { Name = member, Agent = agent, JoinedAt = now });
+            // A guest's agent hears and answers through its guest's ProJict, which sees only what its guest is in.
+            if (agent && Agents.AgentNaming.ViaWhom(member) is { } guest && Member(channel, guest) == null)
+                channel.Members.Add(new ChatMember { Name = guest, JoinedAt = now });
+        }
+        Channels.Add(channel);
+        AddNotice(from, by, $"📞 {by.Name} called {names}: what's said is in #{name}.");
+        Changed?.Invoke(channel);
+        Changed?.Invoke(from);
+        return channel;
+    }
+
+    /// <summary>
+    /// A call's chat's name: "call-" its agents and the time to the second, "call-ada-1105-103214", so calling again
+    /// at once gets a chat of its own under the name the caller told the agent.
+    /// </summary>
+    public static string CallName(IEnumerable<string> called, DateTime at)
+    {
+        var stamp = at.ToString("MMdd-HHmmss", System.Globalization.CultureInfo.InvariantCulture);
+        var who = Slug("call-" + string.Join("-", called));
+        if (who.Length > MaxNameLength - stamp.Length - 1) who = who[..(MaxNameLength - stamp.Length - 1)].TrimEnd('-');
+        return $"{who}-{stamp}";
     }
 
     public void SetTopic(ChatChannel channel, ChatActor by, string? topic)

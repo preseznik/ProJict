@@ -100,6 +100,11 @@ public sealed class ChatChannel
     /// <summary>A private conversation the owner stopped: neither can write in it until it's resumed.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool Suspended { get; set; }
+    /// <summary>A call's own chat (#28be649a): the conversation the call was started from; null for every other channel.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Guid? CallFrom { get; set; }
+    /// <summary>A call's chat: listed under Calls, not with the channels.</summary>
+    [JsonIgnore] public bool IsCall => CallFrom != null;
     public ChannelLink? Link { get; set; }
     /// <summary>The channel's small icon (a square picture), shown instead of its # in Chat; null while it has none.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

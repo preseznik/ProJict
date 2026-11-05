@@ -171,7 +171,7 @@ public sealed partial class HostService
             if (!Guid.TryParse(Text("channel"), out var id) || room.Channels.FirstOrDefault(c => c.Id == id) is not { } channel || !ChatRoom.CanSee(channel, seeing))
                 return Refuse("That channel isn't there any more.");
             // Calls across the connection (#546dab2b): a guest's agent answers a call from here; a guest's call rings agents here.
-            if (op is "callAnswer" or "callLine") return CallOp(session, channel, actor, op, message, Refuse);
+            if (op is "callAnswer" or "callLine" or "callChat") return CallOp(session, channel, actor, op, message, Refuse);
             RemoteChatOps.OnChannel(room, channel, actor, message, GuestAccess.CanComment(RoleOf(account)),
                 who => _main.AgentTools.KnownAgentNames().Contains(who, StringComparer.OrdinalIgnoreCase), () =>
                 {
