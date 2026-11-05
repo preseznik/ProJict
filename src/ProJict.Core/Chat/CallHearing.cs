@@ -181,3 +181,59 @@ public sealed record WhisperModel(string Id, string Name, int SizeMb, string Not
         return t.Trim('.', ' ').Length == 0 || (t.StartsWith('[') && t.EndsWith(']')) || (t.StartsWith('(') && t.EndsWith(')'));
     }
 }
+
+/// <summary>
+/// A language you speak in calls (#a06cd2e0): its name, the code recognizers take (Whisper's and ElevenLabs'), Windows'
+/// tag for it, and whether ElevenLabs' fast Flash model reads it (otherwise answers are read with Eleven v3).
+/// </summary>
+public sealed record CallLanguage(string Code, string Name, string WindowsTag, bool Flash)
+{
+    /// <summary>The ones to pick from, by name (Detect, null, isn't among them: the recognizer guesses then).</summary>
+    public static IReadOnlyList<CallLanguage> All { get; } =
+    [
+        new("en", "English", "en-US", true),
+        new("sl", "Slovenian", "sl-SI", false),
+        new("hr", "Croatian", "hr-HR", true),
+        new("sr", "Serbian", "sr-Latn-RS", false),
+        new("bs", "Bosnian", "bs-Latn-BA", false),
+        new("de", "German", "de-DE", true),
+        new("it", "Italian", "it-IT", true),
+        new("fr", "French", "fr-FR", true),
+        new("es", "Spanish", "es-ES", true),
+        new("pt", "Portuguese", "pt-PT", true),
+        new("nl", "Dutch", "nl-NL", true),
+        new("pl", "Polish", "pl-PL", true),
+        new("cs", "Czech", "cs-CZ", true),
+        new("sk", "Slovak", "sk-SK", true),
+        new("hu", "Hungarian", "hu-HU", true),
+        new("ru", "Russian", "ru-RU", true),
+        new("uk", "Ukrainian", "uk-UA", true),
+    ];
+
+    /// <summary>The language with this code; null for Detect or one that isn't in the list.</summary>
+    public static CallLanguage? For(string? code) => All.FirstOrDefault(l => string.Equals(l.Code, code, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>What a call says about it.</summary>
+    public static string NameOf(string? code) => For(code)?.Name ?? "Detect";
+}
+
+/// <summary>ElevenLabs' models for reading answers aloud, and which one reads a language.</summary>
+public static class ElevenLabsModels
+{
+    public const string Flash = "eleven_flash_v2_5";
+    public const string Multilingual = "eleven_multilingual_v2";
+    public const string V3 = "eleven_v3";
+
+    /// <summary>The ones to pick from in Settings (null: by the call's language).</summary>
+    public static IReadOnlyList<(string? Id, string Name)> Choices { get; } =
+    [
+        (null, "By the call's language (Flash when it can, v3 otherwise)"),
+        (Flash, "Flash v2.5 (fastest; 32 languages)"),
+        (Multilingual, "Multilingual v2 (29 languages)"),
+        (V3, "Eleven v3 (most languages, Slovenian too; slower)"),
+    ];
+
+    /// <summary>The model that reads <paramref name="language"/>: the one picked, or by the language.</summary>
+    public static string For(string? picked, string? language) =>
+        picked is { Length: > 0 } ? picked : CallLanguage.For(language) is { Flash: false } ? V3 : Flash;
+}

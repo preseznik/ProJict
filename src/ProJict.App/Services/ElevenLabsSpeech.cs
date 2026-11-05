@@ -29,6 +29,9 @@ public sealed class ElevenLabsSpeechOut(string key, HttpClient? http = null, str
     /// <summary>The speech is fetched and starts playing now (until then nothing is heard from the speakers).</summary>
     public event Action? Playing;
 
+    /// <summary>The model that reads the answers: Flash, or one that speaks the call's language (Eleven v3 for Slovenian, #f021ff25).</summary>
+    public string ModelId { get; set; } = Model;
+
     public async Task<IReadOnlyList<string>> VoicesAsync(CancellationToken stop)
     {
         if (_voices == null)
@@ -51,7 +54,7 @@ public sealed class ElevenLabsSpeechOut(string key, HttpClient? http = null, str
         var id = _voices!.TryGetValue(voice, out var known) ? known : _voices.Values.First();
         using var request = new HttpRequestMessage(HttpMethod.Post, $"{api}/v1/text-to-speech/{Uri.EscapeDataString(id)}?output_format=mp3_44100_128")
         {
-            Content = JsonContent.Create(new { text, model_id = Model }),
+            Content = JsonContent.Create(new { text, model_id = ModelId }),
         };
         request.Headers.Add("xi-api-key", key);
         request.Headers.Add("Accept", "audio/mpeg");

@@ -12,7 +12,15 @@
         <!-- Who's on the call and how long; why it can't hear you, if so -->
         <StackPanel DockPanel.Dock="Top" Margin="0,0,0,14">
             <TextBlock Text="{Binding Title}" FontSize="22" FontWeight="SemiBold" />
-            <TextBlock x:Name="Status" Text="{Binding StatusText}" Style="{StaticResource MutedText}" Margin="0,2,0,0" />
+            <DockPanel Margin="0,2,0,0">
+                <!-- The language of this call (#a06cd2e0) -->
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Visibility="{Binding IsOngoing, Converter={StaticResource BoolToVis}}">
+                    <TextBlock Text="Language" Style="{StaticResource MutedText}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <ComboBox x:Name="LanguagePicker" ItemsSource="{Binding LanguageNames}" SelectedItem="{Binding SelectedLanguage}" MinWidth="130"
+                              AutomationProperties.Name="Language of this call" ToolTip="The language you speak in this call: the recognizer is told it, and the agents answer in it" />
+                </StackPanel>
+                <TextBlock x:Name="Status" Text="{Binding StatusText}" Style="{StaticResource MutedText}" VerticalAlignment="Center" />
+            </DockPanel>
             <TextBlock Text="{Binding Problem}" Foreground="{DynamicResource SystemFillColorCautionBrush}" TextWrapping="Wrap" Margin="0,6,0,0"
                        Visibility="{Binding Problem, Converter={StaticResource EmptyToVis}}" />
             <!-- The recognizer is getting ready: Whisper loading its model (#23739299) -->
@@ -96,7 +104,12 @@
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
                 <DataTemplate DataType="{x:Type vm:CallTile}">
-                    <Border x:Name="Tile" Margin="6" CornerRadius="12" BorderThickness="3" BorderBrush="Transparent" Background="{DynamicResource SubtleFillColorSecondaryBrush}">
+                    <Border x:Name="Tile" Margin="6" CornerRadius="12" BorderThickness="3" BorderBrush="Transparent" Background="{DynamicResource SubtleFillColorSecondaryBrush}"
+                            ContextMenuOpening="Tile_ContextMenuOpening">
+                        <!-- An agent's tile: right-click › its voice (#f021ff25) -->
+                        <Border.ContextMenu>
+                            <ContextMenu />
+                        </Border.ContextMenu>
                         <Grid>
                             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
                                 <Grid Width="96" Height="96">

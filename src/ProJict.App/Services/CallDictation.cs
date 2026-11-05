@@ -8,7 +8,7 @@ namespace ProJict.App.Services;
 /// &amp; security › Speech). It listens to Windows' default microphone; a microphone you picked only moves the level bar
 /// (<paramref name="levels"/>). It starts in the background: when it can't, <see cref="ISpeechIn.Failed"/> says why.
 /// </summary>
-public sealed class WindowsOnlineSpeechIn(ISoundIn? levels = null) : ISpeechIn
+public sealed class WindowsOnlineSpeechIn(ISoundIn? levels = null, string? language = null) : ISpeechIn
 {
     /// <summary>Windows' answer when online speech recognition is off.</summary>
     private const int PrivacyNotAccepted = unchecked((int)0x80045509);
@@ -37,7 +37,21 @@ public sealed class WindowsOnlineSpeechIn(ISoundIn? levels = null) : ISpeechIn
     {
         try
         {
+            // The call's language, when Windows' dictation speaks it; else it says so, and the old recognizer hears you.
             var recognizer = new SpeechRecognizer();
+            if (ProJict.Core.Chat.CallLanguage.For(language) is { } wanted)
+            {
+                var tag = SpeechRecognizer.SupportedTopicLanguages.FirstOrDefault(l =>
+                    l.LanguageTag.StartsWith(wanted.Code + "-", StringComparison.OrdinalIgnoreCase) || l.LanguageTag.Equals(wanted.Code, StringComparison.OrdinalIgnoreCase));
+                if (tag == null)
+                {
+                    recognizer.Dispose();
+                    Failed?.Invoke($"Windows' online dictation doesn't speak {wanted.Name}.");
+                    return;
+                }
+                recognizer.Dispose();
+                recognizer = new SpeechRecognizer(tag);
+            }
             _recognizer = recognizer;
             recognizer.Constraints.Add(new SpeechRecognitionTopicConstraint(SpeechRecognitionScenario.Dictation, "dictation"));
             var compiled = await recognizer.CompileConstraintsAsync();

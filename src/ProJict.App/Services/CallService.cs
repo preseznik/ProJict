@@ -38,18 +38,69 @@ public sealed partial class CallService(AppState state, MainViewModel main, Disp
         switch (state.AppSettings.CallRecognizer)
         {
             case CallRecognizer.ElevenLabs when ElevenLabsKey() is { } key:
-                return new PhraseSpeechIn(SoundIn(), new ElevenLabsSpeechToText(key, api: ElevenLabsApi), "ElevenLabs");
+                var scribe = new ElevenLabsSpeechToText(key, api: ElevenLabsApi);
+                scribe.UseLanguage(Language);
+                return new PhraseSpeechIn(SoundIn(), scribe, "ElevenLabs");
             case CallRecognizer.Whisper when WhisperModel.For(state.AppSettings.WhisperModel) is var model && WhisperModels.Has(model):
                 return new PhraseSpeechIn(SoundIn(), new WhisperSpeechToText(WhisperModels.PathOf(model),
-                    [.. Current?.Agents.Select(a => a.Name) ?? [], .. main.AgentTools.ConnectedAgentNames(), "ProJict"]), "Whisper");
+                    [.. Current?.Agents.Select(a => a.Name) ?? [], .. main.AgentTools.ConnectedAgentNames(), "ProJict"], Language), "Whisper");
             case CallRecognizer.WindowsOnline:
-                return new WindowsOnlineSpeechIn(SoundIn());
+                return new WindowsOnlineSpeechIn(SoundIn(), Language);
         }
         return NewOldSpeechIn();
     }
 
     private ISpeechIn NewOldSpeechIn() =>
-        OldSpeechIn?.Invoke() ?? new WindowsSpeechIn(Microphones.DeviceOf(state.AppSettings.CallMicrophone) >= 0 ? SoundIn() : null);
+        OldSpeechIn?.Invoke() ?? new WindowsSpeechIn(Microphones.DeviceOf(state.AppSettings.CallMicrophone) >= 0 ? SoundIn() : null, Language);
+
+    // ───────────── The call's language (#a06cd2e0, #f021ff25) ─────────────
+
+    /// <summary>The language spoken in this call (a <see cref="CallLanguage"/> code), or null to have it detected.</summary>
+    public string? Language { get; private set; }
+
+    /// <summary>What the agents are asked: to answer in the call's language.</summary>
+    private string LanguageAsk => CallLanguage.For(Language) is { } l ? $" Speak {l.Name} in this call." : "";
+
+    /// <summary>
+    /// The call goes on in another language (the call window's picker): the recognizer is told, and the agents in it are
+    /// asked to answer in it.
+    /// </summary>
+    public void SetLanguage(string? code)
+    {
+        code = CallLanguage.For(code)?.Code;
+        if (code == Language || Current is not { IsOver: false } call) return;
+        Language = code;
+        _in?.UseLanguage(code);
+        var name = CallLanguage.NameOf(code);
+        var said = code == null ? "the language is detected again" : $"in {name} now";
+        Captions.Add(("ProJict", code == null ? "The language is detected again." : $"The call is in {name} now."));
+        foreach (var agent in call.Agents.Where(a => a.State is CallState.Joined or CallState.Ringing))
+            Line($"📞 {Caller}'s call: {said}.", agent.Name,
+                code == null ? $"{Caller}'s call in {Where}: answer in the language {Caller} speaks." : $"{Caller}'s call in {Where} is in {name} now: answer in {name}.");
+        Changed?.Invoke();
+    }
+
+    /// <summary>The voices the call reads with, for the call's language (the tiles' Voice menu).</summary>
+    public async Task<IReadOnlyList<string>> VoicesAsync()
+    {
+        _out ??= NewOut();
+        try { return await _out.VoicesAsync(Language, CancellationToken.None); }
+        catch (InvalidOperationException) { return []; }
+    }
+
+    /// <summary>The voice you picked for an agent (null: one by its name).</summary>
+    public string? VoicePickedFor(string agent) => state.AppSettings.AgentVoices?.GetValueOrDefault(agent);
+
+    /// <summary>Picks the voice an agent reads with, in every call on this computer (null: one by its name again).</summary>
+    public void PickVoice(string agent, string? voice)
+    {
+        var voices = state.AppSettings.AgentVoices ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (voice == null) voices.Remove(agent);
+        else voices[agent] = voice;
+        if (voices.Count == 0) state.AppSettings.AgentVoices = null;
+        state.SaveAppSettings();
+        Changed?.Invoke();
+    }
 
     /// <summary>With Whisper picked, its model loads while the call rings (once, then it stays loaded): ready when you speak.</summary>
     private void PreloadWhisper()
@@ -219,6 +270,7 @@ public sealed partial class CallService(AppState state, MainViewModel main, Disp
                    " take a call now: an agent takes calls only while it hears Chat right away (a chat watcher runs for it, or it's waiting for messages).";
         Current = call;
         _channel = channel;
+        Language = CallLanguage.For(state.AppSettings.CallLanguage)?.Code;
         PreloadWhisper();
         _host = main.Guest.ConnectionOf(channel);
         _room = _host?.Chat ?? state.Chat;
@@ -234,7 +286,7 @@ public sealed partial class CallService(AppState state, MainViewModel main, Disp
                 Line($"📞 {Caller} is calling {agent.Name}…", agent.Name,
                     $"{Caller} is calling you: a voice call in {WhereFor(agent.Name)}. Pick up with answer_call answer=yes (or answer=no). In the call, what {Caller} says " +
                     $"comes to you as messages in {WhereFor(agent.Name)}; answer there with post_message, a sentence or two at a time in plain spoken words " +
-                    "(no lists, code or links), and ProJict reads it aloud. answer_call answer=hang_up leaves the call.");
+                    "(no lists, code or links), and ProJict reads it aloud. answer_call answer=hang_up leaves the call." + LanguageAsk);
             else Captions.Add(("ProJict", $"{agent.Name} {ChatCall.Describe(agent.State)} (it doesn't hear Chat right away)."));
         StartClock();
         Started?.Invoke(this);
@@ -509,12 +561,9 @@ public sealed partial class CallService(AppState state, MainViewModel main, Disp
         var (agent, text) = _toSay.Dequeue();
         _busySaying = true;
         _sayingAgent = agent;
-        if (_out == null)
-        {
-            _out = (SpeechOut ?? NewSpeechOut)();
-            // ElevenLabs fetches the speech first: you're heard until it really plays (#dcfeab4b).
-            if (_out is ElevenLabsSpeechOut eleven) eleven.Playing += () => dispatcher.InvokeAsync(() => SpeakersPlaying(true));
-        }
+        _out ??= NewOut();
+        // ElevenLabs reads with the model that speaks the call's language (Eleven v3 for Slovenian, #f021ff25).
+        if (_out is ElevenLabsSpeechOut model) model.ModelId = ElevenLabsModels.For(state.AppSettings.ElevenLabsModel, Language);
         if (_out is not ElevenLabsSpeechOut) SpeakersPlaying(true);
         _stopSaying = new CancellationTokenSource();
         try { await _out.SpeakAsync(await VoiceOfAsync(agent), text, _stopSaying.Token); }
@@ -563,11 +612,23 @@ public sealed partial class CallService(AppState state, MainViewModel main, Disp
         Changed?.Invoke();
     }
 
-    /// <summary>Each agent's own voice, the same every call (of the voices it reads with: Settings' choice, unless <paramref name="from"/> says).</summary>
+    /// <summary>The voices for answers (Settings' choice, or tests'); ElevenLabs says when its speech starts playing (#dcfeab4b).</summary>
+    private ISpeechOut NewOut()
+    {
+        var made = (SpeechOut ?? NewSpeechOut)();
+        if (made is ElevenLabsSpeechOut eleven) eleven.Playing += () => dispatcher.InvokeAsync(() => SpeakersPlaying(true));
+        return made;
+    }
+
+    /// <summary>
+    /// Each agent's voice: the one you picked for it (right-click its tile), else its own by its name, the same every call;
+    /// of the voices for the call's language (unless <paramref name="from"/> says whose voices).
+    /// </summary>
     public async Task<string> VoiceOfAsync(string agent, ISpeechOut? from = null)
     {
-        _out ??= (SpeechOut ?? NewSpeechOut)();
-        var voices = await (from ?? _out).VoicesAsync(CancellationToken.None);
+        _out ??= NewOut();
+        var voices = await (from ?? _out).VoicesAsync(Language, CancellationToken.None);
+        if (from == null && VoicePickedFor(agent) is { } picked && voices.Contains(picked, StringComparer.OrdinalIgnoreCase)) return picked;
         return voices.Count == 0 ? "" : voices[agent.ToLowerInvariant().Sum(c => c) % voices.Count];
     }
 }

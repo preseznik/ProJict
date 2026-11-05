@@ -62,6 +62,7 @@ public partial class SettingsWindow : Window
         ChatCacheMax.Text = state.AppSettings.ChatCacheMaxGb.ToString();
         ShowMicrophones(state.AppSettings.CallMicrophone);
         ShowRecognizers(state.AppSettings.CallRecognizer, state.AppSettings.WhisperModel);
+        ShowCallLanguage(state.AppSettings.CallLanguage, state.AppSettings.ElevenLabsModel);
         WindowsVoices.IsChecked = state.AppSettings.CallVoices == ProJict.Core.Chat.CallVoices.Windows;
         ElevenLabsVoices.IsChecked = state.AppSettings.CallVoices == ProJict.Core.Chat.CallVoices.ElevenLabs;
         ElevenLabsVoicesNote.Text = App.Current.MainVm.Calls.HasElevenLabsKey
@@ -134,6 +135,18 @@ public partial class SettingsWindow : Window
             CallMicrophone.Items.Add(new ComboBoxItem { Content = picked + " (not connected now)", Tag = picked });
         CallMicrophone.SelectedItem = CallMicrophone.Items.Cast<ComboBoxItem>().FirstOrDefault(i => string.Equals(i.Tag as string, picked, StringComparison.OrdinalIgnoreCase))
                                       ?? CallMicrophone.Items[0];
+    }
+
+    // ───────────── The language in calls, and ElevenLabs' model (#a06cd2e0, #f021ff25) ─────────────
+
+    private void ShowCallLanguage(string? language, string? model)
+    {
+        CallLanguagePicker.Items.Add(new ComboBoxItem { Content = "Detect it (the recognizer guesses)", Tag = null });
+        foreach (var l in ProJict.Core.Chat.CallLanguage.All) CallLanguagePicker.Items.Add(new ComboBoxItem { Content = l.Name, Tag = l.Code });
+        CallLanguagePicker.SelectedItem = CallLanguagePicker.Items.Cast<ComboBoxItem>().FirstOrDefault(i => (string?)i.Tag == ProJict.Core.Chat.CallLanguage.For(language)?.Code)
+                                          ?? CallLanguagePicker.Items[0];
+        foreach (var (id, name) in ProJict.Core.Chat.ElevenLabsModels.Choices) ElevenLabsModelPicker.Items.Add(new ComboBoxItem { Content = name, Tag = id });
+        ElevenLabsModelPicker.SelectedItem = ElevenLabsModelPicker.Items.Cast<ComboBoxItem>().FirstOrDefault(i => (string?)i.Tag == model) ?? ElevenLabsModelPicker.Items[0];
     }
 
     // ───────────── Understanding you in calls (#4980bbee) ─────────────
@@ -738,6 +751,8 @@ public partial class SettingsWindow : Window
         _state.AppSettings.CallVoices = ElevenLabsVoices.IsChecked == true ? ProJict.Core.Chat.CallVoices.ElevenLabs : ProJict.Core.Chat.CallVoices.Windows;
         _state.AppSettings.CallMicrophone = (CallMicrophone.SelectedItem as ComboBoxItem)?.Tag as string;
         _state.AppSettings.CallRecognizer = PickedRecognizer;
+        _state.AppSettings.CallLanguage = (CallLanguagePicker.SelectedItem as ComboBoxItem)?.Tag as string;
+        _state.AppSettings.ElevenLabsModel = (ElevenLabsModelPicker.SelectedItem as ComboBoxItem)?.Tag as string;
         _state.AppSettings.WhisperModel = PickedWhisperModel.Id == WhisperModel.DefaultId ? null : PickedWhisperModel.Id;
         var privateFolder = PrivateFilesFolder.Text.Trim();
         if (!string.Equals(privateFolder, _state.PrivateFilesRoot, StringComparison.OrdinalIgnoreCase))

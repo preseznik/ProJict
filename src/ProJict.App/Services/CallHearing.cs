@@ -15,6 +15,8 @@ public interface ISpeechToText : IDisposable
     Task<string> TranscribeAsync(byte[] pcm, CancellationToken stop);
     /// <summary>Done when it can transcribe (Whisper: its model loaded); faulted with why when it can't.</summary>
     Task Ready => Task.CompletedTask;
+    /// <summary>The language you speak now (a <see cref="CallLanguage"/> code), or null to have it detected.</summary>
+    void UseLanguage(string? code) { }
 }
 
 /// <summary>
@@ -26,6 +28,8 @@ public sealed class PhraseSpeechIn(ISoundIn sound, ISpeechToText recognizer, str
 {
     /// <summary>Done when the recognizer can transcribe; phrases said before wait for it.</summary>
     public Task Ready => recognizer.Ready;
+
+    public void UseLanguage(string? code) => recognizer.UseLanguage(code);
     public string? GettingReady => $"{name} is getting ready: it loads its model (the first time on a computer takes longer). What you say meanwhile waits for it.";
 
     private readonly PhraseSplitter _splitter = new(CallVoice.Rate * 2);
@@ -197,11 +201,16 @@ public sealed class ElevenLabsSpeechToText(string key, HttpClient? http = null, 
 
     private readonly HttpClient _http = http ?? new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
     private readonly bool _ownsHttp = http == null;
+    private string? _language;
+
+    /// <summary>ElevenLabs is told the language instead of guessing it (#a06cd2e0).</summary>
+    public void UseLanguage(string? code) => _language = code;
 
     public async Task<string> TranscribeAsync(byte[] pcm, CancellationToken stop)
     {
         using var form = new MultipartFormDataContent();
         form.Add(new StringContent(Model), "model_id");
+        if (_language != null) form.Add(new StringContent(_language), "language_code");
         form.Add(new StringContent("false"), "tag_audio_events");
         var file = new ByteArrayContent(Wav.Of(pcm, CallVoice.Rate));
         file.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("audio/wav");
@@ -245,20 +254,46 @@ public sealed class WhisperSpeechToText : ISpeechToText
     private static readonly object Gate = new();
     private static (string Path, Task<WhisperFactory> Factory)? _loaded;
 
-    private readonly Task<WhisperProcessor> _loading;
+    private Task<WhisperProcessor> _loading;
+    private readonly Task<WhisperProcessor> _first;
+    private readonly string _modelPath;
+    private readonly string? _prompt;
+    private string? _language;
     private bool _disposed;
 
-    public WhisperSpeechToText(string modelPath, IEnumerable<string>? names = null)
+    public WhisperSpeechToText(string modelPath, IEnumerable<string>? names = null, string? language = null)
     {
-        var prompt = names?.Where(n => !string.IsNullOrWhiteSpace(n)).Distinct(StringComparer.OrdinalIgnoreCase).ToList() is { Count: > 0 } list
+        _modelPath = modelPath;
+        _prompt = names?.Where(n => !string.IsNullOrWhiteSpace(n)).Distinct(StringComparer.OrdinalIgnoreCase).ToList() is { Count: > 0 } list
             ? string.Join(", ", list) + "." : null;
-        _loading = Task.Run(async () =>
+        _language = language;
+        _first = _loading = Processor();
+    }
+
+    /// <summary>This call's processor: the loaded model, the language you speak (or detected), the names to spell.</summary>
+    private Task<WhisperProcessor> Processor()
+    {
+        var language = _language;
+        return Task.Run(async () =>
         {
-            var factory = await Load(modelPath);
-            var builder = factory.CreateBuilder().WithLanguage("auto");
-            if (prompt != null) builder = builder.WithPrompt(prompt);
+            var factory = await Load(_modelPath);
+            var builder = factory.CreateBuilder().WithLanguage(language ?? "auto");
+            if (_prompt != null) builder = builder.WithPrompt(_prompt);
             return builder.Build();
         });
+    }
+
+    /// <summary>Whisper is told the language instead of guessing it (#a06cd2e0): a new processor for it (the model stays loaded).</summary>
+    public void UseLanguage(string? code)
+    {
+        if (code == _language || _disposed) return;
+        _language = code;
+        var old = _loading;
+        _loading = Processor();
+        _ = old.ContinueWith(t =>
+        {
+            if (t.IsCompletedSuccessfully) t.Result.Dispose();
+        }, TaskScheduler.Default);
     }
 
     /// <summary>
@@ -309,7 +344,7 @@ public sealed class WhisperSpeechToText : ISpeechToText
     public static string? RunsOn => RuntimeOptions.LoadedLibrary?.ToString();
 
     /// <summary>Done when the model is loaded and warmed up, and this call's processor made.</summary>
-    public Task Ready => _loading;
+    public Task Ready => _first;
 
     public async Task<string> TranscribeAsync(byte[] pcm, CancellationToken stop)
     {
