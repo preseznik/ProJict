@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.46
+## 0.1.46 (2026-11-05)
 
 - **Your phone hears what waits for you at once.** A "You, on your phone" token can keep `GET /api/v1/me/watch` open. It gets a line for each new message to you, the counts of what waits whenever they change (questions, ship plans, work to review, unread), and a ping every 30 quiet seconds.
 - **ProJict on your phone, first step: a token that acts as you.** In **Settings › API**, a token's **Tools** can now be **You, on your phone**. It signs as you, not as an agent, and does what only you can: answer what agents ask, approve or decline ship plans, and accept finished work or send it back with why. It also chats, comments and adds items as you, at `/api/v1/me`. Made with network access on, it shows a QR code for the phone to scan, with this computer's addresses (Tailscale's first), the token and the certificate's fingerprint. The Android app that scans it comes next.
