@@ -136,6 +136,8 @@ public sealed partial class MainViewModel : ObservableObject
         ApiStore = new Services.Api.ApiStore(state.PersistsSettings ? ProJict.Core.Api.ApiData.DefaultPath : null);
         Api = new Services.Api.ApiServer(AgentTools, ApiStore, () => State.Projects.Where(p => p.Remote == null).ToList(),
             Services.UpdateService.CurrentVersionText);
+        // It starts and stops with the API (when it serves the network over HTTPS).
+        Tailscale = new Services.Api.TailscaleService(Api);
         Host.Changed += () =>
         {
             OnPropertyChanged(nameof(PendingJoin));
@@ -307,6 +309,8 @@ public sealed partial class MainViewModel : ObservableObject
     public Services.Api.ApiStore ApiStore { get; }
     /// <summary>ProJict's API (Settings › API).</summary>
     public Services.Api.ApiServer Api { get; }
+    /// <summary>Built-in Tailscale (Settings › API), so your phone reaches the API away from home (#a0d11f05).</summary>
+    public Services.Api.TailscaleService Tailscale { get; }
     public DashboardViewModel Dashboard { get; }
     public FeedViewModel Feed { get; }
     /// <summary>The Agents view: what connected agents are doing, and what they did.</summary>

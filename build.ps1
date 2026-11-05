@@ -1,5 +1,6 @@
 # Builds the self-contained app and the installer: artifacts\ProJict-Setup-<version>.exe
-# Requires the .NET 10 SDK, Inno Setup 6 and Visual Studio's C++ build tools (for the bridge).
+# Requires the .NET 10 SDK, Inno Setup 6, Visual Studio's C++ build tools (for the bridge), and Go with MinGW-w64's gcc
+# (for built-in Tailscale, native\tailscale).
 param([string]$Version)
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
@@ -8,6 +9,10 @@ if (-not $Version) {
     [xml]$project = Get-Content 'src/ProJict.App/ProJict.App.csproj'
     $Version = ($project.Project.PropertyGroup | Where-Object { $_.Version } | Select-Object -First 1).Version
 }
+
+# Built-in Tailscale (#a0d11f05): the bridge DLL, which the publish below puts next to ProJict.exe.
+& ./native/tailscale/build.ps1
+Set-Location $PSScriptRoot
 
 $publish = 'artifacts/publish'
 if (Test-Path $publish) { Remove-Item $publish -Recurse -Force }

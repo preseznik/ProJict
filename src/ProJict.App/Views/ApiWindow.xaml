@@ -44,6 +44,25 @@
                 <TextBlock Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="2,6,0,0" FontSize="12"
                            Text="ProJict opens nothing to the internet. For web-based connectors (claude.ai, cloud automations), put a tunnel in front of it, such as Cloudflare Tunnel; the README explains. For agents on this computer, the MCP setup under Settings › AI agents stays the simplest way." />
 
+                <!-- Built-in Tailscale (#a0d11f05): your phone reaches the API away from home -->
+                <Border x:Name="TailscaleCard" Style="{StaticResource Card}" Padding="12,10" Margin="0,12,0,0">
+                    <StackPanel>
+                        <CheckBox x:Name="TailscaleOn" Content="Reach ProJict away from home through Tailscale (built in)" IsChecked="{Binding TailscaleOn}"
+                                  IsEnabled="{Binding IsTailscaleAvailable}" />
+                        <TextBlock x:Name="TailscaleStatus" Text="{Binding TailscaleText}" TextWrapping="Wrap" Margin="2,6,0,0" />
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                            <Button x:Name="TailscaleSignIn" Content="Sign in…" Style="{StaticResource AccentButtonStyle}" Margin="0,0,8,0" Command="{Binding TailscaleSignInCommand}"
+                                    ToolTip="Opens Tailscale's sign-in page in your browser; sign in, and this computer joins your Tailscale"
+                                    Visibility="{Binding CanSignInTailscale, Converter={StaticResource BoolToVis}}" />
+                            <Button x:Name="TailscaleSignOut" Content="Sign out of Tailscale" Command="{Binding TailscaleSignOutCommand}"
+                                    ToolTip="Takes this computer off your Tailscale and turns it off; turning it on again needs a sign-in"
+                                    Visibility="{Binding CanSignOutTailscale, Converter={StaticResource BoolToVis}}" />
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap" Margin="2,6,0,0"
+                                   Text="ProJict joins your Tailscale itself: no Tailscale app on this computer, and only your own devices on your Tailscale can reach it there, each still with a token. Your phone needs Tailscale too, signed in to the same account (the app, until ProJict on your phone has it built in). Tailscale is free for personal use." />
+                    </StackPanel>
+                </Border>
+
                 <!-- A token just made or renewed, shown once -->
                 <Border x:Name="SecretCard" Style="{StaticResource Card}" Padding="12,10" Margin="0,14,0,0"
                         Visibility="{Binding HasSecret, Converter={StaticResource BoolToVis}}">

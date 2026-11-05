@@ -12,6 +12,8 @@
     <AssemblyName>ProJict</AssemblyName>
     <RootNamespace>ProJict.App</RootNamespace>
     <ApplicationIcon>Assets\ProJict.ico</ApplicationIcon>
+    <!-- Says ProJict runs on Windows 10 and 11, which built-in Tailscale needs (#a0d11f05) -->
+    <ApplicationManifest>app.manifest</ApplicationManifest>
     <Version>0.1.46</Version>
     <Product>ProJict</Product>
     <Description>Project TODO / DONE lists for Windows</Description>
@@ -34,6 +36,11 @@
   <ItemGroup>
     <!-- Kestrel, for the API (Settings › API) -->
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup Condition="Exists('..\..\native\tailscale\bin\projict-tailscale.dll')">
+    <!-- Built-in Tailscale (#a0d11f05), when native\tailscale\build.ps1 built it: next to ProJict.exe -->
+    <None Include="..\..\native\tailscale\bin\projict-tailscale.dll" Link="projict-tailscale.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

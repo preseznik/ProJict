@@ -83,6 +83,8 @@ public sealed class ApiData
     public int Port { get; set; } = DefaultPort;
     /// <summary>Also serve other devices on the network (over HTTPS); otherwise only this computer (127.0.0.1).</summary>
     public bool AllowNetwork { get; set; }
+    /// <summary>Built-in Tailscale (#a0d11f05): this computer joins your tailnet itself, and the API is reachable there.</summary>
+    public bool Tailscale { get; set; }
     public List<ApiToken> Tokens { get; set; } = [];
     /// <summary>The HTTPS certificate for network access (PKCS#12, protected for the Windows user).</summary>
     public string? ProtectedCertificate { get; set; }

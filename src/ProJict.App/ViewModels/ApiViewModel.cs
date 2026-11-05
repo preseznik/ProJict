@@ -23,14 +23,43 @@ public sealed partial class ApiViewModel : ObservableObject
         _newToolSet = ToolSetChoices[0];
         NewTools = DefaultToolChoices();
         _newExpiry = ExpiryChoices.First(e => e.Days == ApiData.DefaultExpiryDays);
+        // Built-in Tailscale's address comes first while it's in (#a0d11f05).
+        PairingAddresses = () => ApiPairing.Order([.. Tailnet.Address is { } tailnet ? [tailnet] : Array.Empty<System.Net.IPAddress>(), .. ApiPairing.Addresses()]);
         Server.Changed += Refresh;
+        Tailnet.Changed += RefreshTailscale;
     }
 
     private ApiServer Server => _main.Api;
+    private TailscaleService Tailnet => _main.Tailscale;
     private ApiData Data => Server.Data;
 
     /// <summary>The window closed: stop listening for changes.</summary>
-    public void Detach() => Server.Changed -= Refresh;
+    public void Detach()
+    {
+        Server.Changed -= Refresh;
+        Tailnet.Changed -= RefreshTailscale;
+    }
+
+    // ───────────── Built-in Tailscale (#a0d11f05) ─────────────
+
+    public bool IsTailscaleAvailable => TailscaleService.IsAvailable;
+    public bool TailscaleOn
+    {
+        get => Tailnet.IsOn;
+        set => Tailnet.SetOn(value);
+    }
+    public string TailscaleText => Tailnet.Description;
+    public bool CanSignInTailscale => Tailnet.IsOn && Tailnet.Status.NeedsSignIn;
+    public bool CanSignOutTailscale => Tailnet.IsOn && Tailnet.Status.IsRunning;
+
+    [RelayCommand] private void TailscaleSignIn() => Tailnet.SignIn();
+    [RelayCommand] private void TailscaleSignOut() => Tailnet.SignOut();
+
+    private void RefreshTailscale()
+    {
+        foreach (var p in new[] { nameof(TailscaleOn), nameof(TailscaleText), nameof(CanSignInTailscale), nameof(CanSignOutTailscale), nameof(PairingImage), nameof(PairingText) })
+            OnPropertyChanged(p);
+    }
 
     public void Refresh()
     {
@@ -182,8 +211,8 @@ public sealed partial class ApiViewModel : ObservableObject
         ? PairingCode.Draw(ApiPairing.Payload(_secretFor, Secret!, PairingAddresses(), Server.Port, Server.Fingerprint))
         : null;
 
-    /// <summary>Where the phone can find this computer, best first; tests set it.</summary>
-    public Func<IReadOnlyList<System.Net.IPAddress>> PairingAddresses { get; set; } = ApiPairing.Addresses;
+    /// <summary>Where the phone can find this computer, best first (built-in Tailscale's address too); tests set it.</summary>
+    public Func<IReadOnlyList<System.Net.IPAddress>> PairingAddresses { get; set; }
 
     public string PairingText
     {
@@ -198,7 +227,7 @@ public sealed partial class ApiViewModel : ObservableObject
                    string.Join(", ", addresses.Select(a => ApiPairing.Url(a, Server.Port))) + ". " +
                    (addresses.Any(ApiPairing.IsPrivateVpn)
                        ? "The first is Tailscale's, so it works away from home too."
-                       : "Away from home, put Tailscale on this computer and your phone, then renew this token: its address comes first.");
+                       : "Away from home, turn on Tailscale below (it's built in), then renew this token: its address comes first.");
         }
     }
 

@@ -480,3 +480,6 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Built-in Tailscale: the bridge DLL native/tailscale/build.ps1 builds
+native/tailscale/bin/

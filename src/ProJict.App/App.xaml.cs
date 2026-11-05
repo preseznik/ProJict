@@ -257,6 +257,8 @@ public partial class App : Application
         if (MainVm != null)
         {
             MainVm.Host.Stop();
+            try { MainVm.Tailscale.Stop(); }
+            catch (Exception) { }
             // Off the UI thread, so stopping doesn't wait for it.
             try { Task.Run(MainVm.Api.StopAsync).Wait(TimeSpan.FromSeconds(3)); }
             catch (Exception) { }
