@@ -79,6 +79,9 @@ public sealed class AppSettings
     public int ChatCacheMaxGb { get; set; } = 10;
     /// <summary>How Chat's list is sorted (its sort button), on this computer.</summary>
     public Chat.ChatOrder ChatOrder { get; set; }
+    /// <summary>The size of everything in ProJict's windows (Ctrl+mouse wheel), e.g. 1.25 for 125%; 0 for 100%.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public double UiScale { get; set; }
     /// <summary>How a channel's Media and Files tabs are sorted (their sort button), on this computer.</summary>
     public Chat.ChatFileOrder ChatFileOrder { get; set; }
     /// <summary>Chat shows the channel's member list beside the messages (the members button hides it, and the messages take the room).</summary>

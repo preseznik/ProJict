@@ -23,6 +23,8 @@ public partial class ProjectView : UserControl
         // Row text boxes would otherwise swallow the mouse wheel.
         BoardScroll.PreviewMouseWheel += (_, e) =>
         {
+            // Ctrl+wheel sizes everything (UiScale).
+            if (Keyboard.Modifiers == ModifierKeys.Control) return;
             BoardScroll.ScrollToVerticalOffset(BoardScroll.VerticalOffset - e.Delta * 0.6);
             e.Handled = true;
         };

@@ -103,7 +103,8 @@ public partial class OfficeView : UserControl
 
     private void Room_MouseWheel(object sender, MouseWheelEventArgs e)
     {
-        if (Camera is not { } camera) return;
+        // Ctrl+wheel sizes everything (UiScale); the wheel alone zooms the room.
+        if (Camera is not { } camera || Keyboard.Modifiers == ModifierKeys.Control) return;
         StopFlight();
         var factor = Math.Pow(1.2, e.Delta / 120.0);
         // Already the whole room: the wheel scrolls the page around it.

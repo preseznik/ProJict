@@ -33,6 +33,7 @@ Get **`ProJict-Setup-x.y.z.exe`** from [Releases](https://github.com/preseznik/p
 | Ctrl+K | search all projects, the wiki and Chat |
 | Ctrl+Space | select items for **Copy prompt** |
 | Ctrl+V | with a screenshot or files copied: attach them to the item |
+| Ctrl+mouse wheel, Ctrl+plus / Ctrl+minus, Ctrl+0 | make everything in ProJict bigger or smaller (75% to 200%), or back to 100%: every window and menu together, kept on this computer |
 
 Right-click an item, or click the **⋯** that appears on its right when you point at it, for everything else you can do with it: priority, tag, discussion, attachments, moving it and more. **Copy #4e84570c** there copies the item's short id, which links the item when pasted into Chat and is how agents name it.
 

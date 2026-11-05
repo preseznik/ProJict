@@ -11,6 +11,8 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         DataContext = viewModel;
+        // Ctrl+mouse wheel makes everything bigger or smaller, in every window (#b242e155).
+        Services.UiScale.Install(viewModel.State);
         RestorePlacement();
         // Back in front: the chat channel you look at is read now.
         Activated += (_, _) => viewModel.Chat.OnActivated();
