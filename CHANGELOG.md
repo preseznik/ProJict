@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.47
+## 0.1.47 (2026-11-05)
 
 - **A To test tab for what agents ask you to try.** When something needs a person to try it by hand, an agent asks on the item (`ask_to_test`, or with `complete_item`): a few short steps, what should happen, and files if they help. It waits in the project's new **To test** tab, and a **to test** chip on the item opens it. **Works** or **Doesn't work…** (with a note and screenshots) goes back to the agent like an approval. Doesn't work on finished work waiting for your review also sends it back with your note, while Works leaves the review to you. Agents close tests that were settled elsewhere with `close_test`, and you can answer from your own ProJict on another computer too.
 - **Tailscale built in, for your phone away from home.** Tick **Reach ProJict away from home through Tailscale (built in)** in Settings › API, sign in to Tailscale once in your browser, and this computer joins your Tailscale network by itself, with no Tailscale app and no VPN adapter. Your phone then reaches ProJict through it at home or away, still over HTTPS with ProJict's certificate and still with its token, and the pairing QR code puts that address first. Your phone needs Tailscale too, signed in to the same account, until ProJict on your phone has it built in. Nothing goes to Tailscale's log servers.
