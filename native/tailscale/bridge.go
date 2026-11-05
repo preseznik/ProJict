@@ -57,7 +57,8 @@ func ProJictTsStart(dir, hostname, authKey *C.char, listenPort, targetPort, ephe
 	if err := os.MkdirAll(d, 0o700); err != nil {
 		return failed(err)
 	}
-	// Nothing goes to Tailscale's log servers: ProJict keeps its own log, in the node's folder.
+	// Nothing goes to Tailscale's log servers (and the build leaves the uploader and its disk buffers out, ts_omit_logtail):
+	// ProJict keeps its own log, in the node's folder.
 	os.Setenv("TS_NO_LOGS_NO_SUPPORT", "true")
 	f, err := os.OpenFile(filepath.Join(d, "tailscale.log"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {

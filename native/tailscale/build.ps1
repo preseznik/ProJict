@@ -16,7 +16,8 @@ if (-not (Get-Command gcc.exe -ErrorAction SilentlyContinue)) { throw 'gcc not f
 $env:CGO_ENABLED = '1'
 $env:CC = 'gcc'
 New-Item -ItemType Directory -Force bin | Out-Null
-& $go build -buildmode=c-shared -trimpath -ldflags '-s -w' -o bin/projict-tailscale.dll .
+# ts_omit_logtail: Tailscale's own feature tag leaves its log uploader out, and with it the log buffers it keeps on disk.
+& $go build -buildmode=c-shared -trimpath -tags ts_omit_logtail -ldflags '-s -w' -o bin/projict-tailscale.dll .
 if ($LASTEXITCODE -ne 0) { throw 'go build (Tailscale bridge) failed' }
 Remove-Item bin/projict-tailscale.h -ErrorAction SilentlyContinue
 Write-Host ("Tailscale bridge: native/tailscale/bin/projict-tailscale.dll ({0:N1} MB)" -f ((Get-Item bin/projict-tailscale.dll).Length / 1MB))
