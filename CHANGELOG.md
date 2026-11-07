@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- **To test from the phone.** The phone-token API can list waiting tests across your projects or one selected project, show their steps and expected result with safe file metadata, and record Works or Doesn't work with a note using the same rules as the PC. Doesn't work sends a done review back; Works leaves accepting it to you. This needs an Android client implementing the new phone test API v1; file downloads/uploads are not part of this first contract.
+- **Safer phone API errors.** Malformed JSON is rejected without reflecting parser snippets, and unexpected phone-request failures no longer return raw application or storage exception details.
+
 ## 0.1.47 (2026-11-05)
 
 - **A To test tab for what agents ask you to try.** When something needs a person to try it by hand, an agent asks on the item (`ask_to_test`, or with `complete_item`): a few short steps, what should happen, and files if they help. It waits in the project's new **To test** tab, and a **to test** chip on the item opens it. **Works** or **Doesn't work…** (with a note and screenshots) goes back to the agent like an approval. Doesn't work on finished work waiting for your review also sends it back with your note, while Works leaves the review to you. Agents close tests that were settled elsewhere with `close_test`, and you can answer from your own ProJict on another computer too.

@@ -466,11 +466,19 @@ public sealed class ApiServer
             await Problem(context, 403, $"The token “{token.Name}” is read only: it can't decide, post or add (Settings › API).");
             return;
         }
-        var body = method == "GET" ? null : await BodyAsync(context.Request, false);
+        JsonObject? body;
+        try { body = method == "GET" ? null : await BodyAsync(context.Request, false); }
+        catch (JsonException)
+        {
+            // A malformed phone payload must not become an unhandled 500 or
+            // reflect a parser snippet containing the submitted note.
+            await Problem(context, 400, "Send a valid JSON object.");
+            return;
+        }
         var query = context.Request.Query.ToDictionary(q => q.Key, q => q.Value.ToString(), StringComparer.OrdinalIgnoreCase);
         try
         {
-            var text = await _tools.MeAsync(method, path, body, query);
+            var text = await _tools.MeAsync(method, path, body, query, token);
             var made = method == "POST" && (path.EndsWith("/items", StringComparison.OrdinalIgnoreCase) || path.EndsWith("/comments", StringComparison.OrdinalIgnoreCase) ||
                                              path.EndsWith("/messages", StringComparison.OrdinalIgnoreCase));
             await Reply(context, made ? 201 : 200, text);
@@ -485,9 +493,11 @@ public sealed class ApiServer
                 _ => 400,
             }, ex.Message);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            await Problem(context, 500, $"ProJict could not do that: {ex.Message}");
+            // Phone requests can carry private feedback; never reflect raw
+            // application/storage exception details into a network response.
+            await Problem(context, 500, "ProJict could not confirm the request. Refresh and check the PC before trying again.");
         }
     }
 

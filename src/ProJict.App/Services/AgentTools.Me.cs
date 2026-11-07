@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using ProJict.Core.Agents;
+using ProJict.Core.Api;
 using ProJict.Core.Chat;
 using ProJict.Core.Features;
 using ProJict.Core.Model;
@@ -15,10 +16,10 @@ namespace ProJict.App.Services;
 public sealed partial class AgentTools
 {
     /// <summary>Runs a /me request (path after /api/v1, e.g. "/me/waiting"); throws McpToolException for what the phone should show.</summary>
-    public Task<string> MeAsync(string method, string path, JsonObject? body, IReadOnlyDictionary<string, string> query) =>
-        _dispatcher.InvokeAsync(() => MeRoute(method, path.Trim('/').Split('/'), body ?? [], query)).Task;
+    public Task<string> MeAsync(string method, string path, JsonObject? body, IReadOnlyDictionary<string, string> query, ApiToken? phoneToken = null) =>
+        _dispatcher.InvokeAsync(() => MeRoute(method, path.Trim('/').Split('/'), body ?? [], query, phoneToken)).Task;
 
-    private string MeRoute(string method, string[] parts, JsonObject body, IReadOnlyDictionary<string, string> query)
+    private string MeRoute(string method, string[] parts, JsonObject body, IReadOnlyDictionary<string, string> query, ApiToken? phoneToken)
     {
         string Part(int i) => Uri.UnescapeDataString(parts[i]);
         return (method, parts.Length, parts.ElementAtOrDefault(1)) switch
@@ -29,6 +30,9 @@ public sealed partial class AgentTools
             ("POST", 3, "ship") => Json(MeDecideShip(Part(2), Approve(body))),
             ("POST", 3, "reviews") => Json(MeReview(Part(2), body)),
             ("GET", 2, "projects") => Json(MeProjects()),
+            ("GET", 2, "tests") => Json(PhoneTestsApi.Pending(_state.Projects, phoneToken, query.GetValueOrDefault("project"))),
+            ("GET", 5, "projects") when parts[3] == "tests" => Json(PhoneTestsApi.Detail(_state.Projects, phoneToken, Part(2), Part(4))),
+            ("POST", 5, "projects") when parts[3] == "tests" => Json(MeAnswerTest(phoneToken, Part(2), Part(4), body)),
             ("POST", 4, "projects") when parts[3] == "items" => Json(MeAddItem(Part(2), body)),
             ("POST", 4, "items") when parts[3] == "comments" => Json(MeComment(Part(2), body)),
             ("GET", 2, "channels") => Json(MeChannels()),
@@ -37,9 +41,17 @@ public sealed partial class AgentTools
             _ => throw new McpToolException($"Nothing at {method} /api/v1/{string.Join('/', parts)}. A phone's token reaches: GET /me, GET /me/waiting, " +
                                              "POST /me/approvals/{message}, POST /me/ship/{project}, POST /me/reviews/{item}, GET /me/projects, " +
                                              "POST /me/projects/{project}/items, POST /me/items/{item}/comments, GET /me/channels, GET /me/channels/{channel}, " +
-                                             "POST /me/channels/{channel}/messages, GET /me/watch.", ToolProblem.NotFound),
+                                              "POST /me/channels/{channel}/messages, GET /me/watch, GET /me/tests?project=<id>, " +
+                                              "GET or POST /me/projects/{project}/tests/{test}.", ToolProblem.NotFound),
         };
     }
+
+    private JsonObject MeAnswerTest(ApiToken? token, string project, string test, JsonObject body) =>
+        PhoneTestsApi.Answer(_state.Projects, token, project, test, body, (board, request, works, note) =>
+        {
+            if (!_main.GetProjectViewModel(board).AnswerTest(request, works, note, []))
+                throw new McpToolException("That test changed. Refresh To test before trying again.", ToolProblem.Conflict);
+        });
 
     private static bool Approve(JsonObject body) => body["approve"] is JsonValue v && v.TryGetValue<bool>(out var yes)
         ? yes : throw new McpToolException("Say \"approve\": true or false.");

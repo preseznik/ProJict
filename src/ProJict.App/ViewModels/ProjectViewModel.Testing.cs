@@ -77,8 +77,11 @@ public sealed partial class ProjectViewModel
     /// review sends it back, with your note as the reason.
     /// </summary>
     internal bool AnswerTest(TestCardViewModel card, bool works, string? note, List<Attachment> files)
+        => AnswerTest(card.Model, works, note, files);
+
+    /// <summary>Same answer operation for a phone request, without constructing a UI card.</summary>
+    internal bool AnswerTest(TestRequest test, bool works, string? note, List<Attachment> files)
     {
-        var test = card.Model;
         if (Project.Remote != null)
         {
             // A project shared by your own ProJict: it's answered there.
