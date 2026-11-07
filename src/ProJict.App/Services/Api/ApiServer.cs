@@ -466,6 +466,12 @@ public sealed class ApiServer
             else await WatchMeAsync(context, token);
             return;
         }
+        if (path.Equals("/me/app-update", StringComparison.OrdinalIgnoreCase) || path.Equals("/me/app-update/apk", StringComparison.OrdinalIgnoreCase))
+        {
+            if (method != "GET") await NotAllowed(context, "GET");
+            else await PhoneAppUpdateAsync(context, path.EndsWith("/apk", StringComparison.OrdinalIgnoreCase));
+            return;
+        }
         if (PhoneCallMediaPath(path) is { } callId)
         {
             if (method != "GET") await NotAllowed(context, "GET");
@@ -625,6 +631,49 @@ public sealed class ApiServer
         finally
         {
             lock (_lock) _watches.Remove((token, watch));
+        }
+    }
+
+    private readonly PhoneAppUpdates _phoneApp = new();
+
+    /// <summary>
+    /// The phone app's updates through this PC (#06baf4c6): /me/app-update says which version the latest release has;
+    /// /me/app-update/apk hands the APK over (fetched once from the release, size and SHA-256 checked), with its SHA-256.
+    /// </summary>
+    private async Task PhoneAppUpdateAsync(HttpContext context, bool apk)
+    {
+        var stop = context.RequestAborted;
+        if (!apk)
+        {
+            await Reply(context, 200, (await _phoneApp.InfoAsync(stop)).ToJsonString(ReadableJson));
+            return;
+        }
+        (string Path, string Sha256, Core.Updates.PhoneAppInfo Info)? found;
+        try { found = await _phoneApp.ApkAsync(stop); }
+        catch (Exception ex) when (ex is System.Net.Http.HttpRequestException or TaskCanceledException or InvalidDataException or IOException && !stop.IsCancellationRequested)
+        {
+            await Problem(context, 502, "Your PC couldn't fetch the phone app from the release. Try again later.");
+            return;
+        }
+        if (found is not { } file)
+        {
+            await Problem(context, 404, "The latest release has no phone app.");
+            return;
+        }
+        var response = context.Response;
+        response.StatusCode = 200;
+        response.ContentType = "application/vnd.android.package-archive";
+        response.ContentLength = new FileInfo(file.Path).Length;
+        response.Headers["X-ProJict-Version"] = file.Info.VersionText;
+        response.Headers["X-ProJict-SHA256"] = file.Sha256;
+        try
+        {
+            await using var source = File.OpenRead(file.Path);
+            await source.CopyToAsync(response.Body, stop);
+        }
+        catch (Exception ex) when (ex is OperationCanceledException or IOException)
+        {
+            // The phone went away mid-download; it starts again next time.
         }
     }
 

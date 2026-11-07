@@ -3,6 +3,7 @@
 ## Unreleased
 
 - **Fixed: updating from inside ProJict could leave it uninstalled.** The update started while ProJict was still closing; Setup gave up, and the ProJict.exe it had set aside was deleted, so ProJict was gone until you installed it by hand. Setup now waits for ProJict to close, a Setup that doesn't finish puts the previous ProJict back and starts it, and each update keeps a log next to the download.
+- **Your phone gets its app updates through this computer.** When a newer ProJict for Android is on ProJict's release, this computer fetches it once (checking it's the published file) and hands it to your paired phone, which offers **Update**. The phone never goes to the internet for it, and installs it only when it's signed like the app you have.
 
 ## 0.1.49 (2026-11-07)
 
