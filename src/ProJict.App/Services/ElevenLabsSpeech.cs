@@ -32,6 +32,9 @@ public sealed class ElevenLabsSpeechOut(string key, HttpClient? http = null, str
     /// <summary>The model that reads the answers: Flash, or one that speaks the call's language (Eleven v3 for Slovenian, #f021ff25).</summary>
     public string ModelId { get; set; } = Model;
 
+    /// <summary>What ElevenLabs sends back: an MP3 for the speakers, or "pcm_16000" (16 kHz, 16-bit mono) for a call on your phone.</summary>
+    public string OutputFormat { get; init; } = "mp3_44100_128";
+
     public async Task<IReadOnlyList<string>> VoicesAsync(CancellationToken stop)
     {
         if (_voices == null)
@@ -52,12 +55,12 @@ public sealed class ElevenLabsSpeechOut(string key, HttpClient? http = null, str
     {
         await VoicesAsync(stop);
         var id = _voices!.TryGetValue(voice, out var known) ? known : _voices.Values.First();
-        using var request = new HttpRequestMessage(HttpMethod.Post, $"{api}/v1/text-to-speech/{Uri.EscapeDataString(id)}?output_format=mp3_44100_128")
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"{api}/v1/text-to-speech/{Uri.EscapeDataString(id)}?output_format={Uri.EscapeDataString(OutputFormat)}")
         {
             Content = JsonContent.Create(new { text, model_id = ModelId }),
         };
         request.Headers.Add("xi-api-key", key);
-        request.Headers.Add("Accept", "audio/mpeg");
+        request.Headers.Add("Accept", OutputFormat.StartsWith("mp3", StringComparison.Ordinal) ? "audio/mpeg" : "*/*");
         using var response = await SendRawAsync(request, stop);
         var mp3 = await response.Content.ReadAsByteArrayAsync(stop);
         Playing?.Invoke();

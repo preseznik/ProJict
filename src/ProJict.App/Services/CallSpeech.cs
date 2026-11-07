@@ -202,16 +202,19 @@ public sealed class WindowsSpeechOut : ISpeechOut
 
     public WindowsSpeechOut() => _synth.SetOutputToDefaultAudioDevice();
 
-    public IReadOnlyList<string> Voices => [.. _synth.GetInstalledVoices().Where(v => v.Enabled).Select(v => v.VoiceInfo.Name)];
+    public IReadOnlyList<string> Voices => VoicesOf(_synth, null);
 
     public Task<IReadOnlyList<string>> VoicesAsync(CancellationToken stop) => Task.FromResult(Voices);
 
     /// <summary>Windows' voices that speak the language (one with a Slovenian voice installed reads Slovenian); all when none does.</summary>
-    public Task<IReadOnlyList<string>> VoicesAsync(string? language, CancellationToken stop)
+    public Task<IReadOnlyList<string>> VoicesAsync(string? language, CancellationToken stop) => Task.FromResult(VoicesOf(_synth, language));
+
+    /// <summary>The enabled voices that speak <paramref name="language"/>; all of them when none does (or no language).</summary>
+    internal static IReadOnlyList<string> VoicesOf(SpeechSynthesizer synth, string? language)
     {
-        IReadOnlyList<string> speaking = language == null ? [] :
-            [.. _synth.GetInstalledVoices().Where(v => v.Enabled && v.VoiceInfo.Culture.TwoLetterISOLanguageName == language).Select(v => v.VoiceInfo.Name)];
-        return Task.FromResult(speaking.Count > 0 ? speaking : Voices);
+        var all = synth.GetInstalledVoices().Where(v => v.Enabled).ToList();
+        IReadOnlyList<string> speaking = language == null ? [] : [.. all.Where(v => v.VoiceInfo.Culture.TwoLetterISOLanguageName == language).Select(v => v.VoiceInfo.Name)];
+        return speaking.Count > 0 ? speaking : [.. all.Select(v => v.VoiceInfo.Name)];
     }
 
     public Task SpeakAsync(string voice, string text, CancellationToken stop)

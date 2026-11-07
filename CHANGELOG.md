@@ -3,6 +3,7 @@
 ## Unreleased
 
 - **To test from the phone.** The phone-token API can list waiting tests across your projects or one selected project, show their steps and expected result with safe file metadata, and record Works or Doesn't work with a note using the same rules as the PC. Doesn't work sends a done review back; Works leaves accepting it to you. This needs an Android client implementing the new phone test API v1; file downloads/uploads are not part of this first contract.
+- **Call your agents from your phone.** ProJict on your phone can call one of your agents that hears Chat right away: the same call as from this computer, in your private conversation with it, but ProJict hears your phone's microphone and the agent's voice plays on your phone, not on this computer. Mute, stop an answer and hang up from the phone. It uses the speech services Settings › Chat picked (Windows' offline recognizer stands in for Windows' online dictation, which only hears this computer). One call at a time; pausing, renewing or revoking the phone's token ends its call.
 - **Safer phone API errors.** Malformed JSON is rejected without reflecting parser snippets, and unexpected phone-request failures no longer return raw application or storage exception details.
 
 ## 0.1.47 (2026-11-05)

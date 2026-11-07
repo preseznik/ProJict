@@ -33,6 +33,10 @@ public sealed partial class AgentTools
             ("GET", 2, "tests") => Json(PhoneTestsApi.Pending(_state.Projects, phoneToken, query.GetValueOrDefault("project"))),
             ("GET", 5, "projects") when parts[3] == "tests" => Json(PhoneTestsApi.Detail(_state.Projects, phoneToken, Part(2), Part(4))),
             ("POST", 5, "projects") when parts[3] == "tests" => Json(MeAnswerTest(phoneToken, Part(2), Part(4), body)),
+            ("GET", 2, "calls") => Json(MeCalls(phoneToken)),
+            ("POST", 2, "calls") => Json(MeStartCall(phoneToken, body)),
+            ("GET", 3, "calls") => Json(MeCall(phoneToken, Part(2))),
+            ("POST", 4, "calls") => Json(MeCallAction(phoneToken, Part(2), parts[3], body)),
             ("POST", 4, "projects") when parts[3] == "items" => Json(MeAddItem(Part(2), body)),
             ("POST", 4, "items") when parts[3] == "comments" => Json(MeComment(Part(2), body)),
             ("GET", 2, "channels") => Json(MeChannels()),
@@ -42,7 +46,8 @@ public sealed partial class AgentTools
                                              "POST /me/approvals/{message}, POST /me/ship/{project}, POST /me/reviews/{item}, GET /me/projects, " +
                                              "POST /me/projects/{project}/items, POST /me/items/{item}/comments, GET /me/channels, GET /me/channels/{channel}, " +
                                               "POST /me/channels/{channel}/messages, GET /me/watch, GET /me/tests?project=<id>, " +
-                                              "GET or POST /me/projects/{project}/tests/{test}.", ToolProblem.NotFound),
+                                              "GET or POST /me/projects/{project}/tests/{test}, GET or POST /me/calls, GET /me/calls/{call}, " +
+                                              "POST /me/calls/{call}/mute|stop-speaking|end, GET /me/calls/{call}/media (WebSocket).", ToolProblem.NotFound),
         };
     }
 

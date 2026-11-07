@@ -38,6 +38,7 @@ public sealed partial class CallService(AppState state, MainViewModel main, Disp
     /// <summary>The recognizer Settings › Chat picked (#4980bbee); Windows' old one when that one can't start (no key, no model).</summary>
     private ISpeechIn NewSpeechIn()
     {
+        if (_phone is { } phone) return NewPhoneSpeechIn(phone);
         switch (state.AppSettings.CallRecognizer)
         {
             case CallRecognizer.ElevenLabs when ElevenLabsKey() is { } key:
@@ -54,6 +55,7 @@ public sealed partial class CallService(AppState state, MainViewModel main, Disp
     }
 
     private ISpeechIn NewOldSpeechIn() =>
+        _phone is { } phone ? new WindowsSpeechIn(new PhoneSoundIn(phone), Language) :
         OldSpeechIn?.Invoke() ?? new WindowsSpeechIn(Microphones.DeviceOf(state.AppSettings.CallMicrophone) >= 0 ? SoundIn() : null, Language);
 
     // ───────────── The call's language (#a06cd2e0, #f021ff25) ─────────────
@@ -119,6 +121,8 @@ public sealed partial class CallService(AppState state, MainViewModel main, Disp
         var model = WhisperModel.For(state.AppSettings.WhisperModel);
         return state.AppSettings.CallRecognizer switch
         {
+            CallRecognizer.WindowsOnline when _phone != null =>
+                "Windows' online dictation only hears this computer's microphone: Windows' offline recognizer hears your phone.",
             CallRecognizer.ElevenLabs when ElevenLabsKey() == null =>
                 "ElevenLabs' speech to text needs ElevenLabs' key in Settings › Tools: Windows' offline recognizer hears you for now.",
             CallRecognizer.Whisper when !WhisperModels.Has(model) =>
@@ -209,6 +213,11 @@ public sealed partial class CallService(AppState state, MainViewModel main, Disp
     private void CheckHeard()
     {
         if (_heardSound || Hint != null || Preparing != null || Muted || _listeningSince is not { } since || DateTime.Now - since < QuietFor) return;
+        if (_phone != null)
+        {
+            Hint = "Not hearing you? Check that ProJict on your phone may use the microphone, and that the call isn't muted there.";
+            return;
+        }
         var microphone = _in is WindowsOnlineSpeechIn ? Microphones.DefaultName + " (Windows' online dictation always uses it)" : Microphones.Describe(state.AppSettings.CallMicrophone);
         Hint = $"Not hearing you? ProJict listens to {microphone}, and the bar under your name moves when it " +
                "hears sound. Pick the one you talk into in Settings › Chat › Microphone for calls, and check that Windows lets desktop apps use the " +
@@ -259,8 +268,8 @@ public sealed partial class CallService(AppState state, MainViewModel main, Disp
     /// </summary>
     private string Caller => _host?.MyName is { Length: > 0 } there ? there : Me;
 
-    /// <summary>Calls the agents in the channel; the problem when it can't, or null.</summary>
-    public string? Start(ChatChannel channel, IReadOnlyList<string> agents)
+    /// <summary>Calls the agents in the channel (in <paramref name="language"/>, or the one Settings picked); the problem when it can't, or null.</summary>
+    public string? Start(ChatChannel channel, IReadOnlyList<string> agents, string? language = null)
     {
         if (IsOn) return "You're in a call already: hang up first.";
         if (agents.Count == 0) return "Pick at least one agent to call.";
@@ -301,7 +310,7 @@ public sealed partial class CallService(AppState state, MainViewModel main, Disp
         Current = call;
         _origin = channel;
         _channel = chat;
-        Language = CallLanguage.For(state.AppSettings.CallLanguage)?.Code;
+        Language = CallLanguage.For(language ?? state.AppSettings.CallLanguage)?.Code;
         PreloadWhisper();
         Captions.Clear();
         Muted = false;
@@ -318,7 +327,8 @@ public sealed partial class CallService(AppState state, MainViewModel main, Disp
                     "(no lists, code or links), and ProJict reads it aloud. answer_call answer=hang_up leaves the call." + LanguageAsk);
             else Captions.Add(("ProJict", $"{agent.Name} {ChatCall.Describe(agent.State)} (it doesn't hear Chat right away)."));
         StartClock();
-        Started?.Invoke(this);
+        // A call from your phone has no window here: the phone is where you are.
+        if (_phone == null) Started?.Invoke(this);
         Changed?.Invoke();
         return null;
     }
@@ -443,6 +453,7 @@ public sealed partial class CallService(AppState state, MainViewModel main, Disp
         StopSound();
         StoppedListening();
         Speaking = null;
+        _phone = null;
         Changed?.Invoke();
     }
 
@@ -603,7 +614,7 @@ public sealed partial class CallService(AppState state, MainViewModel main, Disp
             // ElevenLabs failed (its key, credits, the network): this one in a Windows voice, and the window says why.
             Problem = ex.Message + " Its answers are read in a Windows voice for now.";
             Changed?.Invoke();
-            _fallback ??= Fallback();
+            _fallback ??= _phone is { } phone ? new PhoneWindowsSpeechOut(phone) : Fallback();
             SpeakersPlaying(true);
             try { await _fallback.SpeakAsync(await VoiceOfAsync(agent, _fallback), text, _stopSaying.Token); }
             catch (Exception again) when (again is InvalidOperationException or ObjectDisposedException or OperationCanceledException) { }
@@ -646,7 +657,7 @@ public sealed partial class CallService(AppState state, MainViewModel main, Disp
     /// <summary>The voices for answers (Settings' choice, or tests'); ElevenLabs says when its speech starts playing (#dcfeab4b).</summary>
     private ISpeechOut NewOut()
     {
-        var made = (SpeechOut ?? NewSpeechOut)();
+        var made = _phone is { } phone ? NewPhoneSpeechOut(phone) : (SpeechOut ?? NewSpeechOut)();
         if (made is ElevenLabsSpeechOut eleven) eleven.Playing += () => dispatcher.InvokeAsync(() => SpeakersPlaying(true));
         return made;
     }

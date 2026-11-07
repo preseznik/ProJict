@@ -120,6 +120,8 @@ public sealed class ApiServer
                 else kestrel.Listen(IPAddress.Loopback, port, secure);
             });
             var app = builder.Build();
+            // Calls from the phone carry their audio over a WebSocket (/me/calls/{call}/media); pings find a phone that's gone.
+            app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(5), KeepAliveTimeout = TimeSpan.FromSeconds(15) });
             app.Run(HandleAsync);
             await app.StartAsync();
             _app = app;
@@ -199,6 +201,8 @@ public sealed class ApiServer
         string secret;
         lock (_store.Sync) secret = Data.Renew(token, DateTime.Now);
         EndSessions(c => c.Token == token);
+        EndWatches(token);
+        _tools.EndPhoneCalls(token, "token_renewed");
         _store.Save();
         RaiseChanged();
         return secret;
@@ -208,6 +212,8 @@ public sealed class ApiServer
     {
         lock (_store.Sync) Data.Revoke(token);
         EndSessions(c => c.Token == token);
+        EndWatches(token);
+        _tools.EndPhoneCalls(token, "token_revoked");
         _store.Save();
         RaiseChanged();
     }
@@ -240,7 +246,11 @@ public sealed class ApiServer
     public void SetTokenFrozen(ApiToken token, bool frozen)
     {
         lock (_store.Sync) token.Frozen = frozen;
-        if (frozen) EndWatches(token);
+        if (frozen)
+        {
+            EndWatches(token);
+            _tools.EndPhoneCalls(token, "token_paused");
+        }
         _store.Save();
         RaiseChanged();
     }
@@ -456,6 +466,12 @@ public sealed class ApiServer
             else await WatchMeAsync(context, token);
             return;
         }
+        if (PhoneCallMediaPath(path) is { } callId)
+        {
+            if (method != "GET") await NotAllowed(context, "GET");
+            else await PhoneCallMediaAsync(context, token, callId);
+            return;
+        }
         if (method is not ("GET" or "POST"))
         {
             await NotAllowed(context, "GET, POST");
@@ -480,7 +496,7 @@ public sealed class ApiServer
         {
             var text = await _tools.MeAsync(method, path, body, query, token);
             var made = method == "POST" && (path.EndsWith("/items", StringComparison.OrdinalIgnoreCase) || path.EndsWith("/comments", StringComparison.OrdinalIgnoreCase) ||
-                                             path.EndsWith("/messages", StringComparison.OrdinalIgnoreCase));
+                                             path.EndsWith("/messages", StringComparison.OrdinalIgnoreCase) || path.TrimEnd('/').Equals("/me/calls", StringComparison.OrdinalIgnoreCase));
             await Reply(context, made ? 201 : 200, text);
         }
         catch (McpToolException ex)
@@ -609,6 +625,56 @@ public sealed class ApiServer
         finally
         {
             lock (_lock) _watches.Remove((token, watch));
+        }
+    }
+
+    /// <summary>"/me/calls/{call}/media": the call's ID part, or null for any other path.</summary>
+    private static string? PhoneCallMediaPath(string path)
+    {
+        var parts = path.Trim('/').Split('/');
+        return parts.Length == 4 && parts[0].Equals("me", StringComparison.OrdinalIgnoreCase) && parts[1].Equals("calls", StringComparison.OrdinalIgnoreCase) &&
+               parts[3].Equals("media", StringComparison.OrdinalIgnoreCase) ? Uri.UnescapeDataString(parts[2]) : null;
+    }
+
+    /// <summary>
+    /// A call's media (WebSocket): the phone sends its microphone as binary PCM frames; ProJict sends the agent's voice
+    /// as binary PCM frames and the call's events as JSON text. When it closes, the call ends; when the call ends, it closes.
+    /// </summary>
+    private async Task PhoneCallMediaAsync(HttpContext context, ApiToken token, string callId)
+    {
+        if (!context.WebSockets.IsWebSocketRequest)
+        {
+            await Problem(context, 400, "Open the call's media as a WebSocket.");
+            return;
+        }
+        if (token.ReadOnly)
+        {
+            await Problem(context, 403, $"The token “{token.Name}” is read only: it can't make calls (Settings › API).");
+            return;
+        }
+        PhoneCallMedia media;
+        try { media = await _dispatcher.InvokeAsync(() => _tools.AttachPhoneMedia(token, callId)); }
+        catch (McpToolException ex)
+        {
+            await Problem(context, ex.Problem switch { ToolProblem.NotFound => 404, ToolProblem.Forbidden => 403, ToolProblem.Conflict => 409, _ => 400 }, ex.Message);
+            return;
+        }
+        var reason = "media_lost";
+        using var watch = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted);
+        lock (_lock) _watches.Add((token, watch));
+        try
+        {
+            using var socket = await context.WebSockets.AcceptWebSocketAsync();
+            reason = await PhoneCallSocket.RunAsync(socket, media, () => !token.Frozen && !token.IsExpired(DateTime.Now), watch.Token);
+        }
+        catch (Exception ex) when (ex is OperationCanceledException or IOException or ObjectDisposedException or System.Net.WebSockets.WebSocketException)
+        {
+            // The phone went away, or the token can't call any more.
+        }
+        finally
+        {
+            lock (_lock) _watches.Remove((token, watch));
+            await _dispatcher.InvokeAsync(() => _tools.PhoneMediaClosed(media, reason));
         }
     }
 
