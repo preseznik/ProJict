@@ -78,8 +78,12 @@ public sealed partial class UpdateService(AppState state) : ObservableObject
             var path = Path.Combine(Path.GetTempPath(), "ProJict-update", info.AssetName);
             await UpdateChecker.DownloadAsync(Http, info, path, new Progress<double>(p => Progress = p * 100));
             state.SaveNow();
-            // The installer replaces the program files and starts ProJict again when it is done.
-            Process.Start(new ProcessStartInfo(path, "/SILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS") { UseShellExecute = true });
+            // The installer replaces the program files and starts ProJict again when it is done. It waits for this ProJict
+            // to exit before it touches anything (/WAITPID), and keeps a log next to the download, so a failed update
+            // can be told apart (#2a293aff); a Setup that doesn't finish puts the old ProJict back and starts it.
+            var log = Path.ChangeExtension(path, ".log");
+            Process.Start(new ProcessStartInfo(path,
+                $"/SILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS /WAITPID={Environment.ProcessId} /LOG=\"{log}\"") { UseShellExecute = true });
             // Quit once Setup holds its lock: from then on nothing starts ProJict again until the update is done.
             for (var waited = 0; waited < 15_000 && !SetupLock.IsHeld(); waited += 250) await Task.Delay(250);
             App.Current.ExitApp();
