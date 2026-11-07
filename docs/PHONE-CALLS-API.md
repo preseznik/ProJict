@@ -1,6 +1,6 @@
 # Phone calls API v1
 
-For ProJictAndroid `d03a6a2f` / PC `d6b701ce`. You call one of your agents from the
+For ProJictAndroid `d03a6a2f` / PC `d6b701ce`. Available from ProJict 0.1.48. You call one of your agents from the
 phone while the app is open. It is the same call as one started on the PC (the
 agent is rung, picks up with `answer_call`, hears you as messages in your private
 conversation and answers there). The difference is where the audio is: ProJict

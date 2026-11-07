@@ -1,7 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.1.48 (2026-11-07)
 
+- **Approve what can't be taken back with your PIN.** When an agent asks about something that can't be undone (publishing a release, say), **Approve** asks "Are you sure?" and then this computer's PIN; a thumbs-up doesn't count, and Decline needs no PIN. You set the PIN (4–8 digits) at the first start, before the first ship that pushes or releases, or in Settings. Five wrong tries wait five minutes. Your phone can answer these too, with the PIN.
 - **To test from the phone.** The phone-token API can list waiting tests across your projects or one selected project, show their steps and expected result with safe file metadata, and record Works or Doesn't work with a note using the same rules as the PC. Doesn't work sends a done review back; Works leaves accepting it to you. This needs an Android client implementing the new phone test API v1; file downloads/uploads are not part of this first contract.
 - **Call your agents from your phone.** ProJict on your phone can call one of your agents that hears Chat right away: the same call as from this computer, in your private conversation with it, but ProJict hears your phone's microphone and the agent's voice plays on your phone, not on this computer. Mute, stop an answer and hang up from the phone. It uses the speech services Settings › Chat picked (Windows' offline recognizer stands in for Windows' online dictation, which only hears this computer). One call at a time; pausing, renewing or revoking the phone's token ends its call.
 - **Safer phone API errors.** Malformed JSON is rejected without reflecting parser snippets, and unexpected phone-request failures no longer return raw application or storage exception details.

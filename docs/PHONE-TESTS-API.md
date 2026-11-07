@@ -1,9 +1,7 @@
-# Phone To test API v1 — development contract
+# Phone To test API v1
 
-For ProJictAndroid `23969f37` / PC `3678453e`. This is new development work,
-not a claim that the installed PC release already implements it. It requires a
-PC build containing `PhoneTestsApi` v1; the first shipping PC version is still
-to be assigned. The installed 0.1.47 phone surface predates these routes.
+For ProJictAndroid `23969f37` / PC `3678453e`. Available from ProJict 0.1.48;
+older PCs answer these routes with 404.
 
 Use the existing paired HTTPS origin and exact PC certificate-DER fingerprint.
 The bearer must be a **You, on your phone** token. Agent tokens/MCP/Sharing
