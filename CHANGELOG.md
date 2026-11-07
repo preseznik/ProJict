@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.49 (2026-11-07)
 
 - **Hide offline members.** A channel's member list has **Hide offline**: members who aren't connected are left out, and the list says how many are hidden. It's kept for every channel.
 
