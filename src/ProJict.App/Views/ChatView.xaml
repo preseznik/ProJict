@@ -996,6 +996,12 @@
                             AutomationProperties.Name="Hide the member list" />
                     <TextBlock Text="Members" Style="{StaticResource SectionTitle}" VerticalAlignment="Center" />
                 </DockPanel>
+                <!-- Hide who's offline (#f8c56cbd): kept for every channel -->
+                <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+                    <TextBlock DockPanel.Dock="Right" Text="{Binding HiddenMembersText}" Style="{StaticResource MutedText}" FontSize="12" VerticalAlignment="Center" />
+                    <CheckBox x:Name="HideOfflineMembersBox" Content="Hide offline" IsChecked="{Binding HideOfflineMembers}" VerticalAlignment="Center"
+                              ToolTip="Leave members who aren't connected out of the list, in every channel" AutomationProperties.Name="Hide offline members" />
+                </DockPanel>
                 <StackPanel DockPanel.Dock="Bottom" Margin="0,10,0,0" Visibility="{Binding CanInvite, Converter={StaticResource BoolToVis}}">
                     <TextBlock Text="Invite an agent or person" Style="{StaticResource MutedText}" FontSize="12" Margin="0,0,0,4" />
                     <DockPanel>

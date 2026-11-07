@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Hide offline members.** A channel's member list has **Hide offline**: members who aren't connected are left out, and the list says how many are hidden. It's kept for every channel.
+
 ## 0.1.48 (2026-11-07)
 
 - **Approve what can't be taken back with your PIN.** When an agent asks about something that can't be undone (publishing a release, say), **Approve** asks "Are you sure?" and then this computer's PIN; a thumbs-up doesn't count, and Decline needs no PIN. You set the PIN (4–8 digits) at the first start, before the first ship that pushes or releases, or in Settings. Five wrong tries wait five minutes. Your phone can answer these too, with the PIN.

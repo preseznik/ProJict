@@ -92,6 +92,9 @@ public sealed class AppSettings
     public Chat.ChatFileOrder ChatFileOrder { get; set; }
     /// <summary>Chat shows the channel's member list beside the messages (the members button hides it, and the messages take the room).</summary>
     public bool ChatShowsMembers { get; set; } = true;
+    /// <summary>The member list leaves out members who are offline (#f8c56cbd), in every channel.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public bool ChatHidesOfflineMembers { get; set; }
     /// <summary>
     /// What a ProJict connected to others shows (the sidebar's Showing box): null for everything, "this" for only its own,
     /// or a connected ProJict's address for only its (see <see cref="Sharing.ShowingFrom"/>).

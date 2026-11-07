@@ -611,6 +611,23 @@ public sealed partial class ChatViewModel : ObservableObject
 
     [RelayCommand] private void HideMembers() => ShowMembers = false;
 
+    /// <summary>The member list leaves out who's offline (#f8c56cbd); kept for next time, for every channel.</summary>
+    public bool HideOfflineMembers
+    {
+        get => _state.AppSettings.ChatHidesOfflineMembers;
+        set
+        {
+            if (_state.AppSettings.ChatHidesOfflineMembers == value) return;
+            _state.AppSettings.ChatHidesOfflineMembers = value;
+            _state.SaveAppSettings();
+            OnPropertyChanged();
+            RefreshPresence();
+        }
+    }
+
+    /// <summary>"3 offline hidden", while the filter leaves someone out.</summary>
+    public string? HiddenMembersText { get; private set; }
+
     private void SyncChannel()
     {
         // A guest's shared-back channel: its messages' files are fetched to keep with yours, so they open like any other.
@@ -630,10 +647,14 @@ public sealed partial class ChatViewModel : ObservableObject
     /// <summary>The open channel's members, with who's online, away or offline now.</summary>
     public void RefreshPresence()
     {
-        Members = Channel == null ? [] : Channel.Members
+        var all = Channel == null ? [] : Channel.Members
             .OrderByDescending(m => !m.Agent && Here.Room.IsOwner(m.Name)).ThenByDescending(m => m.Moderator).ThenBy(m => m.Name, StringComparer.CurrentCultureIgnoreCase)
             .Select(m => new ChatMemberViewModel(m, Channel, this)).ToList();
+        Members = HideOfflineMembers ? [.. all.Where(m => !m.IsOffline)] : all;
+        var hidden = all.Count - Members.Count;
+        HiddenMembersText = hidden > 0 ? $"{hidden} offline hidden" : null;
         OnPropertyChanged(nameof(Members));
+        OnPropertyChanged(nameof(HiddenMembersText));
         // Who hears Chat changes with presence (a watcher starting or stopping).
         OnPropertyChanged(nameof(ComposerNote));
     }
