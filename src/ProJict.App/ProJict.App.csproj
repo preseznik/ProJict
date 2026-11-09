@@ -14,7 +14,7 @@
     <ApplicationIcon>Assets\ProJict.ico</ApplicationIcon>
     <!-- Says ProJict runs on Windows 10 and 11, which built-in Tailscale needs (#a0d11f05) -->
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>0.1.53</Version>
+    <Version>0.1.54</Version>
     <Product>ProJict</Product>
     <Description>Project TODO / DONE lists for Windows</Description>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
