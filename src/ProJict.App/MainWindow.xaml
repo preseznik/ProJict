@@ -71,6 +71,31 @@
                         </StackPanel>
                     </DockPanel>
 
+                    <!-- Your availability status (#c1c1a259): Online, Away, Busy or Appear offline; tells AI agents when you're not available. -->
+                    <DockPanel x:Name="UserStatusBar" Margin="8,0,2,8" ToolTip="{Binding UserStatusToolTip}">
+                        <Ellipse Width="8" Height="8" Margin="0,0,8,0" VerticalAlignment="Center">
+                            <Ellipse.Style>
+                                <Style TargetType="Ellipse">
+                                    <Setter Property="Fill" Value="{DynamicResource SystemFillColorSuccessBrush}" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsUserAway}" Value="True">
+                                            <Setter Property="Fill" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsUserBusy}" Value="True">
+                                            <Setter Property="Fill" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsUserOffline}" Value="True">
+                                            <Setter Property="Fill" Value="{DynamicResource TextFillColorTertiaryBrush}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Ellipse.Style>
+                        </Ellipse>
+                        <TextBlock Text="{Binding State.UserName}" Style="{StaticResource MutedText}" VerticalAlignment="Center" Margin="0,0,8,0" TextTrimming="CharacterEllipsis" MaxWidth="90" />
+                        <ComboBox x:Name="UserStatusBox" ItemsSource="{Binding UserStatusChoices}" SelectedItem="{Binding SelectedUserStatusChoice}" DisplayMemberPath="Label"
+                                  AutomationProperties.Name="Your status" HorizontalAlignment="Stretch" />
+                    </DockPanel>
+
                     <!-- What to show, while this ProJict is connected to another: everything, only your own, or one connected ProJict's. -->
                     <DockPanel x:Name="ShowingBar" Margin="4,0,2,6" Visibility="{Binding CanChooseShowing, Converter={StaticResource BoolToVis}}">
                         <TextBlock Text="Showing" Style="{StaticResource MutedText}" VerticalAlignment="Center" Margin="0,0,8,0" />

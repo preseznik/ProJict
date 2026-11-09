@@ -18,8 +18,9 @@ public sealed class AgentPresence
     /// </summary>
     private readonly Dictionary<object, Person> _people = [];
     private string? _presenceSignature;
+    private UserStatus _myStatus;
 
-    private sealed record Person(string Name, Guid? Project, bool Away = false, IReadOnlyDictionary<string, PresenceState>? Agents = null);
+    private sealed record Person(string Name, Guid? Project, PresenceState State = PresenceState.Online, IReadOnlyDictionary<string, PresenceState>? Agents = null);
 
     /// <summary>Raised when an agent connects, disconnects, renames itself or starts working in another project.</summary>
     public event Action? Changed;
@@ -30,7 +31,21 @@ public sealed class AgentPresence
     public string Me { get; set; } = "";
     /// <summary>How long nothing was done on this computer, as of the last <see cref="Tick"/>.</summary>
     public TimeSpan MyIdle { get; private set; }
-    public PresenceState MyState => Presence.Of(true, MyIdle);
+    /// <summary>Your chosen status (#c1c1a259): Online, Away, Busy or Offline (appear offline).</summary>
+    public UserStatus MyStatus
+    {
+        get => _myStatus;
+        set
+        {
+            if (_myStatus == value) return;
+            _myStatus = value;
+            MyStatusChangedAt = DateTime.Now;
+            CheckPresence();
+        }
+    }
+    /// <summary>When <see cref="MyStatus"/> was last changed in this session (for telling connected agents once).</summary>
+    public DateTime MyStatusChangedAt { get; set; }
+    public PresenceState MyState => Presence.Of(true, MyIdle, MyStatus);
 
     private void Raise()
     {
@@ -70,11 +85,12 @@ public sealed class AgentPresence
         Changed?.Invoke();
     }
 
-    /// <summary>What a connected person's ProJict says: whether they're away, and their agents there.</summary>
-    public void PersonPresence(object key, bool away, IReadOnlyDictionary<string, PresenceState> agents)
+    /// <summary>What a connected person's ProJict says: their presence state, and their agents there.</summary>
+    public void PersonPresence(object key, bool away, IReadOnlyDictionary<string, PresenceState> agents, PresenceState? state = null)
     {
         if (!_people.TryGetValue(key, out var person)) return;
-        _people[key] = person with { Away = away, Agents = agents };
+        var effective = state ?? (away ? PresenceState.Away : PresenceState.Online);
+        _people[key] = person with { State = effective, Agents = agents };
         CheckPresence();
     }
 
@@ -108,11 +124,11 @@ public sealed class AgentPresence
         var everyone = new Dictionary<string, PresenceState>(StringComparer.OrdinalIgnoreCase);
         void Add(string name, PresenceState state) =>
             everyone[name] = everyone.TryGetValue(name, out var was) ? Presence.Best(was, state) : state;
-        if (Me.Length > 0) Add(Me, MyState);
+        if (Me.Length > 0 && MyState != PresenceState.Offline) Add(Me, MyState);
         foreach (var session in _projects.Keys) Add(session.AgentName, StateOf(session));
         foreach (var person in _people.Values)
         {
-            Add(person.Name, person.Away ? PresenceState.Away : PresenceState.Online);
+            if (person.State != PresenceState.Offline) Add(person.Name, person.State);
             foreach (var (agent, state) in person.Agents ?? new Dictionary<string, PresenceState>()) Add(agent, state);
         }
         return everyone;

@@ -111,14 +111,16 @@ public sealed partial class GuestService
     public void SendPresence()
     {
         var agents = _main.Agents.AgentsHere();
-        var away = _main.Agents.MyState == PresenceState.Away;
+        var state = _main.Agents.MyState;
+        var away = state == PresenceState.Away;
+        var stateWord = Presence.Word(state);
         // Which of them hear Chat right away, so the host can call them (#546dab2b).
         var listening = agents.Keys.Where(_main.AgentTools.HearsChat).Order(StringComparer.OrdinalIgnoreCase).ToList();
-        var signature = $"{away}|{Presence.Signature(agents)}|{string.Join("|", listening)}";
+        var signature = $"{stateWord}|{Presence.Signature(agents)}|{string.Join("|", listening)}";
         foreach (var connection in Connections.Where(c => c.State == ConnectionState.Connected && c.PresenceSent != signature))
         {
             connection.PresenceSent = signature;
-            connection.Send(Wire.Message("presence", ("away", away), ("agents", Presence.ToJson(agents)),
+            connection.Send(Wire.Message("presence", ("away", away), ("state", stateWord), ("agents", Presence.ToJson(agents)),
                 ("listening", new JsonArray(listening.Select(a => (JsonNode)a).ToArray()))));
         }
     }

@@ -531,10 +531,12 @@ public sealed partial class HostService
                 // Their agents act here as "Ada (via Alice)", or by their own names from a ProJict linked as you.
                 var agents = Presence.FromJson(message["agents"]).Take(100)
                     .ToDictionary(a => session.Account.Self ? a.Key : AgentNaming.Via(a.Key, NameOf(session.Account)), a => a.Value, StringComparer.OrdinalIgnoreCase);
-                _main.Agents.PersonPresence(session, (bool?)message["away"] == true, agents);
+                var guestState = Presence.ParseState((string?)message["state"])
+                    ?? ((bool?)message["away"] == true ? PresenceState.Away : PresenceState.Online);
+                _main.Agents.PersonPresence(session, guestState == PresenceState.Away, agents, guestState);
                 session.ListeningAgents = (message["listening"] as JsonArray ?? []).Select(n => (string?)n ?? "").Where(n => n.Trim().Length is > 0 and <= 40)
                     .Take(100).ToHashSet(StringComparer.OrdinalIgnoreCase);
-                BackPresence(session, (bool?)message["away"] == true, Presence.FromJson(message["agents"]));
+                BackPresence(session, guestState, Presence.FromJson(message["agents"]));
                 if (session.Back is { } back) BackChatChanged?.Invoke(back);
                 return null;
             case "backChat" or "backChannel" or "backGone" or "backFile" or "backError":

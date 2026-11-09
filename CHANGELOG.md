@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Set your status: Online, Away, Busy or Appear offline.** Pick your status at the top of the sidebar (or by right-clicking yourself in a channel's member list). **Away**, **Busy** and **Appear offline** tell connected AI agents (in their chat watcher and tool results) that you aren't available at the moment, so they keep working on what doesn't need you instead of waiting on quick replies, approvals or manual tests. **Appear offline** also shows you as offline in Chat and to connected ProJicts.
+
 ## 0.1.50 (2026-11-07)
 
 - **Fixed: updating from inside ProJict could leave it uninstalled.** The update started while ProJict was still closing; Setup gave up, and the ProJict.exe it had set aside was deleted, so ProJict was gone until you installed it by hand. Setup now waits for ProJict to close, a Setup that doesn't finish puts the previous ProJict back and starts it, and each update keeps a log next to the download.

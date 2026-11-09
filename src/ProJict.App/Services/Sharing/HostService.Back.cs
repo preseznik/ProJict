@@ -193,11 +193,11 @@ public sealed partial class HostService
     }
 
     /// <summary>Who's online there, as its "presence" said: the guest themself and their agents (by their names there).</summary>
-    private static void BackPresence(GuestSession session, bool away, IReadOnlyDictionary<string, PresenceState> agents)
+    private static void BackPresence(GuestSession session, PresenceState ownerState, IReadOnlyDictionary<string, PresenceState> agents)
     {
         if (session.Back is not { } back) return;
         var people = new Dictionary<string, PresenceState>(agents, StringComparer.OrdinalIgnoreCase);
-        if (back.Owner.Length > 0) people[back.Owner] = away ? PresenceState.Away : PresenceState.Online;
+        if (back.Owner.Length > 0 && ownerState != PresenceState.Offline) people[back.Owner] = ownerState;
         back.Presence = people;
         back.AgentsThere = agents.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
     }

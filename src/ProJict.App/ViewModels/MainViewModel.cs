@@ -166,11 +166,14 @@ public sealed partial class MainViewModel : ObservableObject
             if (state.Projects.FirstOrDefault(p => p.Id == id) is { } project) GetProjectViewModel(project).RefreshTestBuild();
         };
         Agents.Me = state.UserName;
+        Agents.MyStatus = state.AppSettings.UserStatus;
         Agents.PresenceChanged += () =>
         {
             Chat.RefreshPresence();
             Host.SendPresence();
             Guest.SendPresence();
+            foreach (var prop in new[] { nameof(UserStatus), nameof(SelectedUserStatusChoice), nameof(IsUserOnline), nameof(IsUserAway), nameof(IsUserBusy), nameof(IsUserOffline), nameof(UserStatusToolTip) })
+                OnPropertyChanged(prop);
         };
         _presenceTimer = new System.Windows.Threading.DispatcherTimer { Interval = PresenceCheck };
         _presenceTimer.Tick += (_, _) =>
@@ -336,6 +339,52 @@ public sealed partial class MainViewModel : ObservableObject
     public string LiveAgentToolTip => AgentActivity.CountToolTip;
     /// <summary>Which AI agents are connected and where they work.</summary>
     public Services.AgentPresence Agents { get; } = new();
+
+    // ───────────── Your status (#c1c1a259) ─────────────
+
+    public sealed record UserStatusChoice(ProJict.Core.Chat.UserStatus Status, string Label);
+
+    public static IReadOnlyList<UserStatusChoice> UserStatusChoices { get; } =
+    [
+        new(ProJict.Core.Chat.UserStatus.Online, "Online"),
+        new(ProJict.Core.Chat.UserStatus.Away, "Away"),
+        new(ProJict.Core.Chat.UserStatus.Busy, "Busy"),
+        new(ProJict.Core.Chat.UserStatus.Offline, "Appear offline"),
+    ];
+
+    public ProJict.Core.Chat.UserStatus UserStatus
+    {
+        get => State.AppSettings.UserStatus;
+        set
+        {
+            if (State.AppSettings.UserStatus == value && Agents.MyStatus == value) return;
+            State.AppSettings.UserStatus = value;
+            State.SaveAppSettings();
+            Agents.MyStatus = value;
+            AgentTools.NotifyUserStatusChanged();
+            foreach (var prop in new[] { nameof(UserStatus), nameof(SelectedUserStatusChoice), nameof(IsUserOnline), nameof(IsUserAway), nameof(IsUserBusy), nameof(IsUserOffline), nameof(UserStatusToolTip) })
+                OnPropertyChanged(prop);
+            State.StatusText = value == ProJict.Core.Chat.UserStatus.Online
+                ? "Status: Online — AI agents know you're available."
+                : $"Status: {ProJict.Core.Chat.Presence.Label(value)} — AI agents are told you're not available right now.";
+        }
+    }
+
+    public UserStatusChoice SelectedUserStatusChoice
+    {
+        get => UserStatusChoices.FirstOrDefault(c => c.Status == UserStatus) ?? UserStatusChoices[0];
+        set
+        {
+            if (value != null) UserStatus = value.Status;
+        }
+    }
+
+    public bool IsUserOnline => Agents.MyState == ProJict.Core.Chat.PresenceState.Online;
+    public bool IsUserAway => Agents.MyState == ProJict.Core.Chat.PresenceState.Away;
+    public bool IsUserBusy => Agents.MyState == ProJict.Core.Chat.PresenceState.Busy;
+    public bool IsUserOffline => Agents.MyState == ProJict.Core.Chat.PresenceState.Offline;
+    public string UserStatusToolTip => ProJict.Core.Chat.Presence.UnavailableNotice(State.UserName, UserStatus, Agents.MyState)
+                                       ?? "Your status is Online. Choose Away, Busy or Appear offline to tell AI agents you're not available at the moment.";
     public ObservableCollection<ProjectListItemViewModel> ProjectItems { get; } = [];
     public ICollectionView ProjectsView { get; }
     public ProjectFilterViewModel SidebarFilter { get; }

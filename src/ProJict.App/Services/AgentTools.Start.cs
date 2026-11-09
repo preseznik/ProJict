@@ -128,6 +128,9 @@ public sealed partial class AgentTools
 
         if (project != null) json["project"] = ProjectBrief(session, project, matchedBy!);
         else if (ForAllAgents is { } forAll) json["instructionsForAllAgents"] = forAll;
+        json["userStatus"] = Presence.Word(_main.Agents.MyState);
+        if (Presence.UnavailableNotice(_state.UserName, _main.Agents.MyStatus, _main.Agents.MyState) is { } unavailable)
+            json["userUnavailable"] = unavailable;
         json["guide"] = Guide(session);
         return Json(json);
     }

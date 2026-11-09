@@ -1614,19 +1614,29 @@ public sealed partial class ChatMemberViewModel(ChatMember model, ChatChannel ch
     public bool CanIgnore => !IsMe;
     public string IgnoreHeader => IsIgnored ? "Stop ignoring" : "Ignore: hide their messages";
     /// <summary>Its right-click menu has something in it.</summary>
-    public bool HasMenu => CanMessage || CanIgnore;
+    public bool HasMenu => CanMessage || CanIgnore || CanSetMyStatus;
+    public bool CanSetMyStatus => IsMe && Place.Host == null;
 
     [RelayCommand] private void ToggleIgnore() => owner.SetIgnored(model.Name, !IsIgnored);
 
-    /// <summary>Online, away (idle a while) or offline (not connected), worked out when the members were listed.</summary>
+    [RelayCommand]
+    private void SetMyStatus(string? status)
+    {
+        if (Enum.TryParse<UserStatus>(status, true, out var parsed))
+            owner.Main.UserStatus = parsed;
+    }
+
+    /// <summary>Online, busy, away (idle a while or chosen) or offline (not connected or appearing offline), worked out when the members were listed.</summary>
     public PresenceState Presence { get; } = owner.PresenceOf(owner.PlaceOf(channel), model);
+    public bool IsBusy => Presence == PresenceState.Busy;
     public bool IsAway => Presence == PresenceState.Away;
     public bool IsOffline => Presence == PresenceState.Offline;
     public string PresenceText => Presence switch
     {
         PresenceState.Online => "Online",
-        PresenceState.Away => model.Agent ? "Away: hasn't used ProJict's tools for a while" : "Away: hasn't done anything on their computer for a while",
-        _ => model.Agent ? "Offline: not connected to ProJict" : "Offline: their ProJict isn't connected",
+        PresenceState.Busy => "Busy: not available right now",
+        PresenceState.Away => model.Agent ? "Away: hasn't used ProJict's tools for a while" : "Away: not available right now",
+        _ => model.Agent ? "Offline: not connected to ProJict" : "Offline: not available",
     };
     public string? MutedText => Place.Room.MutedUntil(channel, model.Name) is { } until
         ? until == DateTime.MaxValue ? "muted until unmuted" : $"muted until {until.ToString("HH:mm", CultureInfo.CurrentCulture)}" : null;

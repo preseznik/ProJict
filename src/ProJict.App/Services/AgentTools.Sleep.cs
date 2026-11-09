@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using ProJict.Core.Agents;
+using ProJict.Core.Chat;
 using ProJict.Core.Storage;
 
 namespace ProJict.App.Services;
@@ -63,5 +64,30 @@ public sealed partial class AgentTools
     private void MarkAsleep(JsonObject result)
     {
         if (_state.Settings.Sleep is { WokenAt: null } sleep) result["asleep"] = AsleepText(sleep);
+        if (_main.Agents.MyStatus != UserStatus.Online &&
+            Presence.UnavailableNotice(_state.UserName, _main.Agents.MyStatus, _main.Agents.MyState) is { } unavailable)
+            result["userUnavailable"] = unavailable;
+    }
+
+    /// <summary>Wakes chat watchers when the user changes their availability status (#c1c1a259).</summary>
+    public void NotifyUserStatusChanged() => SleepChanged?.Invoke();
+
+    /// <summary>For waitingForYou and the watcher: when the user sets Away, Busy or Appear offline, and when they're back (#c1c1a259).</summary>
+    private List<string> UserStatusLines(McpSession session)
+    {
+        var status = _main.Agents.MyStatus;
+        var changedAt = _main.Agents.MyStatusChangedAt;
+        if (status != UserStatus.Online)
+        {
+            var key = $"userstatus:{status}:{changedAt.Ticks}";
+            if (session.Noticed.Add(key) && Presence.UnavailableNotice(_state.UserName, status, _main.Agents.MyState) is { } notice)
+                return [notice];
+            return [];
+        }
+        if (changedAt > DateTime.MinValue &&
+            session.Noticed.Any(k => k.StartsWith("userstatus:", StringComparison.Ordinal) && !k.StartsWith("userstatus:online:", StringComparison.Ordinal)) &&
+            session.Noticed.Add($"userstatus:online:{changedAt.Ticks}"))
+            return [$"{_state.UserName} is online and available again."];
+        return [];
     }
 }

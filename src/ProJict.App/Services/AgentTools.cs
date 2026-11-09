@@ -633,6 +633,9 @@ public sealed partial class AgentTools : IMcpToolHost
     {
         var json = WithStudio(ProjectJson(project), project, session);
         json["matchedBy"] = matchedBy;
+        json["userStatus"] = Presence.Word(_main.Agents.MyState);
+        if (Presence.UnavailableNotice(_state.UserName, _main.Agents.MyStatus, _main.Agents.MyState) is { } unavailable)
+            json["userUnavailable"] = unavailable;
         if (ProjectToolsJson(project) is { } tools)
         {
             json["tools"] = tools;

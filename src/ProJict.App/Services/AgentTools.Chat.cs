@@ -225,6 +225,7 @@ public sealed partial class AgentTools
         {
             ["name"] = m.Name,
             ["agent"] = m.Agent ? true : null,
+            ["presence"] = Presence.Word(_main.Agents.StateOf(m.Name)),
             ["moderator"] = m.Moderator || (!m.Agent && Chat.IsOwner(m.Name)) ? true : null,
             ["mutedUntil"] = Chat.MutedUntil(channel, m.Name) is { } until ? (until == DateTime.MaxValue ? "until unmuted" : Time(until)) : null,
         }).ToArray());
@@ -260,6 +261,9 @@ public sealed partial class AgentTools
         var message = Chatting(() => Chat.Post(channel, ActorOf(session), text, replyTo, files));
         session.Noticed.Add($"chat:{message.Id}");
         var result = new JsonObject { ["id"] = ShortId(message.Id), ["channel"] = Display(channel, session), ["at"] = Time(message.At) };
+        if ((channel.Direct && ChatRoom.Member(channel, _state.UserName) != null || ChatRoom.Mentions(channel, message, _state.UserName)) &&
+            Presence.UnavailableNotice(_state.UserName, _main.Agents.MyStatus, _main.Agents.MyState) is { } unavailable)
+            result["userUnavailable"] = unavailable;
         if (!channel.Direct && IsWallOfText(text))
             result["note"] = "That was long for a chat channel. Keep messages short and conversational: a few sentences, one point at a time. " +
                              "Put details in the item's discussion (add_comment) or a note (write_doc) and link it, or go on privately with post_message to @name.";
@@ -335,6 +339,8 @@ public sealed partial class AgentTools
                 : "Wait for the answer: you'll be told when it's approved or declined (your chat watcher prints [approval] …). Do nothing of it before.",
         };
         if (withPin) json["pin"] = true;
+        if (Presence.UnavailableNotice(_state.UserName, _main.Agents.MyStatus, _main.Agents.MyState) is { } unavailable)
+            json["userUnavailable"] = unavailable;
         return Json(json);
     }
 

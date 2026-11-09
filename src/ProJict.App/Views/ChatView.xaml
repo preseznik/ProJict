@@ -446,6 +446,12 @@
                         <MenuItem Header="Private message" Command="{Binding PrivateMessageCommand}" Visibility="{Binding CanMessage, Converter={StaticResource BoolToVis}}" />
                         <MenuItem Header="{Binding IgnoreHeader}" Command="{Binding ToggleIgnoreCommand}" Visibility="{Binding CanIgnore, Converter={StaticResource BoolToVis}}"
                                   ToolTip="Only for you: their messages are hidden in channels, except those that mention you. They aren't told." />
+                        <MenuItem Header="Status" Visibility="{Binding CanSetMyStatus, Converter={StaticResource BoolToVis}}">
+                            <MenuItem Header="Online" Command="{Binding SetMyStatusCommand}" CommandParameter="Online" />
+                            <MenuItem Header="Away" Command="{Binding SetMyStatusCommand}" CommandParameter="Away" />
+                            <MenuItem Header="Busy" Command="{Binding SetMyStatusCommand}" CommandParameter="Busy" />
+                            <MenuItem Header="Appear offline" Command="{Binding SetMyStatusCommand}" CommandParameter="Offline" />
+                        </MenuItem>
                     </ContextMenu>
                 </DockPanel.ContextMenu>
                 <Button DockPanel.Dock="Right" Style="{StaticResource SubtleIconButton}" Content="&#xE712;" FontSize="12" Padding="5,3" VerticalAlignment="Center"
@@ -473,6 +479,9 @@
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding IsAway}" Value="True">
                                         <Setter Property="Fill" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding IsBusy}" Value="True">
+                                        <Setter Property="Fill" Value="{DynamicResource SystemFillColorCriticalBrush}" />
                                     </DataTrigger>
                                     <DataTrigger Binding="{Binding IsOffline}" Value="True">
                                         <Setter Property="Fill" Value="{DynamicResource TextFillColorTertiaryBrush}" />

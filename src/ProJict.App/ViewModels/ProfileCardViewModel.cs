@@ -76,11 +76,13 @@ public sealed partial class ProfileCardViewModel : ObservableObject
     public string KindText { get; }
 
     public PresenceState Presence { get; }
+    public bool IsBusy => Presence == PresenceState.Busy;
     public bool IsAway => Presence == PresenceState.Away;
     public bool IsOffline => Presence == PresenceState.Offline;
     public string PresenceText => Presence switch
     {
         PresenceState.Online => "Online",
+        PresenceState.Busy => "Busy",
         PresenceState.Away => "Away",
         _ => "Offline",
     };

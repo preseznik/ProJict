@@ -95,6 +95,9 @@ public sealed class AppSettings
     /// <summary>The member list leaves out members who are offline (#f8c56cbd), in every channel.</summary>
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
     public bool ChatHidesOfflineMembers { get; set; }
+    /// <summary>Your availability status in ProJict (#c1c1a259): Online, Away, Busy or Offline (appear offline).</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public Chat.UserStatus UserStatus { get; set; }
     /// <summary>
     /// What a ProJict connected to others shows (the sidebar's Showing box): null for everything, "this" for only its own,
     /// or a connected ProJict's address for only its (see <see cref="Sharing.ShowingFrom"/>).

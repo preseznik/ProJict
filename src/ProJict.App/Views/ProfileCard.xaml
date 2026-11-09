@@ -59,6 +59,9 @@
                                     <DataTrigger Binding="{Binding IsAway}" Value="True">
                                         <Setter Property="Fill" Value="{DynamicResource SystemFillColorCautionBrush}" />
                                     </DataTrigger>
+                                    <DataTrigger Binding="{Binding IsBusy}" Value="True">
+                                        <Setter Property="Fill" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                                    </DataTrigger>
                                     <DataTrigger Binding="{Binding IsOffline}" Value="True">
                                         <Setter Property="Fill" Value="{DynamicResource TextFillColorTertiaryBrush}" />
                                     </DataTrigger>
