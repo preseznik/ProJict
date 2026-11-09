@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.52 (2026-11-09)
+
+- **Dashboard project stats on your phone.** `GET /api/v1/me/projects` now includes each project's group order, status, progress counts (`inProgress`, `done`, `bugs`), latest GitHub release tag, active agents, and relative last-activity time so ProJict for Android 0.2.5 shows the same grouped project-status list as the PC Dashboard.
+
 ## 0.1.51 (2026-11-09)
 
 - **Set your status: Online, Away, Busy or Appear offline.** Pick your status at the top of the sidebar (or by right-clicking yourself in a channel's member list). **Away**, **Busy** and **Appear offline** tell connected AI agents (in their chat watcher and tool results) that you aren't available at the moment, so they keep working on what doesn't need you instead of waiting on quick replies, approvals or manual tests. **Appear offline** also shows you as offline in Chat and to connected ProJicts.
