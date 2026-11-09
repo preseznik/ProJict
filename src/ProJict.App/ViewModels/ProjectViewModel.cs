@@ -94,8 +94,18 @@ public sealed partial class ProjectViewModel : ObservableObject
     public bool IsInbox => Project.IsInbox;
     public bool IsNotInbox => !Project.IsInbox;
 
-    /// <summary>Asks the view to focus an item's text box; caret -1 means end of text.</summary>
+    /// <summary>Asks the view to focus an item's text box and scroll to it (going there); caret -1 means end of text.</summary>
     public event Action<Guid, int>? FocusRequested;
+    /// <summary>
+    /// Asks the view to put the keyboard back in an item's text box after a change, without scrolling the board there:
+    /// you may have scrolled away from where you were typing to click something else (#6002204c).
+    /// </summary>
+    public event Action<Guid, int>? FocusRestoreRequested;
+
+    private void RestoreFocus(Guid? itemId, int caret)
+    {
+        if (itemId is { } id && Project.Find(id) != null) FocusRestoreRequested?.Invoke(id, caret);
+    }
     public event Action<CategoryViewModel>? FocusAddItemRequested;
     /// <summary>The view: the category whose Add item… box has the keyboard, and where its caret is (null when none has).</summary>
     public Func<(Guid Category, int Caret)?>? TypingNewItem { get; set; }
@@ -808,7 +818,7 @@ public sealed partial class ProjectViewModel : ObservableObject
         Touch();
         _state.NotifyListChanged();
         NotifyUndo();
-        if (focus != null && Project.Find(focus.Value) != null) FocusRequested?.Invoke(focus.Value, -1);
+        RestoreFocus(focus, -1);
     }
 
     private void NotifyUndo()
@@ -819,17 +829,26 @@ public sealed partial class ProjectViewModel : ObservableObject
 
     // ───────────── Structural edits ─────────────
 
+    /// <remarks>
+    /// <paramref name="focus"/>: the item to go to afterwards (the one added, moved…). Without it, the keyboard goes back
+    /// where it was, but the board doesn't scroll there: a click on a row's chip (review, priority) leaves the board as
+    /// it is, even when you were typing in an item further down (#6002204c).
+    /// </remarks>
     private void Mutate(Action change, IEnumerable<CategoryViewModel?> affected, Guid? focus = null, int caret = -1, EditKind kind = EditKind.Edit)
     {
         if (Refused(kind)) return;
         var hadFocus = _focusedItemId;
+        var hadCaret = hadFocus is { } focused ? CaretOf?.Invoke(focused) : null;
         Checkpoint();
         change();
         Touch();
         foreach (var c in affected.OfType<CategoryViewModel>().Distinct()) c.Refresh();
         ApplyFilter();
-        var target = focus ?? hadFocus;
-        if (target != null && Project.Find(target.Value) != null) FocusRequested?.Invoke(target.Value, caret);
+        if (focus is { } target)
+        {
+            if (Project.Find(target) != null) FocusRequested?.Invoke(target, caret);
+        }
+        else RestoreFocus(hadFocus, hadCaret ?? -1);
     }
 
     private CategoryViewModel? CategoryFor(Category category) => Categories.FirstOrDefault(c => c.Model == category);
@@ -1431,7 +1450,7 @@ public sealed partial class ProjectViewModel : ObservableObject
         else foreach (var c in affected.OfType<CategoryViewModel>().Distinct()) c.Refresh(changed);
         RefreshTagFilters();
         ApplyFilter();
-        if (focus is { } id && caret is { } at && Project.Find(id) != null) FocusRequested?.Invoke(id, at);
+        if (caret is { } at) RestoreFocus(focus, at);
     }
 
     /// <summary>An AI agent changes the project's details, as one undo step (shipping settings stay out of undo, as ever).</summary>
@@ -1482,7 +1501,7 @@ public sealed partial class ProjectViewModel : ObservableObject
         NotifyUndo();
         Touch();
         RebuildAll();
-        if (focus is { } id && caret is { } at && Project.Find(id) != null) FocusRequested?.Invoke(id, at);
+        if (caret is { } at) RestoreFocus(focus, at);
         return true;
     }
 
@@ -1549,7 +1568,7 @@ public sealed partial class ProjectViewModel : ObservableObject
         ReloadSideLists();
         NotifyDetails();
         _state.NotifyProjectChanged(Project);
-        if (focus is { } id && caret is { } at && Project.Find(id) != null) FocusRequested?.Invoke(id, at);
+        if (caret is { } at) RestoreFocus(focus, at);
     }
 
     /// <summary>On the host: a guest's change (already checked and merged), as one undo step.</summary>
@@ -1563,7 +1582,7 @@ public sealed partial class ProjectViewModel : ObservableObject
         ReloadSideLists();
         NotifyDetails();
         Touch();
-        if (focus is { } id && caret is { } at && Project.Find(id) != null) FocusRequested?.Invoke(id, at);
+        if (caret is { } at) RestoreFocus(focus, at);
     }
 
     // ───────────── GitHub issues ─────────────

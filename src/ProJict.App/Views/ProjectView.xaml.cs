@@ -28,6 +28,25 @@ public partial class ProjectView : UserControl
             BoardScroll.ScrollToVerticalOffset(BoardScroll.VerticalOffset - e.Delta * 0.6);
             e.Handled = true;
         };
+        // While the keyboard is put back after a change, the box it goes to doesn't scroll the board to itself (#6002204c).
+        Board.RequestBringIntoView += (_, e) =>
+        {
+            if (_quietFocus) e.Handled = true;
+        };
+    }
+
+    private bool _quietFocus;
+
+    /// <summary>Focuses without scrolling the board: a focused box brings itself into view otherwise.</summary>
+    private void FocusQuietly(TextBox box, int caret)
+    {
+        _quietFocus = true;
+        try
+        {
+            box.Focus();
+            box.CaretIndex = caret < 0 ? box.Text.Length : Math.Min(caret, box.Text.Length);
+        }
+        finally { _quietFocus = false; }
     }
 
     private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
@@ -35,6 +54,7 @@ public partial class ProjectView : UserControl
         if (_vm != null)
         {
             _vm.FocusRequested -= OnFocusRequested;
+            _vm.FocusRestoreRequested -= OnFocusRestoreRequested;
             _vm.FocusAddItemRequested -= OnFocusAddItem;
             _vm.FocusAddItemAtRequested -= OnFocusAddItemAt;
             _vm.PropertyChanged -= OnVmPropertyChanged;
@@ -46,6 +66,7 @@ public partial class ProjectView : UserControl
         if (_vm != null)
         {
             _vm.FocusRequested += OnFocusRequested;
+            _vm.FocusRestoreRequested += OnFocusRestoreRequested;
             _vm.FocusAddItemRequested += OnFocusAddItem;
             _vm.FocusAddItemAtRequested += OnFocusAddItemAt;
             _vm.PropertyChanged += OnVmPropertyChanged;
@@ -328,6 +349,25 @@ public partial class ProjectView : UserControl
         }, DispatcherPriority.Loaded);
     }
 
+    /// <summary>
+    /// The keyboard back where it was after a change: nothing to do when its box is still there and focused; a box drawn
+    /// anew gets it without the board scrolling to it, so what you clicked stays where it is (#6002204c).
+    /// </summary>
+    private void OnFocusRestoreRequested(Guid itemId, int caret)
+    {
+        Dispatcher.BeginInvoke(() =>
+        {
+            var box = FindRowTextBox(itemId);
+            if (box == null)
+            {
+                UpdateLayout();
+                box = FindRowTextBox(itemId);
+            }
+            if (box == null || box.IsKeyboardFocused) return;
+            FocusQuietly(box, caret);
+        }, DispatcherPriority.Loaded);
+    }
+
     private void OnFocusAddItem(CategoryViewModel category)
     {
         Dispatcher.BeginInvoke(() =>
@@ -345,9 +385,8 @@ public partial class ProjectView : UserControl
         Dispatcher.BeginInvoke(() =>
         {
             var box = FindVisual<TextBox>(Board, t => t.Uid == "AddItem" && t.DataContext == category);
-            if (box == null) return;
-            box.Focus();
-            box.CaretIndex = Math.Min(caret, box.Text.Length);
+            if (box == null || box.IsKeyboardFocused) return;
+            FocusQuietly(box, caret);
         }, DispatcherPriority.Loaded);
     }
 
