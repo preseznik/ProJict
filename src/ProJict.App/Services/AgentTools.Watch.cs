@@ -180,7 +180,10 @@ public sealed partial class AgentTools
                         saidOff = false;
                         var waiting = Waiting(identity);
                         foreach (var group in waiting.GroupBy(w => w.Channel)) Delivered(identity, group.Key, group.Select(w => w.Message).ToList());
-                        found.AddRange(waiting.Select(w => WatchLine(w.Channel, w.Message, identity)));
+                        // A backlog (the agent was away) comes as a catch-up, not a line per message (#35c53efa).
+                        var (shown, left) = ChatCatchUp.Pick(waiting, (c, m) => ForYou(c, m, identity.AgentName));
+                        found.AddRange(left.Select(l => $"[{(l.Channel.Direct ? "private" : Display(l.Channel, identity))}] {LeftOutLine(l, shown, identity)}"));
+                        found.AddRange(shown.Select(w => WatchLine(w.Channel, w.Message, identity)));
                         found.AddRange(SharedWatchLines(identity));
                         found.AddRange(SharedRefusalLines(identity).Select(l => "[ProJict] " + l));
                         found.AddRange(WatchAnswerLines(identity));

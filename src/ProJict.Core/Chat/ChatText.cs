@@ -158,13 +158,17 @@ public sealed record ChatHit(ChatChannel Channel, ChatMessage Message, string Sn
 
 public static class ChatSearch
 {
-    /// <summary>Messages (newest first) in which all terms appear, in the text, the author or the channel's name.</summary>
-    public static List<ChatHit> Search(IEnumerable<ChatChannel> channels, string query, int max = 50)
+    /// <summary>
+    /// Messages (newest first) in which all terms appear, in the text, the author or the channel's name; only
+    /// <paramref name="by"/>'s when given (agents' search_chat, #35c53efa).
+    /// </summary>
+    public static List<ChatHit> Search(IEnumerable<ChatChannel> channels, string query, int max = 50, string? by = null)
     {
         var terms = query.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (terms.Length == 0) return [];
         return channels
-            .SelectMany(c => c.Messages.Where(m => !m.Notice && !m.Deleted).Select(m => (Channel: c, Message: m)))
+            .SelectMany(c => c.Messages.Where(m => !m.Notice && !m.Deleted && (by == null || string.Equals(m.By, by, StringComparison.OrdinalIgnoreCase)))
+                .Select(m => (Channel: c, Message: m)))
             .Where(x => terms.All(t => $"{(x.Channel.Direct ? "" : "#" + x.Channel.Name)} {x.Message.By} {x.Message.Text}".Contains(t, StringComparison.OrdinalIgnoreCase)))
             .OrderByDescending(x => x.Message.At)
             .Take(max)

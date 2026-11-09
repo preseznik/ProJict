@@ -17,7 +17,7 @@ public sealed partial class AgentTools
 {
     private const int MaxWaitSeconds = 60;
     private static readonly HashSet<string> ChatTools =
-        ["list_channels", "create_channel", "read_channel", "post_message", "ask_approval", "claim_reply", "edit_message", "join_channel", "invite_to_channel", "moderate_channel", "wait_for_messages"];
+        ["list_channels", "create_channel", "read_channel", "search_chat", "post_message", "ask_approval", "claim_reply", "edit_message", "join_channel", "invite_to_channel", "moderate_channel", "wait_for_messages"];
     /// <summary>Chat's tools, for an API token that may only use Chat.</summary>
     public static IReadOnlySet<string> ChatToolNames => ChatTools;
 
@@ -42,11 +42,16 @@ public sealed partial class AgentTools
                 ("invite", "string[]", "Names to invite, e.g. Codex.", false)),
             CreateChannel);
         Add("read_channel", "Read a chat channel",
-            "A channel's latest messages (oldest first), its members and moderators, in a channel you're in (join an Open one first " +
-            "with join_channel). Marks what you read as read. " +
+            $"A channel's latest messages (oldest first), its members and moderators, in a channel you're in (join an Open one first " +
+            $"with join_channel). Marks what you read as read. It gives a little at a time, so your context stays clear: the latest " +
+            $"{ChatCatchUp.DefaultRead} unless you give limit, fewer when they're long (a read stops at about {ChatCatchUp.ReadBudget.ToString("N0", CultureInfo.InvariantCulture)} characters), " +
+            $"and a long message shows its start (id=<message> gives all of it). Read further back with before=<id>; search_chat finds " +
+            $"older messages by their words, and around=<id> shows one with the messages around it. " +
             "Items are linked as # and the first 8 characters of their id (#4e84570c), channels as #name, people and agents as @name.",
-            Schema(ChannelArg, ("limit", "integer", "Most messages (default 30, at most 200).", false),
-                ("before", "string", "Only messages before this message id, to read further back.", false)),
+            Schema(ChannelArg, ("limit", "integer", $"Most messages (default {ChatCatchUp.DefaultRead}, at most {ChatCatchUp.MaxRead}).", false),
+                ("before", "string", "Only messages before this message id, to read further back.", false),
+                ("id", "string", "Just this message, in full.", false),
+                ("around", "string", $"This message and the {ChatCatchUp.AroundEach} before and after it (e.g. one search_chat found).", false)),
             ReadChannel, readOnly: true, output: ReadChannelOutput);
         Add("post_message", "Post in a chat channel",
             "Posts a message; in an Open channel you join it by posting. With channel @name it goes privately to the user or an agent (the " +
@@ -84,6 +89,16 @@ public sealed partial class AgentTools
         Add("join_channel", "Join or leave a chat channel",
             "Joins an Open channel, so you can read it (read_channel) and new messages there wait for you, or leaves one (leave=true).",
             Schema(ChannelArg, ("leave", "boolean", "Leave the channel instead.", false)), JoinChannel);
+        Add("search_chat", "Search chat history",
+            "Finds messages by their words in the channels and private conversations you're in, however old: all the words must appear " +
+            "(in the text, who wrote it, or the channel's name). Newest first, each with its id, channel, who, when and the line it's on. " +
+            "read_channel around=<id> then shows one with the messages around it, and id=<id> all of it. Use it instead of reading far back: " +
+            "read_channel and wait_for_messages give only the latest, so your context stays clear.",
+            Schema(("query", "string", "The words to find.", true),
+                ("channel", "string", "Only this channel (#name) or private conversation (@name).", false),
+                ("by", "string", "Only messages by this person or agent.", false),
+                ("limit", "integer", "Most messages (default 20, at most 50).", false)),
+            SearchChat, readOnly: true);
         Add("check_presence", "Check who's online",
             "Who's here, before you address or wait on someone: online (at their computer, or an agent using its tools), busy, away (idle a " +
             "while, or set Away) or offline (not connected, or appearing offline). With names: each one's presence, and when an offline agent " +
@@ -107,7 +122,9 @@ public sealed partial class AgentTools
             $"Listens for new chat messages for you: in channels you're in, or anywhere you're @mentioned; for the answers to what you asked with " +
             $"ask_approval (approved or declined); and for 👍/👎 on your other messages (agreement or disagreement with them, never approval). " +
             $"Returns at once when some wait, else as soon as one arrives, " +
-            $"or empty after the time given (at most {MaxWaitSeconds} s). Call it again to keep listening.",
+            $"or empty after the time given (at most {MaxWaitSeconds} s). Call it again to keep listening. A backlog (you were away) comes as " +
+            $"a catch-up, so your context stays clear: the {ChatCatchUp.Newest} newest messages, and older private messages and @mentions of you " +
+            $"up to {ChatCatchUp.ForYou} more; leftOut says what else came meanwhile (marked read) and where to read it, and search_chat finds anything in it.",
             Schema(("seconds", "integer", $"How long to wait (default and most {MaxWaitSeconds}).", false),
                 ("channel", "string", "Only this channel.", false)),
             (_, _, _) => throw new InvalidOperationException("wait_for_messages runs asynchronously."), readOnly: true);
@@ -219,27 +236,105 @@ public sealed partial class AgentTools
         if (ChatRoom.Member(channel, session.AgentName) == null)
             throw new McpToolException($"You're not in #{channel.Name}: join it first with join_channel (anyone may, and the channel sees you joined), " +
                                        "then read_channel shows its messages. list_channels has its name and topic.", ToolProblem.Forbidden);
-        var limit = Math.Clamp(args.Int("limit") ?? 30, 1, 200);
-        IEnumerable<ChatMessage> messages = channel.Messages;
-        if (args.String("before") is { } before)
+        // A little at a time (#35c53efa): the latest few, a read stops at a size, long messages show their start; one message
+        // in full (id), or the ones around it (around, from search_chat); older history is a search away.
+        ChatMessage Find(string id) =>
+            ChatRoom.FindMessage(channel, id.Trim()) ?? throw new McpToolException($"No message {id} in {Display(channel, session)}.", ToolProblem.NotFound);
+        var full = false;
+        List<ChatMessage> shown;
+        if (args.String("id") is { } one)
         {
-            var from = ChatRoom.FindMessage(channel, before.Trim()) ?? throw new McpToolException($"No message {before} in #{channel.Name}.", ToolProblem.NotFound);
-            messages = messages.TakeWhile(m => m != from);
+            shown = [Find(one)];
+            full = true;
         }
-        var shown = messages.TakeLast(limit).ToList();
+        else if (args.String("around") is { } around) shown = ChatCatchUp.Around(channel.Messages, Find(around));
+        else
+        {
+            var limit = Math.Clamp(args.Int("limit") ?? ChatCatchUp.DefaultRead, 1, ChatCatchUp.MaxRead);
+            IEnumerable<ChatMessage> messages = channel.Messages;
+            if (args.String("before") is { } before)
+            {
+                var from = Find(before);
+                messages = messages.TakeWhile(m => m != from);
+            }
+            shown = ChatCatchUp.Latest(messages.ToList(), limit, m => (m.Deleted ? 0 : Math.Min(m.Text.Length, ChatCatchUp.LongStart + 80)) + 120);
+        }
         var json = ChannelJson(channel, session);
-        json["members"] = new JsonArray(channel.Members.Select(m => (JsonNode)new JsonObject
+        json["members"] = new JsonArray(channel.Members.Select(m => (JsonNode)WithoutEmpty(new JsonObject
         {
             ["name"] = m.Name,
             ["agent"] = m.Agent ? true : null,
             ["presence"] = Presence.Word(_main.Agents.StateOf(m.Name)),
             ["moderator"] = m.Moderator || (!m.Agent && Chat.IsOwner(m.Name)) ? true : null,
             ["mutedUntil"] = Chat.MutedUntil(channel, m.Name) is { } until ? (until == DateTime.MaxValue ? "until unmuted" : Time(until)) : null,
-        }).ToArray());
-        json["messages"] = new JsonArray(shown.Select(m => (JsonNode)MessageJson(channel, m, session.AgentName)).ToArray());
-        if (shown.Count > 0 && shown[0] != channel.Messages[0]) json["more"] = $"Earlier messages: read_channel with before={ShortId(shown[0].Id)}.";
+        })).ToArray());
+        json["messages"] = new JsonArray(shown.Select(m => (JsonNode)MessageJson(channel, m, session.AgentName, full)).ToArray());
+        if (!full && shown.Count > 0 && shown[0] != channel.Messages[0])
+            json["more"] = $"Earlier messages: read_channel with before={ShortId(shown[0].Id)}; search_chat finds older ones by their words.";
         Delivered(session, channel, shown);
         return Json(json);
+    }
+
+    /// <summary>Chat's history by its words (#35c53efa): what read_channel and wait_for_messages leave out stays findable.</summary>
+    private string SearchChat(McpSession session, Args args, List<Attachment> files)
+    {
+        RequireChat();
+        if (SharedChannelFor(session, args) is not null)
+            throw new McpToolException("search_chat searches this ProJict's own channels; read another ProJict's with read_channel (before=<id> reads back).");
+        var query = args.Required("query").Trim();
+        var limit = Math.Clamp(args.Int("limit") ?? 20, 1, 50);
+        var actor = ActorOf(session);
+        List<ChatChannel> channels;
+        if (args.String("channel") is not null)
+        {
+            var channel = ChannelFor(session, args);
+            if (ChatRoom.Member(channel, session.AgentName) == null)
+                throw new McpToolException($"You're not in {Display(channel, session)}: join it first with join_channel, then search it.", ToolProblem.Forbidden);
+            channels = [channel];
+        }
+        else channels = Chat.Visible(actor).Where(c => ChatRoom.Member(c, session.AgentName) != null).ToList();
+        var by = args.String("by")?.Trim().TrimStart('@');
+        var hits = ChatSearch.Search(channels, query, limit + 1, string.IsNullOrEmpty(by) ? null : by);
+        var json = new JsonObject
+        {
+            ["query"] = query,
+            ["messages"] = new JsonArray(hits.Take(limit).Select(h => (JsonNode)new JsonObject
+            {
+                ["id"] = ShortId(h.Message.Id),
+                ["channel"] = Display(h.Channel, session),
+                ["by"] = h.Message.By,
+                ["at"] = Time(h.Message.At),
+                ["line"] = h.Snippet,
+            }).ToArray()),
+        };
+        json["next"] = hits.Count == 0
+            ? "Nothing found: try fewer or other words, or leave out channel and by."
+            : "read_channel channel=<its channel> around=<id> shows one with the messages around it; id=<id> gives all of it." +
+              (hits.Count > limit ? $" There are more: give a higher limit (at most 50) or more words." : "");
+        return Json(json);
+    }
+
+    /// <summary>A message meant for the agent: in its private conversation, @mentioning it, or a notice about it (an invitation).</summary>
+    private static bool ForYou(ChatChannel channel, ChatMessage message, string agent) =>
+        channel.Direct || string.Equals(message.About, agent, StringComparison.OrdinalIgnoreCase) || ChatRoom.Mentions(channel, message, agent);
+
+    /// <summary>What of a backlog was left out of a channel, and where to find it (#35c53efa).</summary>
+    private string LeftOutLine(ChatCatchUp.LeftOut left, IEnumerable<(ChatChannel Channel, ChatMessage Message)> shown, McpSession session)
+    {
+        var where = Display(left.Channel, session);
+        var firstShown = shown.Where(s => s.Channel == left.Channel).Select(s => s.Message).MinBy(m => m.At);
+        var read = firstShown != null && firstShown.At > left.Newest.At
+            ? $"read_channel {where} before={ShortId(firstShown.Id)}"
+            : $"read_channel {where}";
+        return $"{Count(left.Count, "older message")} in {where} ({Time(left.Oldest.At)} to {Time(left.Newest.At)}) left out, so your context stays clear; " +
+               $"they're marked read. {read} reads back through them, and search_chat finds anything in them.";
+    }
+
+    /// <summary>Without the fields that say nothing (null): each message carried a dozen of them (#35c53efa).</summary>
+    private static JsonObject WithoutEmpty(JsonObject json)
+    {
+        foreach (var key in json.Where(p => p.Value is null).Select(p => p.Key).ToList()) json.Remove(key);
+        return json;
     }
 
     /// <summary>How agents are asked to write in Chat (post_message's description and their instructions).</summary>
@@ -537,15 +632,19 @@ public sealed partial class AgentTools
         {
             var waiting = Waiting(session, only);
             var answers = NewAnswers(session, only).ToList();
+            // A backlog is caught up on, not replayed (#35c53efa): the newest, and older ones meant for it; the rest is
+            // marked read with it, and said where to find.
+            var (shown, left) = ChatCatchUp.Pick(waiting, (c, m) => ForYou(c, m, session.AgentName));
             var json = new JsonObject
             {
-                ["messages"] = new JsonArray(waiting.Select(w =>
+                ["messages"] = new JsonArray(shown.Select(w =>
                 {
                     var node = MessageJson(w.Channel, w.Message, session.AgentName);
                     node["channel"] = Display(w.Channel, session);
                     return (JsonNode)node;
                 }).ToArray()),
             };
+            if (left.Count > 0) json["leftOut"] = new JsonArray(left.Select(l => (JsonNode)LeftOutLine(l, shown, session)).ToArray());
             if (answers.Count > 0)
                 json["answers"] = new JsonArray(answers.Select(a => (JsonNode)new JsonObject
                 {
@@ -746,19 +845,21 @@ public sealed partial class AgentTools
         };
     }
 
-    private JsonObject MessageJson(ChatChannel channel, ChatMessage m, string you)
+    /// <remarks>A long message shows its start, and how to read it all, unless <paramref name="full"/> (#35c53efa).</remarks>
+    private JsonObject MessageJson(ChatChannel channel, ChatMessage m, string you, bool full = false, string? where = null)
     {
         if (m.Notice)
             return string.Equals(m.About, you, StringComparison.OrdinalIgnoreCase)
                 ? new JsonObject { ["notice"] = m.AboutText ?? m.Text, ["aboutYou"] = true, ["at"] = Time(m.At) }
                 : new JsonObject { ["notice"] = m.Text, ["at"] = Time(m.At) };
-        return new JsonObject
+        where ??= channel.Direct ? "@" + ChatRoom.Title(channel, you) : "#" + channel.Name;
+        return WithoutEmpty(new JsonObject
         {
             ["id"] = ShortId(m.Id),
             ["by"] = m.By,
             ["agent"] = m.Agent ? true : null,
             ["at"] = Time(m.At),
-            ["text"] = m.Deleted ? null : m.Text,
+            ["text"] = m.Deleted ? null : full ? m.Text : ChatCatchUp.Shorten(m.Text, $"read_channel {where} id={ShortId(m.Id)}"),
             ["deleted"] = m.Deleted ? true : null,
             ["answering"] = !m.Agent && ChatRoom.AnswererOf(channel, m, DateTime.Now) is { } answerer ? answerer : null,
             ["answered"] = m.AnsweredAt != null ? true : null,
@@ -771,7 +872,7 @@ public sealed partial class AgentTools
             ["approval"] = m.Approval == null ? null : m.Decision is { } d ? (d.Approved ? "approved by " : "declined by ") + d.By : "waiting",
             ["withPin"] = m.WithPin ? true : null,
             ["attachments"] = m.Attachments is { Count: > 0 } files ? Paths(files) : null,
-        };
+        });
     }
 
     /// <summary>"GRID2VR › HUD › “crash when pausing” (#4e84570c)".</summary>

@@ -87,19 +87,33 @@ public sealed partial class AgentTools
     {
         if (ChatRoom.Member(channel, ViaIn(session, host)) == null)
             throw new McpToolException($"You're not in {SharedName(host, channel)}: join it first with join_channel, then read_channel shows its messages.", ToolProblem.Forbidden);
-        var limit = Math.Clamp(args.Int("limit") ?? 30, 1, 200);
-        IEnumerable<ChatMessage> messages = channel.Messages;
-        if (args.String("before") is { } before)
+        // The same little at a time as this ProJict's own channels (#35c53efa).
+        ChatMessage Find(string id) =>
+            ChatRoom.FindMessage(channel, id.Trim()) ?? throw new McpToolException($"No message {id} in {SharedName(host, channel)}.", ToolProblem.NotFound);
+        var full = false;
+        List<ChatMessage> shown;
+        if (args.String("id") is { } one)
         {
-            var from = ChatRoom.FindMessage(channel, before.Trim()) ?? throw new McpToolException($"No message {before} in {SharedName(host, channel)}.", ToolProblem.NotFound);
-            messages = messages.TakeWhile(m => m != from);
+            shown = [Find(one)];
+            full = true;
         }
-        var shown = messages.TakeLast(limit).ToList();
+        else if (args.String("around") is { } around) shown = ChatCatchUp.Around(channel.Messages, Find(around));
+        else
+        {
+            var limit = Math.Clamp(args.Int("limit") ?? ChatCatchUp.DefaultRead, 1, ChatCatchUp.MaxRead);
+            IEnumerable<ChatMessage> messages = channel.Messages;
+            if (args.String("before") is { } before)
+            {
+                var from = Find(before);
+                messages = messages.TakeWhile(m => m != from);
+            }
+            shown = ChatCatchUp.Latest(messages.ToList(), limit, m => (m.Deleted ? 0 : Math.Min(m.Text.Length, ChatCatchUp.LongStart + 80)) + 120);
+        }
         var me = ViaIn(session, host);
         var json = SharedChannelJson(host, channel, session);
-        json["members"] = new JsonArray(channel.Members.Select(m => (JsonNode)new JsonObject { ["name"] = m.Name, ["agent"] = m.Agent ? true : null }).ToArray());
-        json["messages"] = new JsonArray(shown.Select(m => (JsonNode)MessageJson(channel, m, me)).ToArray());
-        if (shown.Count > 0 && shown[0] != channel.Messages[0]) json["more"] = $"Earlier messages: read_channel with before={ShortId(shown[0].Id)}.";
+        json["members"] = new JsonArray(channel.Members.Select(m => (JsonNode)WithoutEmpty(new JsonObject { ["name"] = m.Name, ["agent"] = m.Agent ? true : null })).ToArray());
+        json["messages"] = new JsonArray(shown.Select(m => (JsonNode)MessageJson(channel, m, me, full, SharedName(host, channel))).ToArray());
+        if (!full && shown.Count > 0 && shown[0] != channel.Messages[0]) json["more"] = $"Earlier messages: read_channel with before={ShortId(shown[0].Id)}.";
         SharedDelivered(session, host, channel, shown);
         return Json(json);
     }
@@ -223,7 +237,13 @@ public sealed partial class AgentTools
         {
             var me = ViaIn(identity, group.Key.Host);
             var where = SharedName(group.Key.Host, group.Key.Channel);
-            foreach (var (_, _, m) in group)
+            // A backlog comes as a catch-up, not a line per message (#35c53efa).
+            var (shown, left) = ChatCatchUp.Pick([.. group.Select(w => (w.Channel, w.Message))],
+                (c, m) => string.Equals(m.About, me, StringComparison.OrdinalIgnoreCase) || ChatRoom.Mentions(c, m, me));
+            foreach (var l in left)
+                lines.Add($"[{where}] {Count(l.Count, "older message")} ({Time(l.Oldest.At)} to {Time(l.Newest.At)}) left out, so your context " +
+                          $"stays clear; they're marked read. read_channel \"{where}\" reads back through them.");
+            foreach (var (_, m) in shown)
             {
                 if (m.Notice)
                 {

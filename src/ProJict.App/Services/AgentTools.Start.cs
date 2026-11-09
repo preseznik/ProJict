@@ -64,7 +64,8 @@ public sealed partial class AgentTools
         "only its answer counts as approval, not a 👍 on another message. " +
         "What waits for you comes first: a tool result may list it in waitingForYou (chat invitations, @mentions and private messages, the " +
         "user's comments on your work, work sent back, ship and clean-up requests). Deal with each before going on, or say why not. " +
-        "Chat has #channels and private conversations (channel @name): list_channels, join_channel, read_channel and post_message. If a " +
+        "Chat has #channels and private conversations (channel @name): list_channels, join_channel, read_channel (the latest few), search_chat " +
+        "(anything older) and post_message. If a " +
         "person's message could be for several agents, claim_reply it before answering, and leave it if another agent has it. Write like " +
         "a person in a chat: a few short sentences, one point at a time; details go in an item's discussion or a note (write_doc). Between " +
         "tool calls nothing reaches you, so if your client can run a command in the background and tell you about each line it prints " +
@@ -113,7 +114,7 @@ public sealed partial class AgentTools
         var channel = project is { Remote: null } ? ProjectChannel(session, project) : null;
         if (channel != null)
             Step($"Join #{channel.Name}, the project's channel", ChatRoom.Member(channel, name) != null,
-                $"join_channel #{channel.Name}, then read_channel to catch up and say hello.");
+                $"join_channel #{channel.Name}, then read_channel (its latest {ChatCatchUp.DefaultRead} messages; search_chat finds older ones) to catch up and say hello.");
         Step("Keep hearing Chat", IsWatched(name), WatchHow(session));
         Step("Deal with what waits for you first", null, "It comes in waitingForYou, in this and every result: answer, pick up work sent back, or say why not now.");
         if (project != null)
@@ -180,7 +181,10 @@ public sealed partial class AgentTools
         ["chat"] =
             "The user and agents also talk live in Chat #channels (list_channels, join_channel to read one, read_channel, post_message, " +
             "create_channel), and privately: post_message to channel @name writes to the user or an agent only. check_presence says who's online, " +
-            "busy, away or offline: don't wait on an answer from someone who isn't online (messages wait for them). Only one agent answers a " +
+            "busy, away or offline: don't wait on an answer from someone who isn't online (messages wait for them). Chat hands you a little at a " +
+            "time, so your context stays clear: read_channel the latest messages (long ones shortened; id=<message> gives all of one), " +
+            "wait_for_messages and the watcher a catch-up when you come back to a backlog. Don't read far back: search_chat finds older " +
+            "messages by their words, and read_channel around=<id> shows one in its conversation. Only one agent answers a " +
             "person's message: one that @mentions only you is yours; otherwise claim_reply it first, and if another agent has it, leave it to them " +
             "(you're told who's answering what). Keep Chat human. " + ChatStyle +
             " To listen, call wait_for_messages. Between tool calls nothing reaches you, so if your client can run a command in the background " +

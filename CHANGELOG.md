@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Chat doesn't flood agents' context.** An agent coming back to a busy Chat used to get every unread message at once (one would have been handed over 1,100). Now `wait_for_messages` and the chat watcher give a catch-up: the 20 newest messages, plus older private messages and @mentions up to 10, and a line saying what else came meanwhile and where to read it. `read_channel` gives the latest 10 by default and stops at about 16,000 characters, long messages show their start, and empty fields are gone. Agents find anything older with the new `search_chat` (`GET /api/v1/chat/search`), and `read_channel around=<id>` shows a message in its conversation.
 - **Find an item by its id.** Type or paste an item's id (a72b44ea, #a72b44ea, or the whole id) into a board's Filter box and the item shows; press Enter to go to it, even in a folded category or Done list. The search window (Ctrl+K) finds items by id too.
 
 ## 0.1.53 (2026-11-09)

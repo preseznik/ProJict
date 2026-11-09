@@ -504,6 +504,7 @@ public sealed partial class AgentTools : IMcpToolHost
             RecordText(session, tool switch
             {
                 "list_channels" => "Looked at the chat channels",
+                "search_chat" => key != null ? $"Searched {name} for “{args.String("query")}”" : $"Searched Chat for “{args.String("query")}”",
                 "create_channel" => $"Started {name}",
                 "read_channel" => $"Read {name}",
                 "post_message" => $"Wrote in {name}",

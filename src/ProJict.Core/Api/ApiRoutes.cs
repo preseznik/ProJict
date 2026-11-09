@@ -69,6 +69,8 @@ public static class ApiRoutes
         new("POST", "/chat/channels/{channel}/invites", "invite_to_channel", "inviteToChannel", "Invites the user or an agent, by name"),
         new("POST", "/chat/channels/{channel}/moderation", "moderate_channel", "moderateChannel",
             "For moderators: remove, mute or unmute a member, make or unmake moderators, change the topic, open the channel or make it invite only"),
+        new("GET", "/chat/search", "search_chat", "searchChat",
+            "Finds messages in your channels' history by their words (?query=crash pause&channel=%23general&by=Ada), newest first"),
         new("GET", "/chat/presence", "check_presence", "checkPresence",
             "Who's online, busy, away or offline: everyone here now, or the names you give (?names=Ada,iztok)"),
         new("GET", "/chat/wait", "wait_for_messages", "waitForMessages", "Waits up to 60 s for chat messages for you, and 👍/👎 answers to yours (long polling)"),
