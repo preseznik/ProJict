@@ -84,6 +84,13 @@ public sealed partial class AgentTools
         Add("join_channel", "Join or leave a chat channel",
             "Joins an Open channel, so you can read it (read_channel) and new messages there wait for you, or leaves one (leave=true).",
             Schema(ChannelArg, ("leave", "boolean", "Leave the channel instead.", false)), JoinChannel);
+        Add("check_presence", "Check who's online",
+            "Who's here, before you address or wait on someone: online (at their computer, or an agent using its tools), busy, away (idle a " +
+            "while, or set Away) or offline (not connected, or appearing offline). With names: each one's presence, and when an offline agent " +
+            "was last seen; without: everyone online, busy or away now (the user, the agents here, and the people and agents of connected " +
+            "ProJicts). A message to someone who isn't online waits until they're back: don't wait on their answer.",
+            Schema(("names", "string[]", "People or agents to look up, by the names they sign with (over the API, names=Ada,iztok).", false)),
+            CheckPresence, readOnly: true);
         Add("invite_to_channel", "Invite to a chat channel",
             "Invites the user or another agent (by the name they sign with). Moderators can invite to any channel, members to Open ones.",
             Schema(ChannelArg, ("who", "string", "Name, e.g. Codex.", true)), InviteToChannel);
@@ -264,6 +271,8 @@ public sealed partial class AgentTools
         if ((channel.Direct && ChatRoom.Member(channel, _state.UserName) != null || ChatRoom.Mentions(channel, message, _state.UserName)) &&
             Presence.UnavailableNotice(_state.UserName, _main.Agents.MyStatus, _main.Agents.MyState) is { } unavailable)
             result["userUnavailable"] = unavailable;
+        // Written to, or @mentioning, someone who isn't here: it waits for them, but no answer is coming soon (#4507be3d).
+        if (Presence.NotHereNotice(AddresseesOf(channel, message, session)) is { } notHere) result["notHere"] = notHere;
         if (!channel.Direct && IsWallOfText(text))
             result["note"] = "That was long for a chat channel. Keep messages short and conversational: a few sentences, one point at a time. " +
                              "Put details in the item's discussion (add_comment) or a note (write_doc) and link it, or go on privately with post_message to @name.";
@@ -342,6 +351,74 @@ public sealed partial class AgentTools
         if (Presence.UnavailableNotice(_state.UserName, _main.Agents.MyStatus, _main.Agents.MyState) is { } unavailable)
             json["userUnavailable"] = unavailable;
         return Json(json);
+    }
+
+    /// <summary>Who's here (#4507be3d), so agents don't address, or wait on, people and agents who are offline.</summary>
+    private string CheckPresence(McpSession session, Args args, List<Attachment> files)
+    {
+        var asked = args.Strings("names").SelectMany(n => n.Split(',')).Select(n => n.Trim().TrimStart('@').Trim())
+            .Where(n => n.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        if (asked.Count > 50) throw new McpToolException("Ask about at most 50 names at a time.");
+        var everyone = _main.Agents.Everyone();
+        Dictionary<string, DateTime>? seen = null;
+        DateTime? LastSeen(string name)
+        {
+            seen ??= AgentRoster.Seen(_state.Projects, Chat.Channels, _state.Settings.AgentNames ?? [], _main.Agents.Sessions);
+            return seen.TryGetValue(name, out var at) && at != DateTime.MinValue ? at : null;
+        }
+        JsonObject Entry(string name, PresenceState state)
+        {
+            var agent = IsAgentName(name);
+            var entry = new JsonObject
+            {
+                ["name"] = name,
+                ["agent"] = agent ? true : null,
+                ["you"] = string.Equals(name, session.AgentName, StringComparison.OrdinalIgnoreCase) ? true : null,
+                ["presence"] = Presence.Word(state),
+            };
+            var known = agent || Chat.IsOwner(name) || everyone.ContainsKey(name) ||
+                        Chat.Channels.Any(c => c.Members.Any(m => string.Equals(m.Name, name, StringComparison.OrdinalIgnoreCase)));
+            if (!known)
+            {
+                entry["known"] = false;
+                entry["advice"] = "No one by that name in ProJict: check the spelling, or call check_presence without names to see who's here.";
+                return entry;
+            }
+            if (state == PresenceState.Offline && agent && LastSeen(name) is { } at) entry["lastSeen"] = Time(at);
+            entry["advice"] = Presence.Advice(state);
+            return entry;
+        }
+
+        var json = new JsonObject();
+        if (asked.Count > 0)
+        {
+            json["people"] = new JsonArray(asked.Select(name =>
+                (JsonNode)Entry(name, everyone.TryGetValue(name, out var state) ? state : PresenceState.Offline)).ToArray());
+        }
+        else
+        {
+            json["people"] = new JsonArray(everyone.OrderByDescending(p => p.Value).ThenBy(p => p.Key, StringComparer.CurrentCultureIgnoreCase)
+                .Select(p => (JsonNode)Entry(p.Key, p.Value)).ToArray());
+            json["note"] = "Anyone not listed is offline.";
+        }
+        if ((asked.Count == 0 || asked.Any(n => Chat.IsOwner(n))) &&
+            Presence.UnavailableNotice(_state.UserName, _main.Agents.MyStatus, _main.Agents.MyState) is { } unavailable)
+            json["userUnavailable"] = unavailable;
+        return Json(json);
+    }
+
+    /// <summary>
+    /// The people and agents a message is for (the other side of a private conversation, and whoever it @mentions), other
+    /// than the user, whose availability <c>userUnavailable</c> tells, and the writer.
+    /// </summary>
+    private List<(string Name, PresenceState State)> AddresseesOf(ChatChannel channel, ChatMessage message, McpSession session)
+    {
+        var everyone = _main.Agents.Everyone();
+        var candidates = channel.Members.Select(m => m.Name).Concat(everyone.Keys).Concat((_state.Settings.AgentNames ?? []).Keys)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Where(n => !string.Equals(n, session.AgentName, StringComparison.OrdinalIgnoreCase) && !Chat.IsOwner(n));
+        return candidates.Where(n => (channel.Direct && ChatRoom.Member(channel, n) != null) || ChatText.Mentions(message.Text, n))
+            .Select(n => (n, everyone.TryGetValue(n, out var state) ? state : PresenceState.Offline)).ToList();
     }
 
     private static bool IsWallOfText(string text) =>

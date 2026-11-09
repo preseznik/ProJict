@@ -546,6 +546,7 @@ public sealed partial class AgentTools : IMcpToolHost
         var text = tool switch
         {
             "list_projects" => "Looked through the projects",
+            "check_presence" => "Checked who's online",
             "current_project" => project != null ? $"Opened {project.Name}" : "Looked for its project",
             "update_project" => $"Changed the details of {project?.Name}",
             "set_name" => $"Now called {session.AgentName}",

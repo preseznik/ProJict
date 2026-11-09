@@ -816,8 +816,8 @@ public sealed class ApiServer
         /// <summary>Need the user's computer itself (its folders, its repository): not in the Agent set, only if ticked.</summary>
         public static readonly HashSet<string> NeedThisComputer =
             ["cleanup_request", "plan_cleanup", "link_media", "ship_request", "plan_ship", "report_ship", "finish_ship"];
-        /// <summary>In every set: picking a name and saying what it's doing.</summary>
-        public static readonly HashSet<string> Always = ["set_name", "set_label", "set_status"];
+        /// <summary>In every set: picking a name, saying what it's doing, and seeing who's here (#4507be3d).</summary>
+        public static readonly HashSet<string> Always = ["set_name", "set_label", "set_status", "check_presence"];
     }
 
     // ───────────── MCP over HTTP ─────────────

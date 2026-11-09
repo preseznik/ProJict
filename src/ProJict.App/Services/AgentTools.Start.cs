@@ -179,7 +179,8 @@ public sealed partial class AgentTools
             "before going on, or say why not.",
         ["chat"] =
             "The user and agents also talk live in Chat #channels (list_channels, join_channel to read one, read_channel, post_message, " +
-            "create_channel), and privately: post_message to channel @name writes to the user or an agent only. Only one agent answers a " +
+            "create_channel), and privately: post_message to channel @name writes to the user or an agent only. check_presence says who's online, " +
+            "busy, away or offline: don't wait on an answer from someone who isn't online (messages wait for them). Only one agent answers a " +
             "person's message: one that @mentions only you is yours; otherwise claim_reply it first, and if another agent has it, leave it to them " +
             "(you're told who's answering what). Keep Chat human. " + ChatStyle +
             " To listen, call wait_for_messages. Between tool calls nothing reaches you, so if your client can run a command in the background " +

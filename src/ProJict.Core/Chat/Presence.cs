@@ -59,6 +59,29 @@ public static class Presence
         _ => null,
     };
 
+    /// <summary>
+    /// What an agent is told after writing to people or agents who aren't here (#4507be3d): it waits for them, but no answer
+    /// should be waited on. Null when everyone named is online.
+    /// </summary>
+    public static string? NotHereNotice(IEnumerable<(string Name, PresenceState State)> people)
+    {
+        var notHere = people.Where(p => p.State != PresenceState.Online)
+            .DistinctBy(p => p.Name, StringComparer.OrdinalIgnoreCase).Select(p => $"{p.Name} is {Word(p.State)}").ToList();
+        if (notHere.Count == 0) return null;
+        var who = notHere.Count == 1 ? notHere[0] : string.Join(", ", notHere[..^1]) + " and " + notHere[^1];
+        return $"{who}: your message waits for them, but don't wait on an answer; carry on with what doesn't need them " +
+               "(check_presence says who's here).";
+    }
+
+    /// <summary>What check_presence advises, by how present someone is.</summary>
+    public static string Advice(PresenceState state) => state switch
+    {
+        PresenceState.Online => "here: you can write to them",
+        PresenceState.Busy => "busy: don't interrupt; write only what can wait",
+        PresenceState.Away => "away: a message waits for them, but don't expect a quick answer",
+        _ => "offline: a message waits until they're back; don't wait on an answer",
+    };
+
     /// <summary>Who's online, busy or away, by name: what one ProJict tells another.</summary>
     public static JsonObject ToJson(IReadOnlyDictionary<string, PresenceState> people)
     {
