@@ -83,6 +83,7 @@ public sealed partial class ProjectViewModel
         foreach (var category in Categories)
         {
             var mine = category.Model == where;
+            category.SyncDoneRows();
             foreach (var row in category.AllRows) row.IsVisible = mine && (shown == null || shown.Contains(row.Item));
             category.IsVisible = mine;
             category.RaiseShowDone();

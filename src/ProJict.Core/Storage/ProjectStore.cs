@@ -94,7 +94,7 @@ public sealed class ProjectStore
     {
         Directory.CreateDirectory(ProjectsDir);
         var desired = UniqueFileName(project);
-        AtomicFile.WriteAllText(Path.Combine(ProjectsDir, desired), Json.Serialize(project));
+        Json.WriteFile(Path.Combine(ProjectsDir, desired), project);
         if (_fileNames.TryGetValue(project.Id, out var old) &&
             !string.Equals(old, desired, StringComparison.OrdinalIgnoreCase))
         {
@@ -145,7 +145,7 @@ public sealed class ProjectStore
     public void SaveChannel(ChatChannel channel)
     {
         Directory.CreateDirectory(ChatDir);
-        AtomicFile.WriteAllText(Path.Combine(ChatDir, $"{channel.Id}.json"), Json.Serialize(channel));
+        Json.WriteFile(Path.Combine(ChatDir, $"{channel.Id}.json"), channel);
     }
 
     /// <summary>Moves the channel's file into backups/deleted instead of erasing it.</summary>
@@ -182,7 +182,7 @@ public sealed class ProjectStore
     public void SaveWikiPage(WikiPage page)
     {
         Directory.CreateDirectory(WikiDir);
-        AtomicFile.WriteAllText(Path.Combine(WikiDir, $"{page.Id}.json"), Json.Serialize(page));
+        Json.WriteFile(Path.Combine(WikiDir, $"{page.Id}.json"), page);
     }
 
     /// <summary>Moves the page's file into backups/deleted instead of erasing it.</summary>

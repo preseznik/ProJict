@@ -277,16 +277,14 @@ public sealed partial class MainViewModel : ObservableObject
             if (p.IsInbox) OnPropertyChanged(nameof(InboxCount));
             ProjectItems.FirstOrDefault(i => i.Project == p)?.Refresh();
             // While the dashboard or the feed shows, changes come from elsewhere (an AI agent, quick capture); keep it current.
-            if (CurrentView is DashboardViewModel) Dashboard.Refresh();
-            if (CurrentView is FeedViewModel) Feed.Refresh();
+            RefreshOverviewSoon();
             if (Discussion is { } open && open.Target.ProjectId == p.Id) open.Sync();
         };
         state.GroupCommentsChanged += group =>
         {
             OnPropertyChanged(nameof(GroupCommentCounts));
             OnPropertyChanged(nameof(UnreadGroups));
-            if (CurrentView is DashboardViewModel) Dashboard.Refresh();
-            if (CurrentView is FeedViewModel) Feed.Refresh();
+            RefreshOverviewSoon();
             if (Discussion is { Target.Kind: DiscussionKind.Group } open && string.Equals(open.Target.Group, group, StringComparison.OrdinalIgnoreCase))
                 open.Sync();
         };
@@ -294,6 +292,31 @@ public sealed partial class MainViewModel : ObservableObject
         var last = state.AppSettings.LastProjectId is { } id ? state.Projects.FirstOrDefault(p => p.Id == id) : null;
         if (last != null) OpenProject(last);
         else ShowDashboard();
+    }
+
+    private System.Windows.Threading.DispatcherTimer? _overviewTimer;
+
+    /// <summary>
+    /// The Dashboard or the Feed, while it shows, catches up with changes at most twice a second: agents at work change
+    /// projects many times a second, and each refresh draws the whole page anew (#0e516918).
+    /// </summary>
+    private void RefreshOverviewSoon()
+    {
+        if (CurrentView is not (DashboardViewModel or FeedViewModel)) return;
+        if (_overviewTimer == null)
+        {
+            _overviewTimer = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Background)
+            {
+                Interval = TimeSpan.FromMilliseconds(500),
+            };
+            _overviewTimer.Tick += (_, _) =>
+            {
+                _overviewTimer.Stop();
+                if (CurrentView is DashboardViewModel) Dashboard.Refresh();
+                if (CurrentView is FeedViewModel) Feed.Refresh();
+            };
+        }
+        if (!_overviewTimer.IsEnabled) _overviewTimer.Start();
     }
 
     public AppState State { get; }

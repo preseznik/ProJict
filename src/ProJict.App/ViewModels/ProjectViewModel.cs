@@ -461,7 +461,11 @@ public sealed partial class ProjectViewModel : ObservableObject
     {
         _state.Settings.SideBySide = value;
         _state.MarkSettingsDirty();
-        foreach (var c in Categories) c.RaiseShowDone();
+        foreach (var c in Categories)
+        {
+            c.SyncDoneRows();
+            c.RaiseShowDone();
+        }
     }
 
     /// <summary>
@@ -676,6 +680,8 @@ public sealed partial class ProjectViewModel : ObservableObject
         var filter = Filter;
         foreach (var category in Categories)
         {
+            // A filter may look through a folded Done list: its rows are built for it (and let go after).
+            category.SyncDoneRows();
             if (!filter.IsActive)
             {
                 foreach (var row in category.AllRows) row.IsVisible = true;
@@ -758,7 +764,7 @@ public sealed partial class ProjectViewModel : ObservableObject
     /// <summary>Called before a text field changes; the first change after focusing records one undo step.</summary>
     public void BeforeTextChange()
     {
-        if (CanEdit && _history.BeforeTyping(() => Json.Serialize(Project))) NotifyUndo();
+        if (CanEdit && _history.BeforeTyping(() => Json.SerializeCompact(Project))) NotifyUndo();
     }
 
     private void RefreshTagFilters()
@@ -771,7 +777,7 @@ public sealed partial class ProjectViewModel : ObservableObject
 
     public void Checkpoint()
     {
-        _history.Checkpoint(Json.Serialize(Project));
+        _history.Checkpoint(Json.SerializeCompact(Project));
         NotifyUndo();
     }
 
@@ -781,13 +787,13 @@ public sealed partial class ProjectViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanUndo))]
     public void Undo()
     {
-        if (_history.CanUndo) Restore(_history.Undo(Json.Serialize(Project))!);
+        if (_history.CanUndo) Restore(_history.Undo(Json.SerializeCompact(Project))!);
     }
 
     [RelayCommand(CanExecute = nameof(CanRedo))]
     public void Redo()
     {
-        if (_history.CanRedo) Restore(_history.Redo(Json.Serialize(Project))!);
+        if (_history.CanRedo) Restore(_history.Redo(Json.SerializeCompact(Project))!);
     }
 
     private void Restore(string json)
@@ -1411,7 +1417,9 @@ public sealed partial class ProjectViewModel : ObservableObject
     /// A change from outside the board (an AI agent, the discussion panel): one undo step, the affected categories
     /// redrawn, and the cursor put back where it was if you were typing in the board (redrawn rows lose focus).
     /// </summary>
-    private void MutateKeepingCursor(Action change, IEnumerable<CategoryViewModel?> affected, bool rebuildAll = false, EditKind kind = EditKind.Edit)
+    /// <remarks><paramref name="changed"/>: the item it changed, when that's all it changed, so only its rows are re-read.</remarks>
+    private void MutateKeepingCursor(Action change, IEnumerable<CategoryViewModel?> affected, bool rebuildAll = false, EditKind kind = EditKind.Edit,
+        TodoItem? changed = null)
     {
         if (Refused(kind)) return;
         var focus = _focusedItemId;
@@ -1420,7 +1428,7 @@ public sealed partial class ProjectViewModel : ObservableObject
         change();
         Touch();
         if (rebuildAll) RebuildAll();
-        else foreach (var c in affected.OfType<CategoryViewModel>().Distinct()) c.Refresh();
+        else foreach (var c in affected.OfType<CategoryViewModel>().Distinct()) c.Refresh(changed);
         RefreshTagFilters();
         ApplyFilter();
         if (focus is { } id && caret is { } at && Project.Find(id) != null) FocusRequested?.Invoke(id, at);
@@ -1439,7 +1447,7 @@ public sealed partial class ProjectViewModel : ObservableObject
     public void AgentEdit(Guid itemId, Action<TodoItem> change)
     {
         var loc = Project.Find(itemId) ?? throw new InvalidOperationException("The item is no longer in this project.");
-        MutateKeepingCursor(() => change(loc.Item), [CategoryFor(loc.Category)]);
+        MutateKeepingCursor(() => change(loc.Item), [CategoryFor(loc.Category)], changed: loc.Item);
     }
 
     /// <summary>Adds an item under a parent item, or at the end of a category (created when missing).</summary>
@@ -1448,13 +1456,13 @@ public sealed partial class ProjectViewModel : ObservableObject
         if (parentId is { } pid)
         {
             var parent = Project.Find(pid) ?? throw new InvalidOperationException("The parent item is not in this project.");
-            MutateKeepingCursor(() => parent.Item.Children.Add(item), [CategoryFor(parent.Category)], kind: EditKind.Add);
+            MutateKeepingCursor(() => parent.Item.Children.Add(item), [CategoryFor(parent.Category)], kind: EditKind.Add, changed: item);
             return;
         }
         var category = Project.FindCategory(categoryName ?? "");
         if (category != null)
         {
-            MutateKeepingCursor(() => category.Items.Add(item), [CategoryFor(category)], kind: EditKind.Add);
+            MutateKeepingCursor(() => category.Items.Add(item), [CategoryFor(category)], kind: EditKind.Add, changed: item);
             return;
         }
         MutateKeepingCursor(() => Project.Categories.Add(new Category { Name = categoryName!.Trim(), Items = [item] }), [], rebuildAll: true, kind: EditKind.Add);
@@ -1466,7 +1474,7 @@ public sealed partial class ProjectViewModel : ObservableObject
     /// </summary>
     public bool ExternalChange(Func<bool> change)
     {
-        var snapshot = Json.Serialize(Project);
+        var snapshot = Json.SerializeCompact(Project);
         var focus = _focusedItemId;
         var caret = focus is { } focused ? CaretOf?.Invoke(focused) : null;
         if (!change()) return false;
@@ -1916,7 +1924,8 @@ public sealed partial class ProjectViewModel : ObservableObject
         if (replyTo is { } parent && CommentsOf(targetId).Find(parent) == null)
             throw new InvalidOperationException("The comment to reply to isn't there any more.");
         if (Project.Find(targetId) is { } loc)
-            MutateKeepingCursor(() => loc.Item.Comments = Discussions.Post(loc.Item.Comments, comment, replyTo), [CategoryFor(loc.Category)], kind: EditKind.Comment);
+            MutateKeepingCursor(() => loc.Item.Comments = Discussions.Post(loc.Item.Comments, comment, replyTo), [CategoryFor(loc.Category)], kind: EditKind.Comment,
+                changed: loc.Item);
         else if (Project.Categories.FirstOrDefault(c => c.Id == targetId) is { } category)
             MutateKeepingCursor(() => category.Comments = Discussions.Post(category.Comments, comment, replyTo), [CategoryFor(category)], kind: EditKind.Comment);
         else

@@ -107,7 +107,10 @@ public sealed partial class AppState : ObservableObject
     [ObservableProperty] private string _statusText = "";
 
     /// <summary>How you sign comments and history entries (Settings › Comments &amp; history, else the Windows user name).</summary>
-    public string UserName => string.IsNullOrWhiteSpace(AppSettings.UserName) ? Environment.UserName : AppSettings.UserName.Trim();
+    public string UserName => string.IsNullOrWhiteSpace(AppSettings.UserName) ? WindowsUserName : AppSettings.UserName.Trim();
+
+    /// <summary>Asked of Windows once: each ask is a call into Windows, and scans of every comment asked for each one (#0e516918).</summary>
+    private static readonly string WindowsUserName = Environment.UserName;
 
     /// <summary>Raised after a group's discussion changed (projects' discussions raise <see cref="ProjectChanged"/>).</summary>
     public event Action<string>? GroupCommentsChanged;

@@ -1,14 +1,18 @@
+using System.IO.Compression;
+using System.Text;
+
 namespace ProJict.Core.Features;
 
 /// <summary>
 /// Undo and redo for a project page, by snapshots of the whole project (its JSON): a step is taken just before each
 /// change, so undoing it brings back what was there. Typing into a field is one step, from its first change until the
 /// field loses focus or the next step. A new step forgets what could be redone; at most <paramref name="max"/> steps back.
+/// The snapshots are kept compressed: a big project's hundred steps took hundreds of megabytes as text (#0e516918).
 /// </summary>
 public sealed class UndoHistory(int max = 100)
 {
-    private readonly List<string> _undo = [];
-    private readonly List<string> _redo = [];
+    private readonly List<byte[]> _undo = [];
+    private readonly List<byte[]> _redo = [];
 
     public bool CanUndo => _undo.Count > 0;
     public bool CanRedo => _redo.Count > 0;
@@ -18,7 +22,7 @@ public sealed class UndoHistory(int max = 100)
     /// <summary>A step before a change: <paramref name="before"/> is the project as it is now.</summary>
     public void Checkpoint(string before)
     {
-        Push(_undo, before);
+        Push(_undo, Pack(before));
         _redo.Clear();
         Typing = false;
     }
@@ -52,19 +56,36 @@ public sealed class UndoHistory(int max = 100)
     /// <summary>The project to bring back for Redo, or null when there's none.</summary>
     public string? Redo(string current) => Step(_redo, _undo, current);
 
-    private string? Step(List<string> from, List<string> to, string current)
+    private string? Step(List<byte[]> from, List<byte[]> to, string current)
     {
         if (from.Count == 0) return null;
-        Push(to, current);
+        Push(to, Pack(current));
         Typing = false;
         var snapshot = from[^1];
         from.RemoveAt(from.Count - 1);
-        return snapshot;
+        return Unpack(snapshot);
     }
 
-    private void Push(List<string> stack, string snapshot)
+    private void Push(List<byte[]> stack, byte[] snapshot)
     {
         stack.Add(snapshot);
         if (stack.Count > max) stack.RemoveAt(0);
+    }
+
+    /// <summary>UTF-8, Brotli at its fastest: a big project's step takes about a sixth of what it took as text, for ~3 ms.</summary>
+    private static byte[] Pack(string snapshot)
+    {
+        using var packed = new MemoryStream();
+        using (var brotli = new BrotliStream(packed, CompressionLevel.Fastest, leaveOpen: true))
+        using (var writer = new StreamWriter(brotli, new UTF8Encoding(false), bufferSize: 16 * 1024))
+            writer.Write(snapshot);
+        return packed.ToArray();
+    }
+
+    private static string Unpack(byte[] packed)
+    {
+        using var brotli = new BrotliStream(new MemoryStream(packed), CompressionMode.Decompress);
+        using var reader = new StreamReader(brotli, new UTF8Encoding(false));
+        return reader.ReadToEnd();
     }
 }

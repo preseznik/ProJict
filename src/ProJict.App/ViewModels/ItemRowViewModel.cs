@@ -131,7 +131,10 @@ public sealed partial class ItemRowViewModel : ObservableObject
     public string GripToolTip => NeedsAttention ? AttentionToolTip + "\nDrag to move · Ctrl+click to select for a prompt" : "Drag to move · Ctrl+click to select for a prompt";
 
     /// <summary>"To review" and/or "New comments", for the category's list of what waits.</summary>
-    public string AttentionKind => (Item.NeedsReview, HasUnreadComments) switch
+    public string AttentionKind => AttentionKindOf(Item.NeedsReview, HasUnreadComments);
+
+    /// <summary>The same for an item that has no row now (in a folded Done list).</summary>
+    public static string AttentionKindOf(bool needsReview, bool unreadComments) => (needsReview, unreadComments) switch
     {
         (true, true) => "To review, new comments",
         (true, false) => "To review",
@@ -193,9 +196,11 @@ public sealed partial class ItemRowViewModel : ObservableObject
     [ObservableProperty] private bool _isVisible = true;
     [ObservableProperty] private bool _isDropTarget;
 
+    /// <summary>Re-reads the item: a row now stays while its item is on the board, so what it keeps is let go here (#0e516918).</summary>
     public void Refresh()
     {
         _attachments = null;
+        _media = null;
         OnPropertyChanged(string.Empty);
     }
 
