@@ -615,6 +615,17 @@ public sealed partial class ProjectViewModel : ObservableObject
         WorkedBy = WorkedBy,
     };
 
+    /// <summary>
+    /// Enter in the filter box: when it holds an item's id, the board goes to that item (#bebbd825), even in a folded
+    /// category or Done list. False when it doesn't name one.
+    /// </summary>
+    public bool GoToItemInFilter()
+    {
+        if (Filter.ItemNamedById(Project) is not { } item) return false;
+        FocusOn(item);
+        return true;
+    }
+
     public void Touch() => _state.MarkDirty(Project);
 
     /// <summary>How you sign notes, comments and history entries.</summary>

@@ -29,7 +29,7 @@ Get **`ProJict-Setup-x.y.z.exe`** from [Releases](https://github.com/preseznik/p
 | Alt+↑ / Alt+↓ | move the item up or down |
 | Ctrl+Shift+Del | delete the item |
 | Ctrl+Z / Ctrl+Y | undo / redo |
-| Ctrl+F | filter the current project |
+| Ctrl+F | filter the current project (words, or an item's id such as a72b44ea: Enter goes to that item) |
 | Ctrl+K | search all projects, the wiki and Chat |
 | Ctrl+Space | select items for **Copy prompt** |
 | Ctrl+V | with a screenshot or files copied: attach them to the item |
@@ -39,7 +39,7 @@ Right-click an item, or click the **⋯** that appears on its right when you poi
 
 Start an item with `BUG:`, `ADD:`, `ISSUE:` or `CHANGE:` to tag it, or click its type chip to pick another: BUG, ADD, ISSUE, CHANGE, FIX and IDEA, the types you added, and any other the project's items have. **Other…** there adds a type of your own (tech debt becomes TECH-DEBT), kept in the list for every project. An item without a type shows an empty **type** chip while you point at it, like the priority's. Right-click an item's checkbox to mark it as to do, in progress or done. Drag items by their handle to reorder them or move them to another category.
 
-Next to the filter box, **All tags** shows only items with one tag and **All states** shows only items that are to do, in progress or done. **Working on** shows only the items someone is on: checked out by an AI agent or marked in progress. **Hide empty** hides the categories with nothing left to do (only done items, or none) until you click **Show all**.
+The filter box also takes an item's id, as Chat and agents write it (a72b44ea or #a72b44ea): the item shows, and Enter goes to it even in a folded category or Done list. Next to the filter box, **All tags** shows only items with one tag and **All states** shows only items that are to do, in progress or done. **Working on** shows only the items someone is on: checked out by an AI agent or marked in progress. **Hide empty** hides the categories with nothing left to do (only done items, or none) until you click **Show all**.
 
 **Focus** shows one item and nothing else: its sub-items and the items it's under stay, the rest of the board goes. A link to an item (in Chat, the Feed, search results, a notification or an agent's card) opens its project focused on it; so does ⋯ › **Focus** on an item, and the eye button in a category's header focuses on that category. Your filters stay as they were underneath: **Leave focus** (in the bar above the board, the ⋯ menu or the eye button) brings them back.
 

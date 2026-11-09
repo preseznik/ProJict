@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Find an item by its id.** Type or paste an item's id (a72b44ea, #a72b44ea, or the whole id) into a board's Filter box and the item shows; press Enter to go to it, even in a folded category or Done list. The search window (Ctrl+K) finds items by id too.
+
 ## 0.1.53 (2026-11-09)
 
 - **ProJict stays responsive while agents work.** A change by an agent (a comment, a check-out, a finished item) used to freeze ProJict for about half a second, because the board built every row of the category again, and Windows' accessibility tree with it. Now only the rows that changed are redrawn, and a folded Done list isn't built at all until you unfold it (or a filter or focus looks through it). Undo keeps the same 100 steps in a sixth of the memory (a big project's took nearly 200 MB), saving no longer makes a full copy of the project in memory first, and the Dashboard and Feed catch up with a burst of changes once instead of for every one.

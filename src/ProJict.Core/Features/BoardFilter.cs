@@ -43,8 +43,31 @@ public sealed record BoardFilter
     {
         var tagOk = Untagged ? string.IsNullOrEmpty(item.Tag) : Tag == null || string.Equals(item.Tag, Tag, StringComparison.OrdinalIgnoreCase);
         var text = item.SearchText();
-        return tagOk && StateMatches(item) && PriorityMatches(item) && Terms.All(t => text.Contains(t, StringComparison.OrdinalIgnoreCase)) &&
+        return tagOk && StateMatches(item) && PriorityMatches(item) &&
+               Terms.All(t => text.Contains(t, StringComparison.OrdinalIgnoreCase) || IsIdOf(t, item)) &&
                (WorkedBy == null || item.Contributors().Any(c => string.Equals(c.Name, WorkedBy, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    /// <summary>
+    /// The word is the item's id, or its start, as Chat and agents write it (#bebbd825): "a72b44ea", "#a72b44ea" or the whole
+    /// id. At least six of its characters, so an ordinary word doesn't find an item by chance.
+    /// </summary>
+    public static bool IsIdOf(string term, TodoItem item)
+    {
+        var id = term.Trim().TrimStart('#');
+        return id.Length >= 6 && id.All(c => char.IsAsciiHexDigit(c) || c == '-') &&
+               item.Id.ToString().StartsWith(id, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// The one item the words name by its id (the filter holds just an id, and only that item has it); null otherwise. The
+    /// board goes to it on Enter.
+    /// </summary>
+    public TodoItem? ItemNamedById(Project project)
+    {
+        if (Terms is not [var only]) return null;
+        var found = project.Walk().Select(l => l.Item).Where(i => IsIdOf(only, i)).Take(2).ToList();
+        return found.Count == 1 ? found[0] : null;
     }
 
     /// <summary>

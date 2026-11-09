@@ -24,7 +24,9 @@ public static class GlobalSearch
         {
             foreach (var loc in project.Walk())
             {
-                if (!Matches($"{project.Name} {loc.Category.Name} {loc.Item.SearchText()}", terms)) continue;
+                // An item's id (a72b44ea, #a72b44ea) finds it too (#bebbd825).
+                var haystack = $"{project.Name} {loc.Category.Name} {loc.Item.SearchText()}";
+                if (!terms.All(t => haystack.Contains(t, StringComparison.OrdinalIgnoreCase) || BoardFilter.IsIdOf(t, loc.Item))) continue;
                 (loc.Item.IsDone ? done : open).Add(new SearchHit(project, loc.Category, loc.Item, null, FirstLine(loc.Item.DisplayText())));
             }
             foreach (var note in project.Notes)

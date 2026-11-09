@@ -618,8 +618,9 @@
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <Grid>
-                            <TextBox x:Name="FilterBox" Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}" PreviewKeyDown="FilterBox_PreviewKeyDown" />
-                            <TextBlock x:Name="FilterHint" Text="Filter (Ctrl+F)" Margin="12,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"
+                            <TextBox x:Name="FilterBox" Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}" PreviewKeyDown="FilterBox_PreviewKeyDown"
+                                     ToolTip="Words to look for, or an item's id (a72b44ea): Enter goes to that item" />
+                            <TextBlock x:Name="FilterHint" Text="Filter or #id (Ctrl+F)" Margin="12,0,8,0" VerticalAlignment="Center" IsHitTestVisible="False" TextTrimming="CharacterEllipsis"
                                        Foreground="{DynamicResource TextFillColorTertiaryBrush}"
                                        Visibility="{Binding FilterText, Converter={StaticResource InvEmptyToVis}}" />
                         </Grid>

@@ -328,6 +328,9 @@ public partial class ProjectView : UserControl
             OnFocusRequested(first.Item.Id, -1);
             e.Handled = true;
         }
+        // An item's id typed or pasted in: Enter goes to it (#bebbd825).
+        else if (e.Key == Key.Enter && _vm?.GoToItemInFilter() == true)
+            e.Handled = true;
     }
 
     // ───────────── Focus ─────────────
