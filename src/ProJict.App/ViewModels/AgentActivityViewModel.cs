@@ -201,6 +201,9 @@ public sealed partial class AgentActivityViewModel : ObservableObject
     /// <summary>For the Shared machines card: <see cref="MainViewModel.SharedThings"/>.</summary>
     public MainViewModel Main => _main;
 
+    /// <summary>The shared machines' calendar (#68c97287).</summary>
+    [RelayCommand] private void ShowCalendar() => _main.ShowResourceCalendar(null);
+
     /// <summary>Reserves a shared thing no agent has named yet (or by typing its name): yours until you free it.</summary>
     [RelayCommand]
     private void ReserveAnother()

@@ -496,41 +496,96 @@ public sealed partial class MainViewModel : ObservableObject
     public IReadOnlyList<ResourceBarItem> SharedThings { get; private set; } = [];
     public bool HasSharedThings => SharedThings.Count > 0;
 
+    private ResourceActions? _resourceActions;
+    private ResourceActions ResourceActions => _resourceActions ??= new(
+        Reserve: (name, minutes) =>
+        {
+            if (AgentTools.ReserveResource(name, minutes) is { } why) State.StatusText = why;
+        },
+        Queue: (name, minutes) =>
+        {
+            if (AgentTools.QueueForResource(name, minutes) is { } why) State.StatusText = why;
+        },
+        Cancel: (name, id) => AgentTools.CancelBooking(name, id),
+        Free: name => AgentTools.FreeResource(name),
+        ShowCalendar: ShowResourceCalendar);
+
     private void RefreshResources()
     {
         var now = DateTime.Now;
+        var culture = System.Globalization.CultureInfo.CurrentCulture;
         SharedThings = [.. (State.Settings.SharedResources ?? []).OrderBy(r => r.Name, StringComparer.CurrentCultureIgnoreCase).Select(r =>
         {
             var held = ResourceLocks.IsHeld(r, now);
             var yours = held && r.Person && string.Equals(r.HeldBy, State.UserName, StringComparison.OrdinalIgnoreCase);
             var until = ResourceLocks.OpenEnded(r) ? (yours ? "until you free it" : "until they free it") : "until " + ResourceLocks.UntilText(r, now);
+            var queued = ResourceLocks.QueuedFor(r);
+            // What's ahead for you (#68c97287): your place in the queue, your next booked slot.
+            var ahead = (queued != null ? " · you're next" : "") +
+                        (ResourceLocks.NextSlot(r, now) is { } slot
+                            ? $" · booked by you {ResourceLocks.Clock(slot.From!.Value)}–{slot.To!.Value.ToString("t", culture)}"
+                            : "");
             var waiting = r.Waiting.Count > 0 ? $" · {r.Waiting.Count} waiting ({string.Join(", ", r.Waiting)})" : "";
             var who = yours ? "Yours" : $"{r.HeldBy}{(r.For is { } why ? $" ({why})" : "")}";
-            var state = held ? $"{who} {until}{waiting}" : "Free" + waiting;
-            var text = $"“{r.Name}”: " + (yours ? $"reserved by you {until}" : $"{who} {until}") + waiting;
-            return new ResourceBarItem(r.Name, text, state, ResourceLocks.IsOverdue(r, now), held, yours,
-                minutes =>
-                {
-                    if (AgentTools.ReserveResource(r.Name, minutes) is { } why) State.StatusText = why;
-                },
-                () => AgentTools.FreeResource(r.Name));
+            var state = (held ? $"{who} {until}" : "Free") + ahead + waiting;
+            var text = $"“{r.Name}”: " + (yours ? $"reserved by you {until}" : $"{who} {until}") + ahead + waiting;
+            return new ResourceBarItem(r.Name, text, state, ResourceLocks.IsOverdue(r, now), held, yours, queued?.Id, ResourceActions);
         })];
         ResourcesHeld = [.. SharedThings.Where(t => t.IsHeld)];
         OnPropertyChanged(nameof(SharedThings));
         OnPropertyChanged(nameof(HasSharedThings));
         OnPropertyChanged(nameof(ResourcesHeld));
         OnPropertyChanged(nameof(HasResourcesHeld));
-        // Time goes by: the minutes left (and a holder leaving for good) show without anything else happening.
-        if (HasResourcesHeld)
+        // Time goes by: the minutes left (and a holder leaving for good) show without anything else happening, and your
+        // booked slots begin and what you queued for becomes yours (#68c97287).
+        if (HasResourcesHeld || (State.Settings.SharedResources ?? []).Any(r => r.Bookings.Count > 0))
         {
             if (_resourceClock == null)
             {
                 _resourceClock = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
-                _resourceClock.Tick += (_, _) => RefreshResources();
+                _resourceClock.Tick += (_, _) =>
+                {
+                    AgentTools.AdvanceResources();
+                    RefreshResources();
+                };
             }
             _resourceClock.Start();
         }
         else _resourceClock?.Stop();
+    }
+
+    private Views.ResourceCalendarWindow? _resourceCalendar;
+
+    /// <summary>The calendar's view of ProJict's shared machines (#68c97287).</summary>
+    private sealed class CalendarHost(MainViewModel main) : Views.IResourceCalendarHost
+    {
+        public IReadOnlyList<SharedResource> Machines => main.State.Settings.SharedResources ?? [];
+        public string Me => main.State.UserName;
+        public string Status => main.State.StatusText;
+        public event Action? Changed
+        {
+            add => main.AgentTools.ResourcesChanged += value;
+            remove => main.AgentTools.ResourcesChanged -= value;
+        }
+        public string? Reserve(string machine, int? minutes) => main.AgentTools.ReserveResource(machine, minutes);
+        public string? Queue(string machine, int? minutes) => main.AgentTools.QueueForResource(machine, minutes);
+        public string? Book(string machine, DateTime from, DateTime to) => main.AgentTools.BookResource(machine, from, to);
+        public void Cancel(string machine, Guid booking) => main.AgentTools.CancelBooking(machine, booking);
+        public void Free(string machine) => main.AgentTools.FreeResource(machine);
+    }
+
+    /// <summary>The shared machines' calendar (#68c97287): one machine's, or all of them (null).</summary>
+    public void ShowResourceCalendar(string? machine)
+    {
+        if (_resourceCalendar != null)
+        {
+            _resourceCalendar.ShowMachine(machine);
+            _resourceCalendar.Activate();
+            return;
+        }
+        _resourceCalendar = new Views.ResourceCalendarWindow(new CalendarHost(this), machine) { Owner = Application.Current.MainWindow };
+        _resourceCalendar.Closed += (_, _) => _resourceCalendar = null;
+        _resourceCalendar.Show();
     }
 
     /// <summary>Shows the browser it's using, where you can click too (take over); closing it hides it again.</summary>

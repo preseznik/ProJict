@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- **Queue for a shared machine.** When an agent holds one, **Reserve ▾ › Queue for it** makes it yours the moment it's freed, ahead of agents just waiting, for the time you choose. ProJict tells you when it's yours.
+- **Shared machines calendar.** **Calendar** in the Agents view's Shared machines (or **Reserve ▾ › Calendar…**) shows who had, has and will have each machine, by day or week, Outlook-style. Drag over free time to book it ahead: it's yours then, and agents' claims before it end when it begins (they're told). Click your booking to cancel it.
+
 ## 0.1.55 (2026-11-12)
 
 - **Reserve a shared machine yourself.** A shared PC or GPU that agents take turns with can now be yours too: **Reserve ▾** in the bar at the bottom, or in the new **Shared machines** card at the top of the Agents view, makes it yours for a while or until you free it. Agents asking for it wait; one using it is told to stop at once and waits for it, and they're all told when you free it.

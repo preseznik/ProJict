@@ -622,6 +622,14 @@
                     <DockPanel>
                         <Button DockPanel.Dock="Right" Style="{StaticResource SubtleButton}" Content="Reserve another…" Command="{Binding ReserveAnotherCommand}"
                                 Padding="8,3" ToolTip="Reserve a shared machine by its name; it's yours until you free it" />
+                        <!-- Who had, has and will have them, by day or week; book slots ahead (#68c97287). -->
+                        <Button DockPanel.Dock="Right" Style="{StaticResource SubtleButton}" Command="{Binding ShowCalendarCommand}" Padding="8,3" Margin="0,0,4,0"
+                                ToolTip="Who had, has and will have each machine, by day or week; drag over free time to book it" AutomationProperties.Name="Calendar">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Style="{StaticResource Icon}" Text="&#xE787;" FontSize="13" Margin="0,1,6,0" VerticalAlignment="Center" />
+                                <TextBlock Text="Calendar" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
                         <TextBlock Style="{StaticResource Icon}" Text="&#xE977;" FontSize="15" Margin="0,0,10,0" VerticalAlignment="Center" />
                         <TextBlock Text="Shared machines" FontWeight="SemiBold" VerticalAlignment="Center" />
                     </DockPanel>

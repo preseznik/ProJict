@@ -1,0 +1,48 @@
+<Window x:Class="ProJict.App.Views.ResourceCalendarWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Shared machines" Width="1180" Height="800" MinWidth="560" MinHeight="420"
+        WindowStartupLocation="CenterOwner">
+    <!-- Who had, has and will have each shared machine (#68c97287): a day or a week, Outlook-style; drag over free time to book it. -->
+    <Grid Margin="16,12,16,10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <DockPanel>
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                <ComboBox x:Name="MachineBox" Width="230" Margin="0,0,10,0" AutomationProperties.Name="Which machine" SelectionChanged="MachineBox_SelectionChanged" />
+                <ToggleButton x:Name="DayButton" Content="Day" Padding="14,5" Click="DayButton_Click" AutomationProperties.Name="Day view" />
+                <ToggleButton x:Name="WeekButton" Content="Week" Padding="14,5" Margin="4,0,0,0" Click="WeekButton_Click" AutomationProperties.Name="Week view" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <Button Content="Today" Padding="12,5" Click="Today_Click" />
+                <Button Style="{StaticResource SubtleButton}" Padding="8,5" Margin="8,0,0,0" Click="Back_Click" AutomationProperties.Name="Earlier" ToolTip="Earlier">
+                    <TextBlock Style="{StaticResource Icon}" Text="&#xE76B;" />
+                </Button>
+                <Button Style="{StaticResource SubtleButton}" Padding="8,5" Click="Forward_Click" AutomationProperties.Name="Later" ToolTip="Later">
+                    <TextBlock Style="{StaticResource Icon}" Text="&#xE76C;" />
+                </Button>
+                <TextBlock x:Name="RangeText" FontSize="19" FontWeight="SemiBold" Margin="12,0,0,0" VerticalAlignment="Center" />
+            </StackPanel>
+        </DockPanel>
+
+        <WrapPanel x:Name="Legend" Grid.Row="1" Margin="0,10,0,6" />
+
+        <!-- The days (and machines) above the grid; built with it, so the columns line up. -->
+        <Canvas x:Name="Header" Grid.Row="2" Height="44" ClipToBounds="True" />
+
+        <ScrollViewer x:Name="BodyScroll" Grid.Row="3" VerticalScrollBarVisibility="Visible" HorizontalScrollBarVisibility="Disabled"
+                      BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}" BorderThickness="0,1,0,0">
+            <Canvas x:Name="Body" Background="Transparent" Cursor="Cross"
+                    MouseLeftButtonDown="Body_MouseLeftButtonDown" MouseMove="Body_MouseMove" MouseLeftButtonUp="Body_MouseLeftButtonUp" />
+        </ScrollViewer>
+
+        <TextBlock x:Name="Status" Grid.Row="4" Style="{StaticResource MutedText}" Margin="0,8,0,0" TextWrapping="Wrap"
+                   Text="Drag over free time to book it (it's yours then, and agents' claims before it end when it begins). Click your own booking to cancel it." />
+    </Grid>
+</Window>

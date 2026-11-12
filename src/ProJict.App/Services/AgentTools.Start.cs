@@ -203,7 +203,8 @@ public sealed partial class AgentTools
             "the name others use (list_resources shows them), for about how long you need it; claim it again to extend it, and release_resource " +
             "as soon as you're done. If another agent has it, you're told who, what for and until when, and you're told when it's free: don't " +
             "use it meanwhile. The user may reserve one too (in ProJict, perhaps until they free it), even while you hold it: then you're told " +
-            "to stop using it at once, and you're told when it's free again.",
+            "to stop using it at once, and you're told when it's free again. They can queue for one (it's theirs the moment it's freed) or book " +
+            "a slot ahead: your claim then ends when their slot begins, so plan to be done by then (list_resources shows their bookings).",
         ["helpers"] =
             "A lead agent whose subagents share its connection gives each its own session with start_session (with the subagent's name): every " +
             "call made as that subagent passes the token it returns as \"session\", so its check-outs, status and private messages are its own. " +

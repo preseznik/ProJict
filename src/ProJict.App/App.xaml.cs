@@ -103,6 +103,11 @@ public partial class App : Application
                 notice.Open?.Invoke();
             }),
             () => MainWindow is { IsVisible: true, IsActive: true } window && window.WindowState != WindowState.Minimized);
+        // A shared machine you queued for or booked is yours now (#68c97287): said even while ProJict is in front.
+        MainVm.AgentTools.ReservationStarted += (title, text) =>
+        {
+            if (State.AppSettings.Notifications.Enabled) _tray?.ShowNotice(title, text, ShowMainWindow);
+        };
 
         _agents = new AgentPipeServer(AgentPipeServer.PipeName(dataRoot), MainVm.AgentTools, UpdateService.CurrentVersionText, MainVm.AgentTools.WatchOverPipeAsync,
             MainVm.AgentTools.ApproveOverPipeAsync);
