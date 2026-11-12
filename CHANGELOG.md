@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.57 (2026-11-12)
 
 - **The calendar is always a click away.** A calendar button at the top of the sidebar, next to Back and Forward (or Ctrl+Shift+M), opens the shared machines calendar from anywhere, not only while something is held.
 - **Reservations like meetings.** In the shared machines calendar, **New reservation** (or right-click on free time) opens a dialog to set the machine, when it starts and ends (date and time, or all day) and what for. Right-click or double-click your reservation to edit it, move it to another machine or cancel it; for what you hold now, change when it ends or keep it until you free it.
