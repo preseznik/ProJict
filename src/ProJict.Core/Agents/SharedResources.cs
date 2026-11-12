@@ -27,8 +27,13 @@ public sealed class SharedResource
     /// <summary>Who held it before it was freed or taken over, and until when they'd said, for telling them.</summary>
     public string? LastHolder { get; set; }
     public DateTime? LastUntil { get; set; }
-    /// <summary>The holder now took it over from <see cref="LastHolder"/>, whose time had run out.</summary>
+    /// <summary>The holder now took it over from <see cref="LastHolder"/>, whose time had run out (or the user took it, #6f04e17e).</summary>
     public bool TakenOver { get; set; }
+    /// <summary>
+    /// Reserved by the user in ProJict, not by an agent (#6f04e17e): agents wait for it like for any other holder, and it
+    /// isn't let go when an agent disconnects. With no end time (<see cref="ResourceLocks.OpenEnded"/>) it's never overdue.
+    /// </summary>
+    public bool Person { get; set; }
 }
 
 /// <summary>What became of a claim.</summary>
@@ -98,6 +103,7 @@ public static class ResourceLocks
         }
         r.TakenOver = before != null;
         r.HeldBy = agent;
+        r.Person = false;
         r.For = string.IsNullOrWhiteSpace(purpose) ? null : purpose.Trim();
         r.Since = now;
         r.Until = now.AddMinutes(minutes);
@@ -105,6 +111,52 @@ public static class ResourceLocks
         r.Waiting.RemoveAll(w => string.Equals(w, agent, StringComparison.OrdinalIgnoreCase));
         return (before == null ? ClaimOutcome.Taken : ClaimOutcome.TakenOver, r, before);
     }
+
+    /// <summary>
+    /// The user reserves it themselves (#6f04e17e), for <paramref name="minutes"/> or, when null, until they free it. Free or
+    /// not, it's theirs at once: an agent holding it is taken off it (and waits for it, so it's told when it's free again).
+    /// Agents asking for it meanwhile wait, as for any holder. Returns the outcome and the agent that held it before.
+    /// </summary>
+    public static (ClaimOutcome Outcome, SharedResource Resource, string? Before) Reserve(WorkspaceSettings settings, string name, string person, string? purpose,
+        int? minutes, DateTime now)
+    {
+        if (Problem(name, purpose) is { } problem) throw new ArgumentException(problem);
+        var all = Of(settings);
+        Forget(all, now);
+        var r = Find(settings, name);
+        if (r == null) all.Add(r = new SharedResource { Name = name.Trim() });
+        var until = minutes is { } m ? now.AddMinutes(Math.Clamp(m, MinMinutes, MaxMinutes)) : DateTime.MaxValue;
+        if (string.Equals(r.HeldBy, person, StringComparison.OrdinalIgnoreCase) && IsHeld(r, now))
+        {
+            r.Until = until;
+            r.Person = true;
+            if (!string.IsNullOrWhiteSpace(purpose)) r.For = purpose.Trim();
+            return (ClaimOutcome.Extended, r, null);
+        }
+        var before = IsHeld(r, now) ? r.HeldBy : null;
+        if (before != null)
+        {
+            r.LastHolder = before;
+            r.LastUntil = r.Until;
+            if (!r.Waiting.Contains(before, StringComparer.OrdinalIgnoreCase)) r.Waiting.Insert(0, before);
+        }
+        r.TakenOver = before != null;
+        r.HeldBy = person;
+        r.Person = true;
+        r.For = string.IsNullOrWhiteSpace(purpose) ? null : purpose.Trim();
+        r.Since = now;
+        r.Until = until;
+        r.HolderLeftAt = null;
+        r.Waiting.RemoveAll(w => string.Equals(w, person, StringComparison.OrdinalIgnoreCase));
+        return (before == null ? ClaimOutcome.Taken : ClaimOutcome.TakenOver, r, before);
+    }
+
+    /// <summary>Reserved with no end time: it's held until its holder frees it, and never overdue.</summary>
+    public static bool OpenEnded(SharedResource r) => r.Until == DateTime.MaxValue;
+
+    /// <summary>"until 13:35 (8 min left)" (with "about" when <paramref name="about"/>), or "until they free it".</summary>
+    public static string UntilPhrase(SharedResource r, DateTime now, bool about = false) =>
+        OpenEnded(r) ? "until they free it" : "until " + (about ? "about " : "") + UntilText(r, now);
 
     /// <summary>The agent (or the user, <paramref name="by"/>) frees it; null when the agent doesn't hold it.</summary>
     public static SharedResource? Release(WorkspaceSettings settings, string name, string? holder, string by, DateTime now)
@@ -119,7 +171,7 @@ public static class ResourceLocks
     public static void Left(WorkspaceSettings settings, string agent, DateTime now)
     {
         foreach (var r in settings.SharedResources ?? [])
-            if (string.Equals(r.HeldBy, agent, StringComparison.OrdinalIgnoreCase) && r.HolderLeftAt == null) r.HolderLeftAt = now;
+            if (!r.Person && string.Equals(r.HeldBy, agent, StringComparison.OrdinalIgnoreCase) && r.HolderLeftAt == null) r.HolderLeftAt = now;
     }
 
     /// <summary>The agent is back: what it held is still its own.</summary>
@@ -144,6 +196,7 @@ public static class ResourceLocks
         r.FreedBy = by;
         r.FreedAt = at;
         r.HeldBy = null;
+        r.Person = false;
         r.For = null;
         r.HolderLeftAt = null;
     }

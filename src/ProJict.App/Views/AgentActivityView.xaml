@@ -616,6 +616,53 @@
                 </DockPanel>
             </Border>
 
+            <!-- Shared machines (#6f04e17e): who has which, and reserving one yourself so agents wait for it. -->
+            <Border x:Name="SharedMachines" Style="{StaticResource Card}" Padding="18,12" Margin="0,16,0,0">
+                <StackPanel>
+                    <DockPanel>
+                        <Button DockPanel.Dock="Right" Style="{StaticResource SubtleButton}" Content="Reserve another…" Command="{Binding ReserveAnotherCommand}"
+                                Padding="8,3" ToolTip="Reserve a shared machine by its name; it's yours until you free it" />
+                        <TextBlock Style="{StaticResource Icon}" Text="&#xE977;" FontSize="15" Margin="0,0,10,0" VerticalAlignment="Center" />
+                        <TextBlock Text="Shared machines" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    </DockPanel>
+                    <TextBlock Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,2,0,4"
+                               Text="Things only one agent should use at a time, such as a test PC or a GPU. Reserve one and agents wait until you free it; an agent using it is told to stop." />
+                    <TextBlock Style="{StaticResource MutedText}" Text="None yet: agents name one when they first claim it, or reserve one here."
+                               Visibility="{Binding Main.HasSharedThings, Converter={StaticResource InvBoolToVis}}" />
+                    <ItemsControl ItemsSource="{Binding Main.SharedThings}" Focusable="False" AutomationProperties.Name="Shared machines">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <DockPanel Margin="0,3">
+                                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Margin="10,0,0,0">
+                                        <Button Style="{StaticResource SubtleButton}" Padding="8,3" Click="Reserve_Click" ToolTip="{Binding ReserveToolTip}"
+                                                Visibility="{Binding CanReserve, Converter={StaticResource BoolToVis}}" AutomationProperties.Name="Reserve">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="Reserve" />
+                                                <TextBlock Style="{StaticResource Icon}" Text="&#xE70D;" FontSize="9" Margin="6,2,0,0" VerticalAlignment="Center" />
+                                            </StackPanel>
+                                        </Button>
+                                        <Button Style="{StaticResource SubtleButton}" Content="Free" Command="{Binding FreeCommand}" Padding="8,3" Margin="4,0,0,0"
+                                                Visibility="{Binding IsHeld, Converter={StaticResource BoolToVis}}" AutomationProperties.Name="Free"
+                                                ToolTip="Lets it go: its holder is told, and the next one waiting may take it" />
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                    <TextBlock x:Name="SharedState" Text="{Binding State}" Style="{StaticResource MutedText}" Margin="10,0,0,0" VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis" ToolTip="{Binding Text}" />
+                                </DockPanel>
+                                <DataTemplate.Triggers>
+                                    <DataTrigger Binding="{Binding IsYours}" Value="True">
+                                        <Setter TargetName="SharedState" Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding IsOverdue}" Value="True">
+                                        <Setter TargetName="SharedState" Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                                    </DataTrigger>
+                                </DataTemplate.Triggers>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+
             <!-- What the view shows; folds open under the header. -->
             <Border x:Name="SettingsPanel" Style="{StaticResource Card}" Padding="18,14" Margin="0,16,0,0"
                     Visibility="{Binding IsSettingsOpen, Converter={StaticResource BoolToVis}}">

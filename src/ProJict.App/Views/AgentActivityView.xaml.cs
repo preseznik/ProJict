@@ -23,6 +23,9 @@ public partial class AgentActivityView : UserControl
     private AgentCardViewModel? _flashing;
     private readonly DispatcherTimer _flash;
 
+    /// <summary>Reserve ▾ on a shared machine (#6f04e17e): for how long.</summary>
+    private void Reserve_Click(object sender, RoutedEventArgs e) => ReserveMenu.Open(sender);
+
     public AgentActivityView()
     {
         InitializeComponent();

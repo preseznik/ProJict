@@ -7,6 +7,9 @@ namespace ProJict.App;
 
 public partial class MainWindow : Window
 {
+    /// <summary>Reserve ▾ on a shared thing in the bar at the bottom (#6f04e17e): for how long.</summary>
+    private void Reserve_Click(object sender, RoutedEventArgs e) => Views.ReserveMenu.Open(sender);
+
     public MainWindow(MainViewModel viewModel)
     {
         InitializeComponent();

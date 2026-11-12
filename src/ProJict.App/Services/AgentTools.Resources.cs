@@ -21,7 +21,8 @@ public sealed partial class AgentTools
     {
         Add("claim_resource", "Claim a shared resource",
             "Takes a shared thing that only one agent should use at a time (a test PC, a GPU, a game install, a device), by name, for about how long you need " +
-            "it; every agent in every project sees who has it. Claim it again to extend it. If another agent has it, you're told who, what for and until when, " +
+            "it; every agent in every project sees who has it. Claim it again to extend it. If another agent has it, or the user reserved it in ProJict " +
+            "(maybe until they free it; they may also take it from you, and you're told to stop), you're told who, what for and until when, " +
             "and you're told when it's free (don't use it meanwhile). Release it with release_resource as soon as you're done. Use the same name others use: " +
             "list_resources shows them.",
             Schema(("name", "string", $"The shared thing, e.g. \"PC4080S game + GPU\" (up to {ResourceLocks.MaxName} characters).", true),
@@ -46,8 +47,8 @@ public sealed partial class AgentTools
         var (outcome, r, before) = ResourceLocks.Claim(_state.Settings, name, session.AgentName, purpose, args.Int("minutes") ?? ResourceLocks.DefaultMinutes, now);
         ResourcesTouched();
         if (outcome == ClaimOutcome.Busy)
-            throw new McpToolException($"{r.HeldBy} has “{r.Name}”" + (r.For is { } why ? $" for {why}" : "") +
-                                       $" since {Clock(r.Since)}, until about {ResourceLocks.UntilText(r, now)}. You're waiting for it " +
+            throw new McpToolException($"{r.HeldBy} has “{r.Name}”" + (r.Person ? " (reserved in ProJict)" : "") + (r.For is { } why ? $" for {why}" : "") +
+                                       $" since {Clock(r.Since)}, {ResourceLocks.UntilPhrase(r, now, about: true)}. You're waiting for it " +
                                        $"({Ordinal(r.Waiting.FindIndex(w => string.Equals(w, session.AgentName, StringComparison.OrdinalIgnoreCase)) + 1)} in line): " +
                                        "you'll be told when it's free. Don't use it meanwhile; if it's urgent, ask " + r.HeldBy + " in Chat.", ToolProblem.Conflict);
         var json = new JsonObject
@@ -92,9 +93,10 @@ public sealed partial class AgentTools
             {
                 ["name"] = r.Name,
                 ["heldBy"] = ResourceLocks.IsHeld(r, now) ? r.HeldBy : null,
+                ["reservedByUser"] = ResourceLocks.IsHeld(r, now) && r.Person ? true : null,
                 ["for"] = ResourceLocks.IsHeld(r, now) ? r.For : null,
                 ["since"] = ResourceLocks.IsHeld(r, now) ? Clock(r.Since) : null,
-                ["until"] = ResourceLocks.IsHeld(r, now) ? ResourceLocks.UntilText(r, now) : null,
+                ["until"] = !ResourceLocks.IsHeld(r, now) ? null : ResourceLocks.OpenEnded(r) ? "they free it" : ResourceLocks.UntilText(r, now),
                 ["overdue"] = ResourceLocks.IsOverdue(r, now) ? true : null,
                 ["free"] = ResourceLocks.IsHeld(r, now) ? null : true,
                 ["waiting"] = r.Waiting.Count > 0 ? new JsonArray(r.Waiting.Select(w => (JsonNode)w).ToArray()) : null,
@@ -103,14 +105,32 @@ public sealed partial class AgentTools
         });
     }
 
-    /// <summary>The user frees a shared thing from the bar; its holder is told.</summary>
+    /// <summary>The user frees a shared thing from the bar; its holder is told (unless it was the user's own).</summary>
     public void FreeResource(string name)
     {
         if (ResourceLocks.Release(_state.Settings, name, null, _state.UserName, DateTime.Now) is { } r)
         {
             ResourcesTouched();
-            _state.StatusText = $"Freed “{r.Name}”: {r.LastHolder} is told.";
+            var waiting = r.Waiting.Count > 0 ? $" {string.Join(", ", r.Waiting)} {(r.Waiting.Count == 1 ? "is" : "are")} told it's free." : "";
+            _state.StatusText = string.Equals(r.LastHolder, _state.UserName, StringComparison.OrdinalIgnoreCase)
+                ? $"Freed “{r.Name}”.{waiting}"
+                : $"Freed “{r.Name}”: {r.LastHolder} is told.{waiting}";
         }
+    }
+
+    /// <summary>
+    /// The user reserves a shared thing themselves (#6f04e17e), for <paramref name="minutes"/> or until they free it (null):
+    /// agents wait for it, and one using it now is told to stop (and waits for it). Null when it went, else why not.
+    /// </summary>
+    public string? ReserveResource(string name, int? minutes)
+    {
+        if (ResourceLocks.Problem(name, null) is { } problem) return problem;
+        var now = DateTime.Now;
+        var (outcome, r, before) = ResourceLocks.Reserve(_state.Settings, name, _state.UserName, null, minutes, now);
+        ResourcesTouched();
+        _state.StatusText = $"“{r.Name}” is yours {(ResourceLocks.OpenEnded(r) ? "until you free it" : "until " + Clock(r.Until))}" +
+                            (outcome == ClaimOutcome.TakenOver ? $": {before} is told to stop using it, and waits for it." : ": agents wait for it.");
+        return null;
     }
 
     private void ResourcesTouched()
@@ -150,7 +170,11 @@ public sealed partial class AgentTools
                 yield return ($"resource-overdue:{r.Name}:{r.Until.Ticks}",
                     $"Your time on “{r.Name}” ran out at {Clock(r.Until)}: claim_resource it again to keep it, or release_resource it if you're done. " +
                     "Others may take it over now.");
-            if (r.TakenOver && Is(r.LastHolder) && r.HeldBy != null && r.LastUntil is { } until)
+            if (r.TakenOver && Is(r.LastHolder) && r.HeldBy != null && r.Person)
+                yield return ($"resource-taken:{r.Name}:{r.Since.Ticks}",
+                    $"{r.HeldBy} reserved “{r.Name}” for themselves at {Clock(r.Since)}, {ResourceLocks.UntilPhrase(r, now)}: stop using it now (finish " +
+                    "or stop what runs on it). You're waiting for it and will be told when it's free.");
+            else if (r.TakenOver && Is(r.LastHolder) && r.HeldBy != null && r.LastUntil is { } until)
                 yield return ($"resource-taken:{r.Name}:{r.Since.Ticks}",
                     $"{r.HeldBy} took over “{r.Name}” at {Clock(r.Since)}: your time on it had run out at {Clock(until)}. Don't use it any more; claim it again to wait for it.");
             if (!r.TakenOver && Is(r.LastHolder) && r.FreedAt is { } freed && r.FreedBy is { } freer && !Is(freer))

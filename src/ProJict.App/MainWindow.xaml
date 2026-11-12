@@ -444,7 +444,7 @@
             </DockPanel>
         </Border>
 
-        <!-- Shared things agents hold (claim_resource): who has what, until when; Free lets it go (its holder is told) -->
+        <!-- Shared things agents (or you) hold (claim_resource): who has what, until when; Free lets it go (its holder is told), Reserve takes it -->
         <Border x:Name="ResourceBar" Padding="14,5" Background="{DynamicResource SubtleFillColorSecondaryBrush}"
                 BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}" BorderThickness="0,1,0,0"
                 Visibility="{Binding HasResourcesHeld, Converter={StaticResource BoolToVis}}">
@@ -455,6 +455,15 @@
                             <TextBlock Style="{StaticResource Icon}" Text="&#xE72E;" Margin="0,0,10,0" VerticalAlignment="Center" />
                             <Button DockPanel.Dock="Right" Style="{StaticResource SubtleButton}" Content="Free" Command="{Binding FreeCommand}" Padding="10,2"
                                     ToolTip="Lets it go: its holder is told, and the next one waiting may take it" AutomationProperties.Name="Free" />
+                            <!-- Take it for yourself (#6f04e17e): for how long, or until you free it. -->
+                            <Button DockPanel.Dock="Right" Style="{StaticResource SubtleButton}" Padding="10,2" Margin="0,0,4,0" Click="Reserve_Click"
+                                    ToolTip="{Binding ReserveToolTip}" AutomationProperties.Name="Reserve"
+                                    Visibility="{Binding CanReserve, Converter={StaticResource BoolToVis}}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="Reserve" />
+                                    <TextBlock Style="{StaticResource Icon}" Text="&#xE70D;" FontSize="9" Margin="6,2,0,0" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
                             <TextBlock x:Name="ResourceText" Text="{Binding Text}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{Binding Text}" />
                         </DockPanel>
                         <DataTemplate.Triggers>

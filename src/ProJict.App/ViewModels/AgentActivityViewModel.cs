@@ -196,6 +196,21 @@ public sealed partial class AgentActivityViewModel : ObservableObject
     /// <summary>Double-click the divider: the usual split again.</summary>
     [RelayCommand] private void ResetDivider() => OfficeShare = AgentsViewSettings.DefaultOfficeShare;
 
+    // ───────────── Shared machines (#6f04e17e) ─────────────
+
+    /// <summary>For the Shared machines card: <see cref="MainViewModel.SharedThings"/>.</summary>
+    public MainViewModel Main => _main;
+
+    /// <summary>Reserves a shared thing no agent has named yet (or by typing its name): yours until you free it.</summary>
+    [RelayCommand]
+    private void ReserveAnother()
+    {
+        var name = Views.InputDialog.Ask(System.Windows.Application.Current.MainWindow!, "Reserve a shared machine",
+            "Its name, as agents call it (e.g. PC4080S game + GPU). It's yours until you free it: agents wait for it.", "");
+        if (string.IsNullOrWhiteSpace(name)) return;
+        if (_main.AgentTools.ReserveResource(name, null) is { } why) _state.StatusText = why;
+    }
+
     // ───────────── All agents ─────────────
 
     /// <summary>Every agent: the ones connected now, then the ones seen here before, most recent first.</summary>

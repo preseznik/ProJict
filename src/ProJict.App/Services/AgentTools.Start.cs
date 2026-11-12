@@ -202,7 +202,8 @@ public sealed partial class AgentTools
             "Shared things only one agent should use at a time (a test PC, a GPU, a game install, a device) are claimed with claim_resource, by " +
             "the name others use (list_resources shows them), for about how long you need it; claim it again to extend it, and release_resource " +
             "as soon as you're done. If another agent has it, you're told who, what for and until when, and you're told when it's free: don't " +
-            "use it meanwhile.",
+            "use it meanwhile. The user may reserve one too (in ProJict, perhaps until they free it), even while you hold it: then you're told " +
+            "to stop using it at once, and you're told when it's free again.",
         ["helpers"] =
             "A lead agent whose subagents share its connection gives each its own session with start_session (with the subagent's name): every " +
             "call made as that subagent passes the token it returns as \"session\", so its check-outs, status and private messages are its own. " +

@@ -492,13 +492,32 @@ public sealed partial class MainViewModel : ObservableObject
     public bool HasResourcesHeld => ResourcesHeld.Count > 0;
     private System.Windows.Threading.DispatcherTimer? _resourceClock;
 
+    /// <summary>Every shared thing, free or held, for the Agents view's Shared machines, where you can reserve one (#6f04e17e).</summary>
+    public IReadOnlyList<ResourceBarItem> SharedThings { get; private set; } = [];
+    public bool HasSharedThings => SharedThings.Count > 0;
+
     private void RefreshResources()
     {
         var now = DateTime.Now;
-        ResourcesHeld = [.. (State.Settings.SharedResources ?? []).Where(r => ResourceLocks.IsHeld(r, now)).Select(r => new ResourceBarItem(r.Name,
-            $"“{r.Name}”: {r.HeldBy}" + (r.For is { } why ? $" ({why})" : "") + $" until {ResourceLocks.UntilText(r, now)}" +
-            (r.Waiting.Count > 0 ? $" · {r.Waiting.Count} waiting" : ""),
-            ResourceLocks.IsOverdue(r, now), () => AgentTools.FreeResource(r.Name)))];
+        SharedThings = [.. (State.Settings.SharedResources ?? []).OrderBy(r => r.Name, StringComparer.CurrentCultureIgnoreCase).Select(r =>
+        {
+            var held = ResourceLocks.IsHeld(r, now);
+            var yours = held && r.Person && string.Equals(r.HeldBy, State.UserName, StringComparison.OrdinalIgnoreCase);
+            var until = ResourceLocks.OpenEnded(r) ? (yours ? "until you free it" : "until they free it") : "until " + ResourceLocks.UntilText(r, now);
+            var waiting = r.Waiting.Count > 0 ? $" · {r.Waiting.Count} waiting ({string.Join(", ", r.Waiting)})" : "";
+            var who = yours ? "Yours" : $"{r.HeldBy}{(r.For is { } why ? $" ({why})" : "")}";
+            var state = held ? $"{who} {until}{waiting}" : "Free" + waiting;
+            var text = $"“{r.Name}”: " + (yours ? $"reserved by you {until}" : $"{who} {until}") + waiting;
+            return new ResourceBarItem(r.Name, text, state, ResourceLocks.IsOverdue(r, now), held, yours,
+                minutes =>
+                {
+                    if (AgentTools.ReserveResource(r.Name, minutes) is { } why) State.StatusText = why;
+                },
+                () => AgentTools.FreeResource(r.Name));
+        })];
+        ResourcesHeld = [.. SharedThings.Where(t => t.IsHeld)];
+        OnPropertyChanged(nameof(SharedThings));
+        OnPropertyChanged(nameof(HasSharedThings));
         OnPropertyChanged(nameof(ResourcesHeld));
         OnPropertyChanged(nameof(HasResourcesHeld));
         // Time goes by: the minutes left (and a holder leaving for good) show without anything else happening.

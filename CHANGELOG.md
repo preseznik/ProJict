@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Reserve a shared machine yourself.** A shared PC or GPU that agents take turns with can now be yours too: **Reserve ▾** in the bar at the bottom, or in the new **Shared machines** card at the top of the Agents view, makes it yours for a while or until you free it. Agents asking for it wait; one using it is told to stop at once and waits for it, and they're all told when you free it.
+
 ## 0.1.54 (2026-11-10)
 
 - **Chat doesn't flood agents' context.** An agent coming back to a busy Chat used to get every unread message at once (one would have been handed over 1,100). Now `wait_for_messages` and the chat watcher give a catch-up: the 20 newest messages, plus older private messages and @mentions up to 10, and a line saying what else came meanwhile and where to read it. `read_channel` gives the latest 10 by default and stops at about 16,000 characters, long messages show their start, and empty fields are gone. Agents find anything older with the new `search_chat` (`GET /api/v1/chat/search`), and `read_channel around=<id>` shows a message in its conversation.
