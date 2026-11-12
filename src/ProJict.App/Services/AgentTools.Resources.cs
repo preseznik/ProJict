@@ -186,16 +186,61 @@ public sealed partial class AgentTools
     /// The user books a slot on a shared thing ahead of time (#68c97287): it's theirs then (an agent on it is told to
     /// stop), and agents' claims before it end when it begins. Null when it's booked, else why not.
     /// </summary>
-    public string? BookResource(string name, DateTime from, DateTime to)
+    public string? BookResource(string name, DateTime from, DateTime to, string? purpose = null)
     {
         try
         {
-            var booking = ResourceLocks.Book(_state.Settings, name, _state.UserName, from, to, null, DateTime.Now);
+            var booking = ResourceLocks.Book(_state.Settings, name, _state.UserName, from, to, purpose, DateTime.Now);
             if (booking == null) AdvanceResources();
             ResourcesTouched();
             _state.StatusText = booking != null
                 ? $"Booked “{name}” from {Clock(from)} to {Clock(to)}: agents' claims before it end when it begins."
                 : $"“{name}” is yours until {Clock(to)}.";
+            return null;
+        }
+        catch (ArgumentException ex)
+        {
+            return ex.Message;
+        }
+    }
+
+    /// <summary>
+    /// The user edits a booked slot (#d27b8c7b): new times and note, on the same machine or another (booked there, then
+    /// let go here). Null when it's done, else why not (nothing changed then).
+    /// </summary>
+    public string? RebookResource(string name, Guid booking, string newName, DateTime from, DateTime to, string? purpose)
+    {
+        try
+        {
+            var now = DateTime.Now;
+            if (string.Equals(name.Trim(), newName.Trim(), StringComparison.OrdinalIgnoreCase))
+            {
+                if (!ResourceLocks.Rebook(_state.Settings, name, booking, from, to, purpose, now)) return "That booking isn't there any more.";
+            }
+            else
+            {
+                ResourceLocks.Book(_state.Settings, newName, _state.UserName, from, to, purpose, now);
+                ResourceLocks.Cancel(_state.Settings, name, booking);
+            }
+            AdvanceResources();
+            ResourcesTouched();
+            _state.StatusText = $"“{newName.Trim()}” is booked for you from {Clock(from)} to {Clock(to)}.";
+            return null;
+        }
+        catch (ArgumentException ex)
+        {
+            return ex.Message;
+        }
+    }
+
+    /// <summary>The user changes when their hold ends (#d27b8c7b): a time ahead, or until they free it (null). Null when done, else why not.</summary>
+    public string? SetHoldEnd(string name, DateTime? until, string? purpose)
+    {
+        try
+        {
+            if (!ResourceLocks.SetHoldEnd(_state.Settings, name, _state.UserName, until, purpose, DateTime.Now)) return $"“{name}” isn't yours now.";
+            ResourcesTouched();
+            _state.StatusText = $"“{name}” is yours {(until is { } end ? "until " + Clock(end) : "until you free it")}.";
             return null;
         }
         catch (ArgumentException ex)

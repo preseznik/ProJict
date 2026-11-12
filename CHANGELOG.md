@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- **Reservations like meetings.** In the shared machines calendar, **New reservation** (or right-click on free time) opens a dialog to set the machine, when it starts and ends (date and time, or all day) and what for. Right-click or double-click your reservation to edit it, move it to another machine or cancel it; for what you hold now, change when it ends or keep it until you free it.
+- **The day view runs on past midnight.** A late evening isn't cut off at the bottom: the next day follows below, with its name at midnight.
+
 ## 0.1.56 (2026-11-12)
 
 - **Queue for a shared machine.** When an agent holds one, **Reserve ▾ › Queue for it** makes it yours the moment it's freed, ahead of agents just waiting, for the time you choose. ProJict tells you when it's yours.

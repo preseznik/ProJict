@@ -20,6 +20,13 @@
                 <ToggleButton x:Name="WeekButton" Content="Week" Padding="14,5" Margin="4,0,0,0" Click="WeekButton_Click" AutomationProperties.Name="Week view" />
             </StackPanel>
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <!-- A reservation set in a dialog, like a new meeting in Outlook (#d27b8c7b). -->
+                <Button Style="{StaticResource AccentButtonStyle}" Padding="12,5" Margin="0,0,8,0" Click="NewReservation_Click" AutomationProperties.Name="New reservation">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource Icon}" Text="&#xE710;" FontSize="12" Margin="0,1,6,0" VerticalAlignment="Center" />
+                        <TextBlock Text="New reservation" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
                 <Button Content="Today" Padding="12,5" Click="Today_Click" />
                 <Button Style="{StaticResource SubtleButton}" Padding="8,5" Margin="8,0,0,0" Click="Back_Click" AutomationProperties.Name="Earlier" ToolTip="Earlier">
                     <TextBlock Style="{StaticResource Icon}" Text="&#xE76B;" />
@@ -39,10 +46,11 @@
         <ScrollViewer x:Name="BodyScroll" Grid.Row="3" VerticalScrollBarVisibility="Visible" HorizontalScrollBarVisibility="Disabled"
                       BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}" BorderThickness="0,1,0,0">
             <Canvas x:Name="Body" Background="Transparent" Cursor="Cross"
-                    MouseLeftButtonDown="Body_MouseLeftButtonDown" MouseMove="Body_MouseMove" MouseLeftButtonUp="Body_MouseLeftButtonUp" />
+                    MouseLeftButtonDown="Body_MouseLeftButtonDown" MouseMove="Body_MouseMove" MouseLeftButtonUp="Body_MouseLeftButtonUp"
+                    MouseRightButtonUp="Body_MouseRightButtonUp" />
         </ScrollViewer>
 
         <TextBlock x:Name="Status" Grid.Row="4" Style="{StaticResource MutedText}" Margin="0,8,0,0" TextWrapping="Wrap"
-                   Text="Drag over free time to book it (it's yours then, and agents' claims before it end when it begins). Click your own booking to cancel it." />
+                   Text="Drag over free time to book it, or right-click › New reservation (it's yours then, and agents' claims before it end when it begins). Right-click or double-click your reservation to edit it." />
     </Grid>
 </Window>

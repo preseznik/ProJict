@@ -569,7 +569,10 @@ public sealed partial class MainViewModel : ObservableObject
         }
         public string? Reserve(string machine, int? minutes) => main.AgentTools.ReserveResource(machine, minutes);
         public string? Queue(string machine, int? minutes) => main.AgentTools.QueueForResource(machine, minutes);
-        public string? Book(string machine, DateTime from, DateTime to) => main.AgentTools.BookResource(machine, from, to);
+        public string? Book(string machine, DateTime from, DateTime to, string? purpose) => main.AgentTools.BookResource(machine, from, to, purpose);
+        public string? Rebook(string machine, Guid booking, string newMachine, DateTime from, DateTime to, string? purpose) =>
+            main.AgentTools.RebookResource(machine, booking, newMachine, from, to, purpose);
+        public string? SetHoldEnd(string machine, DateTime? until, string? purpose) => main.AgentTools.SetHoldEnd(machine, until, purpose);
         public void Cancel(string machine, Guid booking) => main.AgentTools.CancelBooking(machine, booking);
         public void Free(string machine) => main.AgentTools.FreeResource(machine);
     }

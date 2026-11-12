@@ -24,7 +24,11 @@ public interface IResourceCalendarHost
     /// <summary>Each returns why it couldn't be done, or null.</summary>
     string? Reserve(string machine, int? minutes);
     string? Queue(string machine, int? minutes);
-    string? Book(string machine, DateTime from, DateTime to);
+    string? Book(string machine, DateTime from, DateTime to, string? purpose);
+    /// <summary>A booked slot moved: new times and note, on the same machine or another (#d27b8c7b).</summary>
+    string? Rebook(string machine, Guid booking, string newMachine, DateTime from, DateTime to, string? purpose);
+    /// <summary>When what you hold now ends: a time, or until you free it (null) (#d27b8c7b).</summary>
+    string? SetHoldEnd(string machine, DateTime? until, string? purpose);
     void Cancel(string machine, Guid booking);
     void Free(string machine);
 }
@@ -33,6 +37,8 @@ public interface IResourceCalendarHost
 /// The shared machines' calendar (#68c97287), Outlook/Teams style: a day or a week, the hours down the side, a column per
 /// day (split into a lane per machine when all show). Who held each (the past), who holds it now, your place in the queue
 /// and your booked slots. Drag over free time to book it; click your own booking to cancel it, or what you hold to free it.
+/// The day view runs on into the next day, so late evenings aren't cut off at midnight; right-click makes or edits a
+/// reservation in a dialog, Outlook-style (#d27b8c7b).
 /// </summary>
 public partial class ResourceCalendarWindow : Window
 {
@@ -100,6 +106,12 @@ public partial class ResourceCalendarWindow : Window
 
     private int Days => _week ? 7 : 1;
 
+    /// <summary>A column's hours: a day in the week view; in the day view the day and the next, so a late evening runs on past midnight.</summary>
+    private int HoursShown => _week ? 24 : 48;
+
+    /// <summary>The day a column starts on.</summary>
+    private DateTime ColumnDay(int column, int lanes) => FirstDay.AddDays(column / Math.Max(1, lanes));
+
     private List<string> Lanes(List<SharedResource> machines) =>
         _machine != null && machines.Any(m => string.Equals(m.Name, _machine, StringComparison.OrdinalIgnoreCase))
             ? [machines.First(m => string.Equals(m.Name, _machine, StringComparison.OrdinalIgnoreCase)).Name]
@@ -126,7 +138,7 @@ public partial class ResourceCalendarWindow : Window
         var laneCount = Math.Max(1, lanes.Count);
         var columns = Days * laneCount;
         Body.Width = Math.Max(RulerWidth + 60, BodyScroll.ViewportWidth > 0 ? BodyScroll.ViewportWidth : ActualWidth - 50);
-        Body.Height = 24 * HourHeight;
+        Body.Height = HoursShown * HourHeight;
         Header.Width = Body.Width;
         Body.Children.Clear();
         Header.Children.Clear();
@@ -139,9 +151,13 @@ public partial class ResourceCalendarWindow : Window
         {
             var date = first.AddDays(d);
             var x = RulerWidth + d * dayWidth;
-            if (date == DateTime.Today) Body.Children.Add(Box(x, 0, dayWidth, Body.Height, "SystemFillColorAttentionBackgroundBrush", null, 0));
-            else if (date.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday)
-                Body.Children.Add(Box(x, 0, dayWidth, Body.Height, "SubtleFillColorTertiaryBrush", null, 0));
+            for (var k = 0; k < HoursShown / 24; k++)
+            {
+                var shade = date.AddDays(k);
+                if (shade == DateTime.Today) Body.Children.Add(Box(x, k * 24 * HourHeight, dayWidth, 24 * HourHeight, "SystemFillColorAttentionBackgroundBrush", null, 0));
+                else if (shade.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday)
+                    Body.Children.Add(Box(x, k * 24 * HourHeight, dayWidth, 24 * HourHeight, "SubtleFillColorTertiaryBrush", null, 0));
+            }
             var label = new TextBlock
             {
                 Text = date.ToString(_week ? "ddd d" : "dddd d", culture),
@@ -168,15 +184,24 @@ public partial class ResourceCalendarWindow : Window
         }
         Header.Height = laneCount > 1 ? HeaderDayHeight + 18 : HeaderDayHeight + 4;
 
-        // Hours: a line and a label each, a fainter line at the half hour.
-        for (var h = 0; h < 24; h++)
+        // Hours: a line and a label each, a fainter line at the half hour; at midnight in the day view, the next day's
+        // name and a stronger line.
+        for (var h = 0; h < HoursShown; h++)
         {
             var y = h * HourHeight;
-            Body.Children.Add(Line(RulerWidth, y, Body.Width, y, "DividerStrokeColorDefaultBrush", 1));
+            var midnight = h > 0 && h % 24 == 0;
+            Body.Children.Add(Line(midnight ? 0 : RulerWidth, y, Body.Width, y, midnight ? "ControlStrongFillColorDefaultBrush" : "DividerStrokeColorDefaultBrush", midnight ? 1.5 : 1));
             Body.Children.Add(Line(RulerWidth, y + HourHeight / 2, Body.Width, y + HourHeight / 2, "DividerStrokeColorDefaultBrush", 0.4));
-            var hour = new TextBlock { Text = DateTime.Today.AddHours(h).ToString("t", culture), FontSize = 11, Width = RulerWidth - 8, TextAlignment = TextAlignment.Right };
-            hour.SetResourceReference(TextBlock.ForegroundProperty, "TextFillColorTertiaryBrush");
-            Place(Body, hour, 0, y - 7 < 0 ? 0 : y - 7);
+            var next = first.AddHours(h);
+            var hour = new TextBlock
+            {
+                Text = midnight ? next.ToString("ddd d", culture) : next.ToString("t", culture), FontSize = 11, Width = RulerWidth - 8,
+                TextAlignment = TextAlignment.Right, FontWeight = midnight ? FontWeights.SemiBold : FontWeights.Normal,
+            };
+            hour.SetResourceReference(TextBlock.ForegroundProperty, midnight
+                ? next == DateTime.Today ? "AccentTextFillColorPrimaryBrush" : "TextFillColorPrimaryBrush"
+                : "TextFillColorTertiaryBrush");
+            Place(Body, hour, 0, midnight ? y + 2 : y - 7 < 0 ? 0 : y - 7);
         }
 
         if (machines.Count == 0)
@@ -192,15 +217,16 @@ public partial class ResourceCalendarWindow : Window
         }
 
         // The stretches, split at midnight, side by side where they overlap in a lane.
-        var spans = ResourceLocks.Calendar(machines, first, first.AddDays(Days), now)
+        var spans = ResourceLocks.Calendar(machines, first, first.AddDays(Days - 1).AddHours(HoursShown), now)
             .Where(s => lanes.Contains(s.Resource, StringComparer.OrdinalIgnoreCase)).ToList();
         var pieces = new List<(CalendarSpan Span, int Column, DateTime From, DateTime To)>();
         foreach (var s in spans)
             for (var d = 0; d < Days; d++)
             {
                 var dayStart = first.AddDays(d);
+                var dayEnd = dayStart.AddHours(HoursShown);
                 var from = s.From > dayStart ? s.From : dayStart;
-                var to = s.To < dayStart.AddDays(1) ? s.To : dayStart.AddDays(1);
+                var to = s.To < dayEnd ? s.To : dayEnd;
                 if (to <= from) continue;
                 var lane = lanes.FindIndex(l => string.Equals(l, s.Resource, StringComparison.OrdinalIgnoreCase));
                 pieces.Add((s, d * laneCount + lane, from, to));
@@ -221,18 +247,19 @@ public partial class ResourceCalendarWindow : Window
             foreach (var (sub, p) in placed)
             {
                 var x = RulerWidth + p.Column * col + 2 + sub * (col - 4) / subs;
-                var y = (p.From - p.From.Date).TotalHours * HourHeight;
+                var y = (p.From - ColumnDay(p.Column, laneCount)).TotalHours * HourHeight;
                 var height = Math.Max(18, (p.To - p.From).TotalHours * HourHeight - 1);
                 Body.Children.Add(Block(p.Span, x, y, (col - 4) / subs - 1, height, now));
             }
         }
 
-        // Now: a red line across today.
-        var today = (DateTime.Today - first).Days;
-        if (today >= 0 && today < Days)
+        // Now: a red line across the column it's in.
+        for (var d = 0; d < Days; d++)
         {
-            var y = (now - now.Date).TotalHours * HourHeight;
-            var x = RulerWidth + today * dayWidth;
+            var dayStart = first.AddDays(d);
+            if (now < dayStart || now >= dayStart.AddHours(HoursShown)) continue;
+            var y = (now - dayStart).TotalHours * HourHeight;
+            var x = RulerWidth + d * dayWidth;
             // Over the stretches, as in Outlook.
             var line = Line(x, y, x + dayWidth, y, "SystemFillColorCriticalBrush", 2);
             Panel.SetZIndex(line, 4);
@@ -304,8 +331,18 @@ public partial class ResourceCalendarWindow : Window
         };
         block.Children.Add(shape);
         block.Children.Add(label);
-        block.MouseLeftButtonDown += (_, e) => e.Handled = true;
+        block.MouseLeftButtonDown += (_, e) =>
+        {
+            e.Handled = true;
+            // A double-click edits your reservation, as in Outlook.
+            if (e.ClickCount == 2 && yours && s.Kind is SpanKind.Booked or SpanKind.Now) Edit(s);
+        };
         block.MouseLeftButtonUp += (_, e) =>
+        {
+            e.Handled = true;
+            BlockMenu(s, yours, block);
+        };
+        block.MouseRightButtonUp += (_, e) =>
         {
             e.Handled = true;
             BlockMenu(s, yours, block);
@@ -324,20 +361,25 @@ public partial class ResourceCalendarWindow : Window
         switch (s.Kind)
         {
             case SpanKind.Booked when s.Booking is { } id:
+                Add("Edit reservation…", () => Edit(s));
                 Add("Cancel this booking", () => Tell(Do(() => _host.Cancel(s.Resource, id))));
                 break;
             case SpanKind.Queued when s.Booking is { } id:
                 Add("Leave the queue", () => Tell(Do(() => _host.Cancel(s.Resource, id))));
                 break;
             case SpanKind.Now when yours:
+                Add("Edit reservation…", () => Edit(s));
                 Add("Free it", () => Tell(Do(() => _host.Free(s.Resource))));
                 break;
             case SpanKind.Now:
                 Add("Take it now (until I free it)", () => Tell(_host.Reserve(s.Resource, null)));
                 Add("Queue for it (mine as soon as it's free)", () => Tell(_host.Queue(s.Resource, null)));
+                if (!s.OpenEnded) Add("New reservation after it…", () => NewReservation(s.Resource, s.To, s.To.AddHours(1)));
                 break;
             default:
-                return;
+                var start = NextQuarter(DateTime.Now);
+                Add("New reservation…", () => NewReservation(s.Resource, start, start.AddHours(1)));
+                break;
         }
         menu.IsOpen = true;
     }
@@ -351,15 +393,15 @@ public partial class ResourceCalendarWindow : Window
         if (lanes.Count == 0 || p.X < RulerWidth) return null;
         var columns = Days * lanes.Count;
         var column = Math.Clamp((int)((p.X - RulerWidth) / ColumnWidth(columns)), 0, columns - 1);
-        var minutes = Math.Clamp(p.Y / HourHeight * 60, 0, 24 * 60);
+        var minutes = Math.Clamp(p.Y / HourHeight * 60, 0, HoursShown * 60);
         var snapped = (snapUp ? Math.Ceiling(minutes / SnapMinutes) : Math.Floor(minutes / SnapMinutes)) * SnapMinutes;
-        return (column, FirstDay.AddDays(column / lanes.Count).AddMinutes(snapped));
+        return (column, ColumnDay(column, lanes.Count).AddMinutes(snapped));
     }
 
-    /// <summary>The time at <paramref name="y"/> on <paramref name="day"/>, to the quarter hour (rounded up when <paramref name="up"/>).</summary>
-    private static DateTime TimeAt(double y, DateTime day, bool up)
+    /// <summary>The time at <paramref name="y"/> in the column starting <paramref name="day"/>, to the quarter hour (rounded up when <paramref name="up"/>).</summary>
+    private DateTime TimeAt(double y, DateTime day, bool up)
     {
-        var minutes = Math.Clamp(y / HourHeight * 60, 0, 24 * 60);
+        var minutes = Math.Clamp(y / HourHeight * 60, 0, HoursShown * 60);
         return day.AddMinutes((up ? Math.Ceiling(minutes / SnapMinutes) : Math.Floor(minutes / SnapMinutes)) * SnapMinutes);
     }
 
@@ -382,11 +424,12 @@ public partial class ResourceCalendarWindow : Window
     private void Body_MouseMove(object sender, MouseEventArgs e)
     {
         if (_drag is not { } drag) return;
-        // Within the day it started on: up or down from where it started.
+        // Within the column it started in: up or down from where it started.
         var y = e.GetPosition(Body).Y;
+        var day = ColumnDay(drag.Column, Lanes(Machines).Count);
         var (from, to) = y >= _downAt.Y
-            ? (drag.Start, TimeAt(y, drag.Start.Date, up: true))
-            : (TimeAt(y, drag.Start.Date, up: false), drag.Start.AddMinutes(SnapMinutes));
+            ? (drag.Start, TimeAt(y, day, up: true))
+            : (TimeAt(y, day, up: false), drag.Start.AddMinutes(SnapMinutes));
         if (to - from < TimeSpan.FromMinutes(SnapMinutes)) to = from.AddMinutes(SnapMinutes);
         DrawBand(from, to);
     }
@@ -397,7 +440,7 @@ public partial class ResourceCalendarWindow : Window
         var lanes = Lanes(Machines);
         var col = ColumnWidth(Days * lanes.Count);
         Canvas.SetLeft(_band, RulerWidth + drag.Column * col + 2);
-        Canvas.SetTop(_band, (from - from.Date).TotalHours * HourHeight);
+        Canvas.SetTop(_band, (from - ColumnDay(drag.Column, lanes.Count)).TotalHours * HourHeight);
         _band.Width = Math.Max(4, col - 4);
         _band.Height = Math.Max(6, (to - from).TotalHours * HourHeight);
         _band.Tag = (from, to);
@@ -431,11 +474,74 @@ public partial class ResourceCalendarWindow : Window
         {
             Header = $"Book “{machine}”, {from.ToString("ddd d MMM t", culture)} – {to.ToString("t", culture)}",
             FontWeight = FontWeights.SemiBold,
-            Command = new CommunityToolkit.Mvvm.Input.RelayCommand(() => Tell(_host.Book(machine, from, to))),
+            Command = new CommunityToolkit.Mvvm.Input.RelayCommand(() => Tell(_host.Book(machine, from, to, null))),
+        });
+        menu.Items.Add(new MenuItem
+        {
+            Header = "More options…",
+            Command = new CommunityToolkit.Mvvm.Input.RelayCommand(() => Dispatcher.BeginInvoke(() => NewReservation(machine, from, to))),
         });
         menu.Items.Add(new MenuItem { Header = "Cancel", Command = new CommunityToolkit.Mvvm.Input.RelayCommand(() => { }) });
         menu.Closed += (_, _) => EndDrag();
         menu.IsOpen = true;
+    }
+
+    /// <summary>Right-click on free time: a new reservation there (an hour), in the dialog.</summary>
+    private void Body_MouseRightButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (_drag != null || Hit(e.GetPosition(Body)) is not { } hit) return;
+        var lanes = Lanes(Machines);
+        var machine = lanes[hit.Column % lanes.Count];
+        var from = hit.Time < DateTime.Now ? NextQuarter(DateTime.Now) : hit.Time;
+        var menu = new ContextMenu { PlacementTarget = Body, Placement = PlacementMode.MousePoint };
+        menu.Items.Add(new MenuItem
+        {
+            Header = $"New reservation of “{machine}”…",
+            Command = new CommunityToolkit.Mvvm.Input.RelayCommand(() => NewReservation(machine, from, from.AddHours(1))),
+        });
+        menu.IsOpen = true;
+        e.Handled = true;
+    }
+
+    /// <summary>The next quarter hour from <paramref name="at"/>.</summary>
+    private static DateTime NextQuarter(DateTime at)
+    {
+        var start = at.Date.AddMinutes(Math.Ceiling(at.TimeOfDay.TotalMinutes / SnapMinutes) * SnapMinutes);
+        return start <= at ? start.AddMinutes(SnapMinutes) : start;
+    }
+
+    // ───────────── The reservation dialog (#d27b8c7b) ─────────────
+
+    private void NewReservation_Click(object sender, RoutedEventArgs e)
+    {
+        var start = NextQuarter(DateTime.Now);
+        NewReservation(_machine, start, start.AddHours(1));
+    }
+
+    /// <summary>A new reservation, in the dialog: booked for the time you set (a time to come).</summary>
+    private void NewReservation(string? machine, DateTime from, DateTime to)
+    {
+        var names = Machines.Select(m => m.Name).ToList();
+        var dialog = new ReservationDialog(ReservationDialog.Kind.New, names, machine ?? names.FirstOrDefault(), from, to, null,
+            r => _host.Book(r.Machine, r.From, r.To!.Value, r.For)) { Owner = this };
+        if (dialog.ShowDialog() == true) Tell(null);
+    }
+
+    /// <summary>Your booking (its times, machine and note) or what you hold now (when it ends), in the dialog.</summary>
+    private void Edit(CalendarSpan s)
+    {
+        var names = Machines.Select(m => m.Name).ToList();
+        ReservationDialog dialog;
+        if (s.Kind == SpanKind.Booked && s.Booking is { } id)
+            dialog = new ReservationDialog(ReservationDialog.Kind.Booking, names, s.Resource, s.From, s.To, s.For,
+                r => _host.Rebook(s.Resource, id, r.Machine, r.From, r.To!.Value, r.For),
+                () => _host.Cancel(s.Resource, id));
+        else if (s.Kind == SpanKind.Now)
+            dialog = new ReservationDialog(ReservationDialog.Kind.Hold, names, s.Resource, s.From, s.OpenEnded ? null : s.To, s.For,
+                r => _host.SetHoldEnd(s.Resource, r.To, r.For));
+        else return;
+        dialog.Owner = this;
+        if (dialog.ShowDialog() == true) Tell(null);
     }
 
     private void EndDrag()
@@ -522,7 +628,12 @@ public partial class ResourceCalendarWindow : Window
     }
 
     /// <summary>A few hours before now at the top, so now and what comes next show (the scroll stops at the day's end).</summary>
-    private void ScrollToNow() => BodyScroll.ScrollToVerticalOffset(Math.Max(0, DateTime.Now.Hour - 3) * HourHeight);
+    private void ScrollToNow()
+    {
+        var hours = (DateTime.Now - FirstDay).TotalHours;
+        if (_week) hours = DateTime.Now.TimeOfDay.TotalHours;
+        BodyScroll.ScrollToVerticalOffset(Math.Max(0, hours - 3) * HourHeight);
+    }
 
     private void Today_Click(object sender, RoutedEventArgs e)
     {

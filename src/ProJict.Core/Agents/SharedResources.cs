@@ -249,18 +249,61 @@ public static class ResourceLocks
     public static Booking? Book(WorkspaceSettings settings, string name, string person, DateTime from, DateTime to, string? purpose, DateTime now)
     {
         if (Problem(name, purpose) is { } problem) throw new ArgumentException(problem);
-        if (to <= from) throw new ArgumentException("A booking ends after it starts.");
-        if (to <= now) throw new ArgumentException("That time is over already.");
-        if (to - from > LongestBooking) throw new ArgumentException($"Book at most {LongestBooking.TotalDays:0} days at a time.");
-        if (from - now > BookAhead) throw new ArgumentException($"Book at most {BookAhead.TotalDays:0} days ahead.");
+        CheckSlot(from, to, now);
         var r = FindOrAdd(settings, name, now);
-        if (r.Bookings.FirstOrDefault(b => !b.Queued && b.From < to && from < b.To) is { } clash)
+        if (Clash(r, from, to, except: null) is { } clash)
             throw new ArgumentException($"It's booked from {Clock(clash.From!.Value)} to {Clock(clash.To!.Value)} already.");
         var booking = new Booking { By = person, From = from, To = to, For = string.IsNullOrWhiteSpace(purpose) ? null : purpose.Trim(), BookedAt = now };
         r.Bookings.Add(booking);
         if (from > now) return booking;
         Advance(settings, now);
         return null;
+    }
+
+    private static void CheckSlot(DateTime from, DateTime to, DateTime now)
+    {
+        if (to <= from) throw new ArgumentException("A booking ends after it starts.");
+        if (to <= now) throw new ArgumentException("That time is over already.");
+        if (to - from > LongestBooking) throw new ArgumentException($"Book at most {LongestBooking.TotalDays:0} days at a time.");
+        if (from - now > BookAhead) throw new ArgumentException($"Book at most {BookAhead.TotalDays:0} days ahead.");
+    }
+
+    private static Booking? Clash(SharedResource r, DateTime from, DateTime to, Guid? except) =>
+        r.Bookings.FirstOrDefault(b => !b.Queued && b.Id != except && b.From < to && from < b.To);
+
+    /// <summary>
+    /// The user moves a booked slot (#d27b8c7b): new times, and what for. It must not clash with their other slots; one
+    /// moved to begin now (or earlier) is theirs at once. Returns false when there's no such booking; throws
+    /// ArgumentException when the new times can't be booked.
+    /// </summary>
+    public static bool Rebook(WorkspaceSettings settings, string name, Guid booking, DateTime from, DateTime to, string? purpose, DateTime now)
+    {
+        if (Problem(name, purpose) is { } problem) throw new ArgumentException(problem);
+        if (Find(settings, name) is not { } r || r.Bookings.FirstOrDefault(b => b.Id == booking && !b.Queued) is not { } b) return false;
+        CheckSlot(from, to, now);
+        if (Clash(r, from, to, except: booking) is { } clash)
+            throw new ArgumentException($"It's booked from {Clock(clash.From!.Value)} to {Clock(clash.To!.Value)} already.");
+        b.From = from;
+        b.To = to;
+        b.For = string.IsNullOrWhiteSpace(purpose) ? null : purpose.Trim();
+        if (from <= now) Advance(settings, now);
+        return true;
+    }
+
+    /// <summary>
+    /// The user changes when their hold on it ends (#d27b8c7b): a time ahead (at most a week), or null for until they free
+    /// it. Returns false when it isn't theirs; throws ArgumentException for a time that's over.
+    /// </summary>
+    public static bool SetHoldEnd(WorkspaceSettings settings, string name, string person, DateTime? until, string? purpose, DateTime now)
+    {
+        if (Problem(name, purpose) is { } problem) throw new ArgumentException(problem);
+        if (Find(settings, name) is not { } r || !IsHeld(r, now) || !string.Equals(r.HeldBy, person, StringComparison.OrdinalIgnoreCase)) return false;
+        if (until is { } end && end <= now) throw new ArgumentException("Pick an end that's still to come, or Until I free it.");
+        if (until is { } far && far - now > LongestBooking) throw new ArgumentException($"Hold it at most {LongestBooking.TotalDays:0} days ahead; or Until I free it.");
+        r.Until = until ?? DateTime.MaxValue;
+        r.Person = true;
+        r.For = string.IsNullOrWhiteSpace(purpose) ? null : purpose.Trim();
+        return true;
     }
 
     /// <summary>Cancels one of the user's bookings, or their place in the queue; false when it isn't there.</summary>
