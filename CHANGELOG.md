@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.55 (2026-11-12)
 
 - **Reserve a shared machine yourself.** A shared PC or GPU that agents take turns with can now be yours too: **Reserve ▾** in the bar at the bottom, or in the new **Shared machines** card at the top of the Agents view, makes it yours for a while or until you free it. Agents asking for it wait; one using it is told to stop at once and waits for it, and they're all told when you free it.
 
