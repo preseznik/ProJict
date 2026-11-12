@@ -34,6 +34,7 @@
         <KeyBinding Gesture="Ctrl+E" Command="{Binding ExportCommand}" />
         <KeyBinding Gesture="Ctrl+S" Command="{Binding SaveNowCommand}" />
         <KeyBinding Gesture="Ctrl+Shift+D" Command="{Binding ShowDashboardCommand}" />
+        <KeyBinding Gesture="Ctrl+Shift+M" Command="{Binding OpenResourceCalendarCommand}" />
         <KeyBinding Gesture="Ctrl+Shift+I" Command="{Binding ShowInboxCommand}" />
     </Window.InputBindings>
 
@@ -58,6 +59,12 @@
                     <DockPanel Margin="8,2,0,12">
                         <!-- Back and forward through where you've been -->
                         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                            <!-- The shared machines' calendar, always one click away (#68c97287): who has which machine when, and booking them. -->
+                            <Button Style="{StaticResource SubtleButton}" Command="{Binding OpenResourceCalendarCommand}" Padding="6,4" Margin="0,0,6,0"
+                                    ToolTip="Shared machines calendar (Ctrl+Shift+M): who has which machine when, and booking them"
+                                    AutomationProperties.Name="Shared machines calendar">
+                                <TextBlock Style="{StaticResource Icon}" Text="&#xE787;" FontSize="13" />
+                            </Button>
                             <Button Style="{StaticResource SubtleButton}" Command="{Binding GoBackCommand}" Padding="6,4" ToolTip="Back (Alt+←)" AutomationProperties.Name="Back">
                                 <TextBlock Style="{StaticResource Icon}" Text="&#xE72B;" FontSize="12" />
                             </Button>

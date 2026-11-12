@@ -577,6 +577,9 @@ public sealed partial class MainViewModel : ObservableObject
         public void Free(string machine) => main.AgentTools.FreeResource(machine);
     }
 
+    /// <summary>The calendar button next to Back and Forward, and Ctrl+Shift+M (#71e88cc6): all machines.</summary>
+    [RelayCommand] private void OpenResourceCalendar() => ShowResourceCalendar(null);
+
     /// <summary>The shared machines' calendar (#68c97287): one machine's, or all of them (null).</summary>
     public void ShowResourceCalendar(string? machine)
     {
