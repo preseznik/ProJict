@@ -40,4 +40,42 @@ public static class CalendarLayout
         Close();
         return result;
     }
+
+    /// <summary>
+    /// Holds before now on the same machine that would be drawn over each other (each is drawn at least
+    /// <paramref name="minDrawn"/> long) become one stretch, from the first's start to the last's end, made of them
+    /// (<see cref="CalendarSpan.Parts"/>) (#7ee43345): agents' many holds of a few minutes read as one busy stretch, not a
+    /// heap of slivers. What's held now, bookings and the queue stay as they are.
+    /// </summary>
+    public static List<CalendarSpan> JoinPast(IEnumerable<CalendarSpan> spans, TimeSpan minDrawn)
+    {
+        var all = spans.ToList();
+        var result = all.Where(s => s.Kind != SpanKind.Past).ToList();
+        foreach (var machine in all.Where(s => s.Kind == SpanKind.Past).GroupBy(s => s.Resource, StringComparer.OrdinalIgnoreCase))
+        {
+            var run = new List<CalendarSpan>();
+            var drawnEnd = DateTime.MinValue;
+            foreach (var s in machine.OrderBy(s => s.From))
+            {
+                if (run.Count > 0 && s.From >= drawnEnd)
+                {
+                    result.Add(Joined(run));
+                    run = [];
+                }
+                run.Add(s);
+                var end = s.From + minDrawn > s.To ? s.From + minDrawn : s.To;
+                if (run.Count == 1 || end > drawnEnd) drawnEnd = end;
+            }
+            if (run.Count > 0) result.Add(Joined(run));
+        }
+        return [.. result.OrderBy(s => s.From)];
+    }
+
+    private static CalendarSpan Joined(List<CalendarSpan> run)
+    {
+        if (run.Count == 1) return run[0];
+        var first = run[0];
+        var who = string.Join(", ", run.Select(p => p.By).Distinct(StringComparer.OrdinalIgnoreCase));
+        return new CalendarSpan(first.Resource, who, false, SpanKind.Past, first.From, run.Max(p => p.To), null, null, false) { Parts = run };
+    }
 }

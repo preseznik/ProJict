@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Shared machines calendar: a colour per machine.** With all machines shown, each day is one column again instead of a narrow lane per machine, and each machine has its own colour (named above the calendar). Where stretches overlap they go side by side, or in a crowded week overlap a step to the right of each other. An agent's many short holds in a row are one block, with a mark at each hold and the list of them inside (time, who, what for). When you drag over free time, pick which machine to book.
+
 ## 0.1.58 (2026-11-13)
 
 - **Fixed: calendar names drawn over each other.** Short holds a few minutes apart in the shared machines calendar were drawn on top of one another, so their text overlapped. They now go side by side, as in Outlook, each with its name on one line; where a week is too crowded for text, hover a block to see who and when.

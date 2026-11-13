@@ -35,7 +35,7 @@ public interface IResourceCalendarHost
 
 /// <summary>
 /// The shared machines' calendar (#68c97287), Outlook/Teams style: a day or a week, the hours down the side, a column per
-/// day (split into a lane per machine when all show). Who held each (the past), who holds it now, your place in the queue
+/// day, each machine in its own colour (#7ee43345). Who held each (the past), who holds it now, your place in the queue
 /// and your booked slots. Drag over free time to book it; click your own booking to cancel it, or what you hold to free it.
 /// The day view runs on into the next day, so late evenings aren't cut off at midnight; right-click makes or edits a
 /// reservation in a dialog, Outlook-style (#d27b8c7b).
@@ -45,6 +45,24 @@ public partial class ResourceCalendarWindow : Window
     private const double HourHeight = 44, RulerWidth = 58, HeaderDayHeight = 24;
     // A block is at least a line tall; below two lines' height its name and what for share one line (#08597a3b).
     private const double MinBlockHeight = 20, TwoLineHeight = 34;
+    // Overlapping blocks go side by side while each is still this wide; narrower, they overlap, each a step to the right (#7ee43345).
+    private const double SideBySideWidth = 120, CascadeStep = 16;
+
+    // A colour per machine, by its place in the list (#7ee43345): they read on light and dark, as a tint or an outline.
+    private static readonly Color[] Palette =
+    [
+        Color.FromRgb(0x2F, 0x80, 0xED), // blue
+        Color.FromRgb(0xF2, 0x99, 0x4A), // orange
+        Color.FromRgb(0x27, 0xAE, 0x60), // green
+        Color.FromRgb(0xBB, 0x6B, 0xD9), // purple
+        Color.FromRgb(0xEB, 0x57, 0x57), // red
+        Color.FromRgb(0x00, 0xB8, 0xD9), // cyan
+        Color.FromRgb(0xC9, 0xA2, 0x27), // ochre
+        Color.FromRgb(0x8D, 0x6E, 0x63), // brown
+    ];
+    private static readonly Color Neutral = Color.FromRgb(0x8A, 0x8A, 0x8A);
+    private Dictionary<string, Color> _colors = new(StringComparer.OrdinalIgnoreCase);
+    private string? _legendFor;
     private const int SnapMinutes = 15;
     private const string AllMachines = "All machines";
 
@@ -77,7 +95,6 @@ public partial class ResourceCalendarWindow : Window
         {
             if (e.Key == Key.Escape && _drag != null) EndDrag();
         };
-        BuildLegend();
         Loaded += (_, _) =>
         {
             Render();
@@ -112,9 +129,10 @@ public partial class ResourceCalendarWindow : Window
     private int HoursShown => _week ? 24 : 48;
 
     /// <summary>The day a column starts on.</summary>
-    private DateTime ColumnDay(int column, int lanes) => FirstDay.AddDays(column / Math.Max(1, lanes));
+    private DateTime ColumnDay(int column) => FirstDay.AddDays(column);
 
-    private List<string> Lanes(List<SharedResource> machines) =>
+    /// <summary>The machines shown: the one picked, or all.</summary>
+    private List<string> Shown(List<SharedResource> machines) =>
         _machine != null && machines.Any(m => string.Equals(m.Name, _machine, StringComparison.OrdinalIgnoreCase))
             ? [machines.First(m => string.Equals(m.Name, _machine, StringComparison.OrdinalIgnoreCase)).Name]
             : [.. machines.Select(m => m.Name)];
@@ -136,16 +154,24 @@ public partial class ResourceCalendarWindow : Window
             ? $"{first.ToString("d MMM", culture)} – {first.AddDays(6).ToString("d MMM yyyy", culture)}"
             : first.ToString("dddd, d MMMM yyyy", culture);
 
-        var lanes = Lanes(machines);
-        var laneCount = Math.Max(1, lanes.Count);
-        var columns = Days * laneCount;
+        // A column per day, all the machines shown in it, each in its colour (#7ee43345).
+        var shown = Shown(machines);
+        _colors = machines.Select((m, i) => (m.Name, Palette[i % Palette.Length]))
+            .ToDictionary(p => p.Name, p => p.Item2, StringComparer.OrdinalIgnoreCase);
+        var legendFor = string.Join("\n", shown);
+        if (legendFor != _legendFor)
+        {
+            _legendFor = legendFor;
+            BuildLegend(shown);
+        }
+        var columns = Days;
         Body.Width = Math.Max(RulerWidth + 60, BodyScroll.ViewportWidth > 0 ? BodyScroll.ViewportWidth : ActualWidth - 50);
         Body.Height = HoursShown * HourHeight;
         Header.Width = Body.Width;
         Body.Children.Clear();
         Header.Children.Clear();
         var col = ColumnWidth(columns);
-        var dayWidth = col * laneCount;
+        var dayWidth = col;
         var now = DateTime.Now;
 
         // Days: weekends and today tinted, the day's name above, a stronger line between days.
@@ -170,21 +196,9 @@ public partial class ResourceCalendarWindow : Window
             };
             if (date == DateTime.Today) label.SetResourceReference(TextBlock.ForegroundProperty, "AccentTextFillColorPrimaryBrush");
             Place(Header, label, x, 2);
-            if (laneCount > 1)
-                for (var l = 0; l < laneCount; l++)
-                {
-                    var lane = new TextBlock
-                    {
-                        Text = lanes[l], FontSize = 11, Width = col - 4, TextAlignment = TextAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
-                        ToolTip = lanes[l],
-                    };
-                    lane.SetResourceReference(TextBlock.ForegroundProperty, "TextFillColorSecondaryBrush");
-                    Place(Header, lane, x + l * col + 2, HeaderDayHeight);
-                    if (l > 0) Body.Children.Add(Line(x + l * col, 0, x + l * col, Body.Height, "DividerStrokeColorDefaultBrush", 0.5));
-                }
             Body.Children.Add(Line(x, 0, x, Body.Height, "ControlStrokeColorDefaultBrush", 1));
         }
-        Header.Height = laneCount > 1 ? HeaderDayHeight + 18 : HeaderDayHeight + 4;
+        Header.Height = HeaderDayHeight + 4;
 
         // Hours: a line and a label each, a fainter line at the half hour; at midnight in the day view, the next day's
         // name and a stronger line.
@@ -218,9 +232,12 @@ public partial class ResourceCalendarWindow : Window
             return;
         }
 
-        // The stretches, split at midnight, side by side where they overlap in a lane.
-        var spans = ResourceLocks.Calendar(machines, first, first.AddDays(Days - 1).AddHours(HoursShown), now)
-            .Where(s => lanes.Contains(s.Resource, StringComparer.OrdinalIgnoreCase)).ToList();
+        // The stretches, split at midnight. A machine's holds before now that would be drawn over each other are one
+        // stretch (#7ee43345): agents hold it for a few minutes at a time, dozens of times a day.
+        var spans = CalendarLayout.JoinPast(
+            ResourceLocks.Calendar(machines, first, first.AddDays(Days - 1).AddHours(HoursShown), now)
+                .Where(s => shown.Contains(s.Resource, StringComparer.OrdinalIgnoreCase)),
+            TimeSpan.FromHours(MinBlockHeight / HourHeight));
         var pieces = new List<(CalendarSpan Span, int Column, DateTime From, DateTime To)>();
         foreach (var s in spans)
             for (var d = 0; d < Days; d++)
@@ -230,23 +247,31 @@ public partial class ResourceCalendarWindow : Window
                 var from = s.From > dayStart ? s.From : dayStart;
                 var to = s.To < dayEnd ? s.To : dayEnd;
                 if (to <= from) continue;
-                var lane = lanes.FindIndex(l => string.Equals(l, s.Resource, StringComparison.OrdinalIgnoreCase));
-                pieces.Add((s, d * laneCount + lane, from, to));
+                pieces.Add((s, d, from, to));
             }
         foreach (var group in pieces.GroupBy(p => p.Column))
         {
-            // Side by side where they'd overlap as drawn, like Outlook (#08597a3b): a short hold is drawn taller than its
-            // minutes, so holds minutes apart would otherwise cover each other's names.
-            var dayStart = ColumnDay(group.Key, laneCount);
+            // Where they'd overlap as drawn (#08597a3b): side by side while each keeps room for its name and what for, like
+            // Outlook; narrower (a week), they overlap, each a step to the right of the one before, the later on top (#7ee43345).
+            var dayStart = ColumnDay(group.Key);
             var drawn = group.Select(p => (Piece: p, Top: (p.From - dayStart).TotalHours * HourHeight,
                 Height: Math.Max(MinBlockHeight, (p.To - p.From).TotalHours * HourHeight - 1))).ToList();
             var slots = CalendarLayout.SideBySide([.. drawn.Select(b => (b.Top, b.Height))]);
-            for (var i = 0; i < drawn.Count; i++)
+            var left = RulerWidth + group.Key * col + 2;
+            var full = col - 4;
+            foreach (var i in Enumerable.Range(0, drawn.Count).OrderBy(i => drawn[i].Top))
             {
                 var (p, top, height) = drawn[i];
-                var width = (col - 4) / slots[i].Of;
-                var x = RulerWidth + p.Column * col + 2 + slots[i].Slot * width;
-                Body.Children.Add(Block(p.Span, x, top, width - 1, height, now));
+                var (slot, of) = slots[i];
+                double x, width;
+                if (of == 1) (x, width) = (left, full);
+                else if (full / of >= SideBySideWidth) (x, width) = (left + slot * full / of, full / of);
+                else
+                {
+                    var step = Math.Min(CascadeStep, full * 0.45 / (of - 1));
+                    (x, width) = (left + slot * step, full - slot * step);
+                }
+                Body.Children.Add(Block(p.Span, x, top, width - 1, height, now, p.From));
             }
         }
 
@@ -270,29 +295,48 @@ public partial class ResourceCalendarWindow : Window
         if (_band != null) Body.Children.Add(_band);
     }
 
-    /// <summary>One stretch: held before (faint), held now (yours in the accent colour), your booking or place in the queue (outlined).</summary>
-    private FrameworkElement Block(CalendarSpan s, double x, double y, double width, double height, DateTime now)
+    /// <summary>How a stretch looks in its machine's colour: how strong the fill and the outline are, how thick, dashed or not.</summary>
+    private static (byte Fill, byte Stroke, double Thickness, bool Dashed) Look(SpanKind kind, bool yours, bool openEnded) => kind switch
+    {
+        SpanKind.Past => (0x38, 0x80, 1, false),
+        SpanKind.Now when yours => (0xB0, 0xFF, 2, openEnded),
+        SpanKind.Now => (0x70, 0xFF, 1.5, openEnded),
+        SpanKind.Booked => (0x28, 0xFF, 2, false),
+        _ => (0x18, 0xFF, 1.5, true),
+    };
+
+    private static SolidColorBrush Tint(Color c, byte alpha)
+    {
+        var brush = new SolidColorBrush(Color.FromArgb(alpha, c.R, c.G, c.B));
+        brush.Freeze();
+        return brush;
+    }
+
+    private Color ColorOf(string machine) => _colors.TryGetValue(machine, out var c) ? c : Neutral;
+
+    /// <summary>
+    /// One stretch, in its machine's colour (#7ee43345): held before (a faint tint; several joined, with a mark at each
+    /// hold), held now (stronger; yours strongest), your booking (outlined) or your place in the queue (dashed). It covers
+    /// what's under it, so overlapping ones stay readable. <paramref name="shownFrom"/>: where its piece starts.
+    /// </summary>
+    private FrameworkElement Block(CalendarSpan s, double x, double y, double width, double height, DateTime now, DateTime shownFrom)
     {
         var me = _host.Me;
         var yours = s.Person && string.Equals(s.By, me, StringComparison.OrdinalIgnoreCase);
-        var (fill, stroke, text, dashed) = s.Kind switch
-        {
-            SpanKind.Past => ("SubtleFillColorSecondaryBrush", "DividerStrokeColorDefaultBrush", "TextFillColorSecondaryBrush", false),
-            SpanKind.Now when yours => ("AccentFillColorDefaultBrush", "AccentFillColorDefaultBrush", "TextOnAccentFillColorPrimaryBrush", s.OpenEnded),
-            SpanKind.Now => ("ControlFillColorDefaultBrush", now > s.To && !s.OpenEnded ? "SystemFillColorCautionBrush" : "ControlStrongFillColorDefaultBrush",
-                "TextFillColorPrimaryBrush", s.OpenEnded),
-            SpanKind.Booked => ("SystemFillColorAttentionBackgroundBrush", "AccentFillColorDefaultBrush", "TextFillColorPrimaryBrush", false),
-            _ => ("SubtleFillColorTertiaryBrush", "AccentFillColorDefaultBrush", "TextFillColorPrimaryBrush", true),
-        };
-        var shape = new Rectangle { RadiusX = 4, RadiusY = 4, StrokeThickness = s.Kind is SpanKind.Booked or SpanKind.Queued ? 1.5 : 1 };
-        shape.SetResourceReference(Shape.FillProperty, fill);
-        shape.SetResourceReference(Shape.StrokeProperty, stroke);
-        if (dashed) shape.StrokeDashArray = [4, 3];
-        if (s.Kind == SpanKind.Past) shape.Opacity = 0.9;
+        var color = ColorOf(s.Resource);
+        var look = Look(s.Kind, yours, s.OpenEnded);
+        var under = new Rectangle { RadiusX = 4, RadiusY = 4 };
+        under.SetResourceReference(Shape.FillProperty, "SolidBackgroundFillColorBaseBrush");
+        var shape = new Rectangle { RadiusX = 4, RadiusY = 4, StrokeThickness = look.Thickness, Fill = Tint(color, look.Fill), Stroke = Tint(color, look.Stroke) };
+        // An agent's hold that ran over its time.
+        if (s.Kind == SpanKind.Now && !yours && now > s.To && !s.OpenEnded) shape.SetResourceReference(Shape.StrokeProperty, "SystemFillColorCautionBrush");
+        if (look.Dashed) shape.StrokeDashArray = [4, 3];
 
         var culture = CultureInfo.CurrentCulture;
         string Hm(DateTime t) => t.ToString("t", culture);
-        var who = yours ? "You" : s.By;
+        string Name(CalendarSpan p) => p.Person && string.Equals(p.By, me, StringComparison.OrdinalIgnoreCase) ? "You" : p.By;
+        var who = s.Parts is { } joined ? string.Join(", ", joined.Select(Name).Distinct()) : Name(s);
+        var what = s.Parts is { } held ? $"{held.Count} holds" : s.For;
         var when = s.Kind switch
         {
             SpanKind.Queued => s.OpenEnded ? "queued, then until you free it" : $"queued, then {(s.To - s.From).TotalMinutes:0} min",
@@ -300,26 +344,46 @@ public partial class ResourceCalendarWindow : Window
             _ => $"{Hm(s.From)} – {Hm(s.To)}",
         };
         // A short block gets one line, cut off with "…" (its times are in the tooltip); a taller one wraps, times below. A
-        // narrow one (side by side in a week) shows only who, and a sliver nothing: the tooltip has it all.
+        // narrow one shows only who, and a sliver nothing: the tooltip has it all.
         var narrow = width < 44;
         var oneLine = height < TwoLineHeight || narrow;
         var label = new TextBlock
         {
-            Margin = oneLine ? new Thickness(narrow ? 4 : 6, 2, 3, 0) : new Thickness(6, 3, 4, 2),
-            // Long words clip at the edge rather than break in the middle in a narrow lane.
+            Margin = oneLine ? new Thickness(narrow ? 5 : 7, 2, 3, 0) : new Thickness(7, 3, 4, 2),
+            // Long words clip at the edge rather than break in the middle in a narrow column.
             TextWrapping = oneLine ? TextWrapping.NoWrap : TextWrapping.WrapWithOverflow,
             TextTrimming = TextTrimming.CharacterEllipsis,
             FontSize = 11.5,
             Visibility = width < 28 ? Visibility.Collapsed : Visibility.Visible,
         };
         label.Inlines.Add(new System.Windows.Documents.Run(who) { FontWeight = FontWeights.SemiBold });
-        if (!narrow && s.For is { } why) label.Inlines.Add(new System.Windows.Documents.Run(" · " + why));
+        if (!narrow && what != null) label.Inlines.Add(new System.Windows.Documents.Run(" · " + what));
         if (!oneLine)
         {
             label.Inlines.Add(new System.Windows.Documents.LineBreak());
             label.Inlines.Add(new System.Windows.Documents.Run(when) { FontSize = 10.5 });
         }
-        label.SetResourceReference(TextBlock.ForegroundProperty, text);
+        label.SetResourceReference(TextBlock.ForegroundProperty, s.Kind == SpanKind.Past ? "TextFillColorSecondaryBrush" : "TextFillColorPrimaryBrush");
+        // Joined holds with room for more than a line: how many and when, then each, a line apiece, as many as fit.
+        FrameworkElement text = label;
+        if (s.Parts is { } rows && !oneLine)
+        {
+            var list = new StackPanel { Margin = new Thickness(7, 3, 4, 2), IsHitTestVisible = false };
+            var head = new TextBlock { FontSize = 11.5, TextTrimming = TextTrimming.CharacterEllipsis };
+            head.Inlines.Add(new System.Windows.Documents.Run($"{rows.Count} holds") { FontWeight = FontWeights.SemiBold });
+            head.Inlines.Add(new System.Windows.Documents.Run("  " + when) { FontSize = 10.5 });
+            list.Children.Add(head);
+            foreach (var p in rows)
+            {
+                var line = new TextBlock { FontSize = 10.5, TextTrimming = TextTrimming.CharacterEllipsis };
+                line.Inlines.Add(new System.Windows.Documents.Run(Hm(p.From) + "  "));
+                line.Inlines.Add(new System.Windows.Documents.Run(Name(p)) { FontWeight = FontWeights.SemiBold });
+                if (p.For is { } purpose) line.Inlines.Add(new System.Windows.Documents.Run(" · " + purpose));
+                list.Children.Add(line);
+            }
+            list.SetResourceReference(System.Windows.Documents.TextElement.ForegroundProperty, "TextFillColorSecondaryBrush");
+            text = list;
+        }
 
         var kind = s.Kind switch
         {
@@ -328,14 +392,34 @@ public partial class ResourceCalendarWindow : Window
             SpanKind.Booked => "Booked",
             _ => "In the queue (yours as soon as it's free)",
         };
+        string Short(string text) => text.Length > 70 ? text[..69] + "…" : text;
+        var tip = s.Parts is { } parts
+            ? $"{s.Resource}\nHeld {parts.Count} times:\n" + string.Join("\n", parts.Take(15).Select(p =>
+                  $"{Hm(p.From)}–{Hm(p.To)}  {Name(p)}{(p.For is { } f ? " — " + Short(f) : "")}")) +
+              (parts.Count > 15 ? $"\n…and {parts.Count - 15} more" : "")
+            : $"{s.Resource}\n{kind}: {(yours ? "you" : s.By)}{(s.For is { } f ? " — " + f : "")}\n" +
+              (s.Kind == SpanKind.Queued ? when : $"{s.From.ToString("ddd d MMM t", culture)} – {(s.OpenEnded ? "until freed" : s.To.ToString("ddd d MMM t", culture))}");
         var block = new Grid
         {
-            Width = Math.Max(4, width), Height = height, ClipToBounds = true, Cursor = Cursors.Arrow, Tag = s,
-            ToolTip = $"{s.Resource}\n{kind}: {(yours ? "you" : s.By)}{(s.For is { } f ? " — " + f : "")}\n" +
-                      (s.Kind == SpanKind.Queued ? when : $"{s.From.ToString("ddd d MMM t", culture)} – {(s.OpenEnded ? "until freed" : s.To.ToString("ddd d MMM t", culture))}"),
+            Width = Math.Max(4, width), Height = height, ClipToBounds = true, Cursor = Cursors.Arrow, Tag = s, ToolTip = tip,
         };
+        block.Children.Add(under);
         block.Children.Add(shape);
-        block.Children.Add(label);
+        // Joined holds: a mark down the left edge where each one was.
+        if (s.Parts is { } marks)
+            foreach (var p in marks)
+            {
+                var top = (p.From - shownFrom).TotalHours * HourHeight;
+                var tall = Math.Max(2, (p.To - p.From).TotalHours * HourHeight);
+                if (top + tall <= 0 || top >= height) continue;
+                block.Children.Add(new Rectangle
+                {
+                    Width = 3, Height = tall + Math.Min(0, top), Fill = Tint(color, 0xFF), IsHitTestVisible = false,
+                    HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top,
+                    Margin = new Thickness(1.5, Math.Max(0, top), 0, 0),
+                });
+            }
+        block.Children.Add(text);
         block.MouseLeftButtonDown += (_, e) =>
         {
             e.Handled = true;
@@ -393,14 +477,11 @@ public partial class ResourceCalendarWindow : Window
 
     private (int Column, DateTime Time)? Hit(Point p, bool snapUp = false)
     {
-        var machines = Machines;
-        var lanes = Lanes(machines);
-        if (lanes.Count == 0 || p.X < RulerWidth) return null;
-        var columns = Days * lanes.Count;
-        var column = Math.Clamp((int)((p.X - RulerWidth) / ColumnWidth(columns)), 0, columns - 1);
+        if (Shown(Machines).Count == 0 || p.X < RulerWidth) return null;
+        var column = Math.Clamp((int)((p.X - RulerWidth) / ColumnWidth(Days)), 0, Days - 1);
         var minutes = Math.Clamp(p.Y / HourHeight * 60, 0, HoursShown * 60);
         var snapped = (snapUp ? Math.Ceiling(minutes / SnapMinutes) : Math.Floor(minutes / SnapMinutes)) * SnapMinutes;
-        return (column, ColumnDay(column, lanes.Count).AddMinutes(snapped));
+        return (column, ColumnDay(column).AddMinutes(snapped));
     }
 
     /// <summary>The time at <paramref name="y"/> in the column starting <paramref name="day"/>, to the quarter hour (rounded up when <paramref name="up"/>).</summary>
@@ -431,7 +512,7 @@ public partial class ResourceCalendarWindow : Window
         if (_drag is not { } drag) return;
         // Within the column it started in: up or down from where it started.
         var y = e.GetPosition(Body).Y;
-        var day = ColumnDay(drag.Column, Lanes(Machines).Count);
+        var day = ColumnDay(drag.Column);
         var (from, to) = y >= _downAt.Y
             ? (drag.Start, TimeAt(y, day, up: true))
             : (TimeAt(y, day, up: false), drag.Start.AddMinutes(SnapMinutes));
@@ -442,10 +523,9 @@ public partial class ResourceCalendarWindow : Window
     private void DrawBand(DateTime from, DateTime to)
     {
         if (_band == null || _drag is not { } drag) return;
-        var lanes = Lanes(Machines);
-        var col = ColumnWidth(Days * lanes.Count);
+        var col = ColumnWidth(Days);
         Canvas.SetLeft(_band, RulerWidth + drag.Column * col + 2);
-        Canvas.SetTop(_band, (from - ColumnDay(drag.Column, lanes.Count)).TotalHours * HourHeight);
+        Canvas.SetTop(_band, (from - ColumnDay(drag.Column)).TotalHours * HourHeight);
         _band.Width = Math.Max(4, col - 4);
         _band.Height = Math.Max(6, (to - from).TotalHours * HourHeight);
         _band.Tag = (from, to);
@@ -463,8 +543,7 @@ public partial class ResourceCalendarWindow : Window
         if (Math.Abs(e.GetPosition(Body).Y - _downAt.Y) < 6) to = from.AddHours(1);
         DrawBand(from, to);
         Body.ReleaseMouseCapture();
-        var lanes = Lanes(Machines);
-        var machine = lanes[drag.Column % lanes.Count];
+        var shown = Shown(Machines);
         var culture = CultureInfo.CurrentCulture;
         var now = DateTime.Now;
         if (to <= now)
@@ -475,16 +554,19 @@ public partial class ResourceCalendarWindow : Window
         }
         if (from < now) from = now;
         var menu = new ContextMenu { PlacementTarget = _band, Placement = PlacementMode.MousePoint };
-        menu.Items.Add(new MenuItem
-        {
-            Header = $"Book “{machine}”, {from.ToString("ddd d MMM t", culture)} – {to.ToString("t", culture)}",
-            FontWeight = FontWeights.SemiBold,
-            Command = new CommunityToolkit.Mvvm.Input.RelayCommand(() => Tell(_host.Book(machine, from, to, null))),
-        });
+        // Which machine: the one shown, or each of them (in its colour) when all show in the column (#7ee43345).
+        foreach (var machine in shown)
+            menu.Items.Add(new MenuItem
+            {
+                Header = $"Book “{machine}”, {from.ToString("ddd d MMM t", culture)} – {to.ToString("t", culture)}",
+                FontWeight = shown.Count == 1 ? FontWeights.SemiBold : FontWeights.Normal,
+                Icon = Swatch(machine),
+                Command = new CommunityToolkit.Mvvm.Input.RelayCommand(() => Tell(_host.Book(machine, from, to, null))),
+            });
         menu.Items.Add(new MenuItem
         {
             Header = "More options…",
-            Command = new CommunityToolkit.Mvvm.Input.RelayCommand(() => Dispatcher.BeginInvoke(() => NewReservation(machine, from, to))),
+            Command = new CommunityToolkit.Mvvm.Input.RelayCommand(() => Dispatcher.BeginInvoke(() => NewReservation(_machine ?? shown.FirstOrDefault(), from, to))),
         });
         menu.Items.Add(new MenuItem { Header = "Cancel", Command = new CommunityToolkit.Mvvm.Input.RelayCommand(() => { }) });
         menu.Closed += (_, _) => EndDrag();
@@ -495,15 +577,15 @@ public partial class ResourceCalendarWindow : Window
     private void Body_MouseRightButtonUp(object sender, MouseButtonEventArgs e)
     {
         if (_drag != null || Hit(e.GetPosition(Body)) is not { } hit) return;
-        var lanes = Lanes(Machines);
-        var machine = lanes[hit.Column % lanes.Count];
         var from = hit.Time < DateTime.Now ? NextQuarter(DateTime.Now) : hit.Time;
         var menu = new ContextMenu { PlacementTarget = Body, Placement = PlacementMode.MousePoint };
-        menu.Items.Add(new MenuItem
-        {
-            Header = $"New reservation of “{machine}”…",
-            Command = new CommunityToolkit.Mvvm.Input.RelayCommand(() => NewReservation(machine, from, from.AddHours(1))),
-        });
+        foreach (var machine in Shown(Machines))
+            menu.Items.Add(new MenuItem
+            {
+                Header = $"New reservation of “{machine}”…",
+                Icon = Swatch(machine),
+                Command = new CommunityToolkit.Mvvm.Input.RelayCommand(() => NewReservation(machine, from, from.AddHours(1))),
+            });
         menu.IsOpen = true;
         e.Handled = true;
     }
@@ -588,23 +670,41 @@ public partial class ResourceCalendarWindow : Window
         _filling = false;
     }
 
-    private void BuildLegend()
+    /// <summary>A machine's colour, for its menu items.</summary>
+    private Rectangle Swatch(string machine)
     {
-        void Chip(string text, string fill, string stroke, bool dashed)
+        var c = ColorOf(machine);
+        return new Rectangle { Width = 12, Height = 12, RadiusX = 2, RadiusY = 2, StrokeThickness = 1.5, Fill = Tint(c, 0x70), Stroke = Tint(c, 0xFF) };
+    }
+
+    /// <summary>The machines shown, each in its colour; then how each kind of stretch looks (#7ee43345).</summary>
+    private void BuildLegend(List<string> shown)
+    {
+        Legend.Children.Clear();
+        void Chip(string text, Color c, (byte Fill, byte Stroke, double Thickness, bool Dashed) look, bool machine)
         {
-            var swatch = new Rectangle { Width = 22, Height = 12, RadiusX = 3, RadiusY = 3, StrokeThickness = 1.5, Margin = new Thickness(0, 0, 6, 0) };
-            swatch.SetResourceReference(Shape.FillProperty, fill);
-            swatch.SetResourceReference(Shape.StrokeProperty, stroke);
-            if (dashed) swatch.StrokeDashArray = [3, 2];
+            var swatch = new Rectangle
+            {
+                Width = 22, Height = 12, RadiusX = 3, RadiusY = 3, StrokeThickness = Math.Min(look.Thickness, 1.5), Margin = new Thickness(0, 0, 6, 0),
+                Fill = Tint(c, look.Fill), Stroke = Tint(c, look.Stroke),
+            };
+            if (look.Dashed) swatch.StrokeDashArray = [3, 2];
             var label = new TextBlock { Text = text, FontSize = 12, VerticalAlignment = VerticalAlignment.Center };
-            label.SetResourceReference(TextBlock.ForegroundProperty, "TextFillColorSecondaryBrush");
-            Legend.Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 16, 0), Children = { swatch, label } });
+            label.SetResourceReference(TextBlock.ForegroundProperty, machine ? "TextFillColorPrimaryBrush" : "TextFillColorSecondaryBrush");
+            Legend.Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 16, 4), Children = { swatch, label } });
         }
-        Chip("Yours", "AccentFillColorDefaultBrush", "AccentFillColorDefaultBrush", false);
-        Chip("An agent's", "ControlFillColorDefaultBrush", "ControlStrongFillColorDefaultBrush", false);
-        Chip("Booked by you", "SystemFillColorAttentionBackgroundBrush", "AccentFillColorDefaultBrush", false);
-        Chip("Your place in the queue, or until freed", "SubtleFillColorTertiaryBrush", "AccentFillColorDefaultBrush", true);
-        Chip("Earlier", "SubtleFillColorSecondaryBrush", "DividerStrokeColorDefaultBrush", false);
+        foreach (var machine in shown) Chip(machine, ColorOf(machine), Look(SpanKind.Now, false, false), true);
+        if (shown.Count > 0)
+        {
+            var bar = new Rectangle { Width = 1, Height = 14, Margin = new Thickness(0, 0, 16, 4), VerticalAlignment = VerticalAlignment.Center };
+            bar.SetResourceReference(Shape.FillProperty, "DividerStrokeColorDefaultBrush");
+            Legend.Children.Add(bar);
+        }
+        Chip("Yours now", Neutral, Look(SpanKind.Now, true, false), false);
+        Chip("An agent's now", Neutral, Look(SpanKind.Now, false, false), false);
+        Chip("Booked by you", Neutral, Look(SpanKind.Booked, false, false), false);
+        Chip("Your place in the queue, or until freed", Neutral, Look(SpanKind.Queued, false, true), false);
+        Chip("Earlier", Neutral, Look(SpanKind.Past, false, false), false);
     }
 
     private static Rectangle Box(double x, double y, double width, double height, string fill, string? stroke, double thickness)

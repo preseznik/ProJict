@@ -472,4 +472,8 @@ public enum SpanKind { Past, Now, Queued, Booked }
 /// A stretch on the calendar: which thing, who, held or reserved how, from when to when, what for; the booking's id for
 /// cancelling it; <see cref="OpenEnded"/> when it lasts until it's freed (drawn as an hour, fading).
 /// </summary>
-public sealed record CalendarSpan(string Resource, string By, bool Person, SpanKind Kind, DateTime From, DateTime To, string? For, Guid? Booking, bool OpenEnded);
+public sealed record CalendarSpan(string Resource, string By, bool Person, SpanKind Kind, DateTime From, DateTime To, string? For, Guid? Booking, bool OpenEnded)
+{
+    /// <summary>The holds a joined stretch is made of (<see cref="CalendarLayout.JoinPast"/>); null for a single one.</summary>
+    public IReadOnlyList<CalendarSpan>? Parts { get; init; }
+}
