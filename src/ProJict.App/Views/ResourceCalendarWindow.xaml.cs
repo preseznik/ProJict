@@ -43,6 +43,8 @@ public interface IResourceCalendarHost
 public partial class ResourceCalendarWindow : Window
 {
     private const double HourHeight = 44, RulerWidth = 58, HeaderDayHeight = 24;
+    // A block is at least a line tall; below two lines' height its name and what for share one line (#08597a3b).
+    private const double MinBlockHeight = 20, TwoLineHeight = 34;
     private const int SnapMinutes = 15;
     private const string AllMachines = "All machines";
 
@@ -233,23 +235,18 @@ public partial class ResourceCalendarWindow : Window
             }
         foreach (var group in pieces.GroupBy(p => p.Column))
         {
-            // Greedy columns within the lane, like Outlook's side-by-side.
-            var ends = new List<DateTime>();
-            var placed = new List<(int Sub, (CalendarSpan Span, int Column, DateTime From, DateTime To) Piece)>();
-            foreach (var p in group.OrderBy(p => p.From))
+            // Side by side where they'd overlap as drawn, like Outlook (#08597a3b): a short hold is drawn taller than its
+            // minutes, so holds minutes apart would otherwise cover each other's names.
+            var dayStart = ColumnDay(group.Key, laneCount);
+            var drawn = group.Select(p => (Piece: p, Top: (p.From - dayStart).TotalHours * HourHeight,
+                Height: Math.Max(MinBlockHeight, (p.To - p.From).TotalHours * HourHeight - 1))).ToList();
+            var slots = CalendarLayout.SideBySide([.. drawn.Select(b => (b.Top, b.Height))]);
+            for (var i = 0; i < drawn.Count; i++)
             {
-                var sub = ends.FindIndex(e => e <= p.From);
-                if (sub < 0) { sub = ends.Count; ends.Add(p.To); }
-                else ends[sub] = p.To;
-                placed.Add((sub, p));
-            }
-            var subs = Math.Max(1, ends.Count);
-            foreach (var (sub, p) in placed)
-            {
-                var x = RulerWidth + p.Column * col + 2 + sub * (col - 4) / subs;
-                var y = (p.From - ColumnDay(p.Column, laneCount)).TotalHours * HourHeight;
-                var height = Math.Max(18, (p.To - p.From).TotalHours * HourHeight - 1);
-                Body.Children.Add(Block(p.Span, x, y, (col - 4) / subs - 1, height, now));
+                var (p, top, height) = drawn[i];
+                var width = (col - 4) / slots[i].Of;
+                var x = RulerWidth + p.Column * col + 2 + slots[i].Slot * width;
+                Body.Children.Add(Block(p.Span, x, top, width - 1, height, now));
             }
         }
 
@@ -302,18 +299,26 @@ public partial class ResourceCalendarWindow : Window
             _ when s.OpenEnded => $"{Hm(s.From)} – until freed",
             _ => $"{Hm(s.From)} – {Hm(s.To)}",
         };
+        // A short block gets one line, cut off with "…" (its times are in the tooltip); a taller one wraps, times below. A
+        // narrow one (side by side in a week) shows only who, and a sliver nothing: the tooltip has it all.
+        var narrow = width < 44;
+        var oneLine = height < TwoLineHeight || narrow;
         var label = new TextBlock
         {
-            Margin = new Thickness(6, 3, 4, 2),
+            Margin = oneLine ? new Thickness(narrow ? 4 : 6, 2, 3, 0) : new Thickness(6, 3, 4, 2),
             // Long words clip at the edge rather than break in the middle in a narrow lane.
-            TextWrapping = TextWrapping.WrapWithOverflow,
+            TextWrapping = oneLine ? TextWrapping.NoWrap : TextWrapping.WrapWithOverflow,
             TextTrimming = TextTrimming.CharacterEllipsis,
             FontSize = 11.5,
+            Visibility = width < 28 ? Visibility.Collapsed : Visibility.Visible,
         };
         label.Inlines.Add(new System.Windows.Documents.Run(who) { FontWeight = FontWeights.SemiBold });
-        if (s.For is { } why) label.Inlines.Add(new System.Windows.Documents.Run(" · " + why));
-        label.Inlines.Add(new System.Windows.Documents.LineBreak());
-        label.Inlines.Add(new System.Windows.Documents.Run(when) { FontSize = 10.5 });
+        if (!narrow && s.For is { } why) label.Inlines.Add(new System.Windows.Documents.Run(" · " + why));
+        if (!oneLine)
+        {
+            label.Inlines.Add(new System.Windows.Documents.LineBreak());
+            label.Inlines.Add(new System.Windows.Documents.Run(when) { FontSize = 10.5 });
+        }
         label.SetResourceReference(TextBlock.ForegroundProperty, text);
 
         var kind = s.Kind switch

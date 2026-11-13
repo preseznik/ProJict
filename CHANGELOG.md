@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Fixed: calendar names drawn over each other.** Short holds a few minutes apart in the shared machines calendar were drawn on top of one another, so their text overlapped. They now go side by side, as in Outlook, each with its name on one line; where a week is too crowded for text, hover a block to see who and when.
+
 ## 0.1.57 (2026-11-12)
 
 - **The calendar is always a click away.** A calendar button at the top of the sidebar, next to Back and Forward (or Ctrl+Shift+M), opens the shared machines calendar from anywhere, not only while something is held.
