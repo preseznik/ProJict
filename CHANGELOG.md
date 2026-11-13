@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.58 (2026-11-13)
 
 - **Fixed: calendar names drawn over each other.** Short holds a few minutes apart in the shared machines calendar were drawn on top of one another, so their text overlapped. They now go side by side, as in Outlook, each with its name on one line; where a week is too crowded for text, hover a block to see who and when.
 
