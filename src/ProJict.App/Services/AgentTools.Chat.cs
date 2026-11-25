@@ -17,7 +17,7 @@ public sealed partial class AgentTools
 {
     private const int MaxWaitSeconds = 60;
     private static readonly HashSet<string> ChatTools =
-        ["list_channels", "create_channel", "read_channel", "search_chat", "post_message", "ask_approval", "claim_reply", "edit_message", "join_channel", "invite_to_channel", "moderate_channel", "wait_for_messages"];
+        ["list_channels", "create_channel", "read_channel", "search_chat", "post_message", "ask_approval", "ask_question", "claim_reply", "edit_message", "join_channel", "invite_to_channel", "moderate_channel", "wait_for_messages"];
     /// <summary>Chat's tools, for an API token that may only use Chat.</summary>
     public static IReadOnlySet<string> ChatToolNames => ChatTools;
 
@@ -74,6 +74,18 @@ public sealed partial class AgentTools
                 ("pin", "boolean", "It can't be taken back (a release, a push to the main branch, deleting for good): the user approves it with " +
                                    "\"Are you sure?\" and their PIN.", false)),
             AskApproval);
+        var questionsSchema = Schema(ChannelArg,
+            ("questions", "string", "", true),
+            ("text", "string", "A line above the questions, if you want to say more than they do.", false),
+            ("reply_to", "string", "Id of the message you answer; it's quoted.", false));
+        questionsSchema["properties"]!["questions"] = QuestionsSchema();
+        Add("ask_question", "Ask a question with options",
+            "Asks a person in Chat a question (or up to 4) with options to click, in the same shape as Claude Code's AskUserQuestion: " +
+            "each question with a short header, 2 to 6 options (your suggestion first, each with a label and a description of what it means) " +
+            "and multiSelect when several may apply; they can also answer in their own words. Use it, not AskUserQuestion or a question " +
+            "written out in a message, whenever you want the user to choose. You're told the answers (your chat watcher prints [answer] …, " +
+            "and wait_for_messages gives them); don't wait for them where you run. For a go-ahead to one change, use ask_approval instead.",
+            questionsSchema, AskQuestion);
         Add("claim_reply", "Say you're answering a message",
             "Before you answer a person's message that other agents could answer too (it @mentions nobody, several of you, or @everyone), claim it: " +
             "if it's yours, answer it (post_message with reply_to it); if another agent has it, you're told who, so leave it to them. The others are " +
@@ -448,6 +460,73 @@ public sealed partial class AgentTools
         return Json(json);
     }
 
+    /// <summary>The questions argument: AskUserQuestion's shape, so an agent can ask the same way in ProJict.</summary>
+    private static JsonObject QuestionsSchema() => new()
+    {
+        ["type"] = "array",
+        ["minItems"] = 1,
+        ["maxItems"] = ChatQuestions.MaxQuestions,
+        ["description"] = $"1 to {ChatQuestions.MaxQuestions} questions.",
+        ["items"] = new JsonObject
+        {
+            ["type"] = "object",
+            ["properties"] = new JsonObject
+            {
+                ["question"] = new JsonObject { ["type"] = "string", ["description"] = "The question, ending with a question mark." },
+                ["header"] = new JsonObject { ["type"] = "string", ["description"] = $"A short label for it (up to {ChatQuestions.MaxHeader} characters), e.g. \"Cockpit\"." },
+                ["options"] = new JsonObject
+                {
+                    ["type"] = "array",
+                    ["minItems"] = ChatQuestions.MinOptions,
+                    ["maxItems"] = ChatQuestions.MaxOptions,
+                    ["description"] = "The choices, your suggestion first.",
+                    ["items"] = new JsonObject
+                    {
+                        ["type"] = "object",
+                        ["properties"] = new JsonObject
+                        {
+                            ["label"] = new JsonObject { ["type"] = "string", ["description"] = "The option in a few words." },
+                            ["description"] = new JsonObject { ["type"] = "string", ["description"] = "What it means or what it takes." },
+                        },
+                        ["required"] = new JsonArray("label"),
+                    },
+                },
+                ["multiSelect"] = new JsonObject { ["type"] = "boolean", ["description"] = "Several options may be picked." },
+            },
+            ["required"] = new JsonArray("question", "options"),
+        },
+    };
+
+    /// <summary>A message asking a person questions with options to click; the answers come back like approvals.</summary>
+    private string AskQuestion(McpSession session, Args args, List<Attachment> files)
+    {
+        RequireChat();
+        RequireOwnName(session, "ask");
+        if (SharedChannelFor(session, args) is not null)
+            throw new McpToolException("Ask questions in this ProJict's own channels, or privately with channel @name; another ProJict's channels can't take them yet.");
+        var channel = ChannelFor(session, args, start: true);
+        List<ChatQuestion> questions;
+        try { questions = ChatQuestions.Parse(args.String("questions") is { } raw ? JsonValue.Create(raw) : null); }
+        catch (ChatException ex) { throw new McpToolException(ex.Message); }
+        Guid? replyTo = args.String("reply_to") is { } r
+            ? (ChatRoom.FindMessage(channel, r.Trim()) ?? throw new McpToolException($"No message {r} in #{channel.Name}.", ToolProblem.NotFound)).Id
+            : null;
+        var text = args.String("text") is { } said && said.Trim().Length > 0 ? said : questions.Count == 1 ? "A question for you:" : "Some questions for you:";
+        var message = Chatting(() => Chat.Post(channel, ActorOf(session), text, replyTo, questions: questions));
+        session.Noticed.Add($"chat:{message.Id}");
+        var json = new JsonObject
+        {
+            ["id"] = ShortId(message.Id),
+            ["channel"] = Display(channel, session),
+            ["questions"] = ChatQuestions.Json(questions),
+            ["next"] = "Wait for the answers: you'll be told them (your chat watcher prints [answer] …, wait_for_messages gives them). " +
+                       "Go on with other work meanwhile if you can.",
+        };
+        if (Presence.UnavailableNotice(_state.UserName, _main.Agents.MyStatus, _main.Agents.MyState) is { } unavailable)
+            json["userUnavailable"] = unavailable;
+        return Json(json);
+    }
+
     /// <summary>Who's here (#4507be3d), so agents don't address, or wait on, people and agents who are offline.</summary>
     private string CheckPresence(McpSession session, Args args, List<Attachment> files)
     {
@@ -611,9 +690,10 @@ public sealed partial class AgentTools
             // Any change can be for it: a message, an @mention, an invitation, a 👍 or 👎 on its message.
             listener = c =>
             {
-                if ((channel == null || c == channel) && (Waiting(session, channel).Count > 0 || NewAnswers(session, channel).Any())) arrived.TrySetResult();
+                if ((channel == null || c == channel) && (Waiting(session, channel).Count > 0 || NewAnswers(session, channel).Any() ||
+                                                          NewQuestionAnswers(session, channel).Any())) arrived.TrySetResult();
             };
-            if (Waiting(session, channel).Count > 0 || NewAnswers(session, channel).Any()) arrived.TrySetResult();
+            if (Waiting(session, channel).Count > 0 || NewAnswers(session, channel).Any() || NewQuestionAnswers(session, channel).Any()) arrived.TrySetResult();
             else Chat.Changed += listener;
             return channel;
         });
@@ -632,6 +712,7 @@ public sealed partial class AgentTools
         {
             var waiting = Waiting(session, only);
             var answers = NewAnswers(session, only).ToList();
+            var answered = NewQuestionAnswers(session, only).ToList();
             // A backlog is caught up on, not replayed (#35c53efa): the newest, and older ones meant for it; the rest is
             // marked read with it, and said where to find.
             var (shown, left) = ChatCatchUp.Pick(waiting, (c, m) => ForYou(c, m, session.AgentName));
@@ -657,6 +738,16 @@ public sealed partial class AgentTools
                     ["meaning"] = a.Reaction.Up ? "approval: go ahead" : "a decline: don't",
                 }).ToArray());
             foreach (var a in answers) session.Noticed.Add(a.Key);
+            if (answered.Count > 0)
+                json["questionsAnswered"] = new JsonArray(answered.Select(a => (JsonNode)new JsonObject
+                {
+                    ["channel"] = Display(a.Channel, session),
+                    ["message"] = ShortId(a.Message.Id),
+                    ["by"] = a.Answered.By,
+                    ["at"] = Time(a.Answered.At),
+                    ["answers"] = ChatQuestions.AnswerMap(a.Message.Questions!),
+                }).ToArray());
+            foreach (var a in answered) session.Noticed.Add(a.Key);
             if (waiting.Count == 0 && answers.Count == 0) json["note"] = $"Nothing new in {seconds} s. Call wait_for_messages again to keep listening.";
             foreach (var group in waiting.GroupBy(w => w.Channel)) Delivered(session, group.Key, group.Select(w => w.Message).ToList());
             var got = new[] { waiting.Count > 0 ? Count(waiting.Count, "chat message") : null, answers.Count > 0 ? Count(answers.Count, "answer") : null }.OfType<string>().ToList();
@@ -744,6 +835,10 @@ public sealed partial class AgentTools
                 news.Add((true, decision.Approved
                     ? $"{decision.By} approved{(message.WithPin ? " with their PIN" : "")} what you asked in {Display(channel, session)} (id {ShortId(message.Id)}): “{message.Approval}”. Go ahead with that, and only that."
                     : $"{decision.By} declined what you asked in {Display(channel, session)} (id {ShortId(message.Id)}): “{message.Approval}”. Don't do it; ask them what they'd like instead if it isn't clear."));
+        foreach (var (channel, message, answered, key) in NewQuestionAnswers(session).ToList())
+            if (session.Noticed.Add(key))
+                news.Add((false, $"{answered.By} answered what you asked in {Display(channel, session)} (id {ShortId(message.Id)}): " +
+                                 ChatQuestions.AnswerText(message.Questions!).Replace("\n", "; ")));
         foreach (var a in NewAnswers(session).ToList())
             if (session.Noticed.Add(a.Key))
                 news.Add((false, $"{a.Reaction.By} gave {(a.Reaction.Up ? "👍" : "👎")} to your message “{Short(OneLine(a.Message.Text))}” in {Display(a.Channel, session)}" +
@@ -763,6 +858,17 @@ public sealed partial class AgentTools
                     yield return (channel, m, decision, key);
     }
 
+    /// <summary>Answers to the agent's questions (ask_question) that it hasn't heard about yet (in one channel, or in all it sees).</summary>
+    private IEnumerable<(ChatChannel Channel, ChatMessage Message, ChatAnswer Answered, string Key)> NewQuestionAnswers(McpSession session, ChatChannel? only = null)
+    {
+        var since = DateTime.Now - AnswersKeptFor;
+        foreach (var channel in Chat.Visible(ActorOf(session)).Where(c => only == null || c == only))
+            foreach (var m in channel.Messages)
+                if (m is { Answered: { } answered, Questions: not null } && answered.At > since && string.Equals(m.By, session.AgentName, StringComparison.OrdinalIgnoreCase) &&
+                    $"questions:{m.Id}" is var key && !session.Noticed.Contains(key))
+                    yield return (channel, m, answered, key);
+    }
+
     /// <summary>👍 and 👎 on the agent's messages that it hasn't heard about yet (in one channel, or in all it sees).</summary>
     private IEnumerable<(ChatChannel Channel, ChatMessage Message, ChatReaction Reaction, string Key)> NewAnswers(McpSession session, ChatChannel? only = null)
     {
@@ -770,7 +876,7 @@ public sealed partial class AgentTools
         foreach (var channel in Chat.Visible(ActorOf(session)).Where(c => only == null || c == only))
             foreach (var m in channel.Messages)
             {
-                if (m.Reactions == null || m.Approval != null || !string.Equals(m.By, session.AgentName, StringComparison.OrdinalIgnoreCase)) continue;
+                if (m.Reactions == null || m.Approval != null || m.Questions != null || !string.Equals(m.By, session.AgentName, StringComparison.OrdinalIgnoreCase)) continue;
                 foreach (var r in m.Reactions.Where(r => r.At > since))
                     if ($"answer:{m.Id}:{r.By}:{r.Up}:{r.At.Ticks}" is var key && !session.Noticed.Contains(key)) yield return (channel, m, r, key);
             }
@@ -871,6 +977,9 @@ public sealed partial class AgentTools
             ["asksApproval"] = m.Approval,
             ["approval"] = m.Approval == null ? null : m.Decision is { } d ? (d.Approved ? "approved by " : "declined by ") + d.By : "waiting",
             ["withPin"] = m.WithPin ? true : null,
+            ["questions"] = m.Questions is { Count: > 0 } questions && !m.Deleted ? ChatQuestions.Json(questions) : null,
+            ["answeredBy"] = m.Answered?.By,
+            ["questionsClosed"] = m.QuestionsClosed ? true : null,
             ["attachments"] = m.Attachments is { Count: > 0 } files ? Paths(files) : null,
         });
     }

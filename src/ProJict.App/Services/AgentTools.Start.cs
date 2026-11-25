@@ -61,7 +61,8 @@ public sealed partial class AgentTools
         "on hold, are off limits (read and comment only). File problems you notice with add_item, choosing each one's priority on purpose. Ask " +
         "the user or report progress with add_comment, and read their answers with list_comments. Tell the user about a longer step (tests, a " +
         "build) with set_status. Before anything that needs the user's go-ahead (a commit, a push, spending), ask with ask_approval and wait: " +
-        "only its answer counts as approval, not a 👍 on another message. " +
+        "only its answer counts as approval, not a 👍 on another message. To have the user choose between options, ask with ask_question " +
+        "(options to click, like AskUserQuestion), not in a plain message. " +
         "What waits for you comes first: a tool result may list it in waitingForYou (chat invitations, @mentions and private messages, the " +
         "user's comments on your work, work sent back, ship and clean-up requests). Deal with each before going on, or say why not. " +
         "Chat has #channels and private conversations (channel @name): list_channels, join_channel, read_channel (the latest few), search_chat " +
@@ -192,7 +193,12 @@ public sealed partial class AgentTools
         ["approvals"] =
             "To get the user's go-ahead for one change (a commit, a push, deleting or spending something), ask with ask_approval in Chat, naming " +
             "exactly that change; the message gets Approve and Decline. Do nothing of it before you're told \"approved\" (in a result, or [approval] " +
-            "from your chat watcher). A 👍 on any other message is only agreement, not approval. One change per question.",
+            "from your chat watcher). A 👍 on any other message is only agreement, not approval. One change per question. " +
+            "To have the user choose (a design direction, which of several fixes), ask with ask_question: up to 4 questions, each with a short " +
+            "header and 2 to 6 options (label and description, your suggestion first; multiSelect when several apply), the same shape as " +
+            "Claude Code's AskUserQuestion. The user clicks an answer or writes their own, and you're told it ([answer] from your chat " +
+            "watcher, or wait_for_messages). Prefer it to AskUserQuestion, whose question shows only in your own window unless the user set " +
+            "up ProJict's permission hook.",
         ["testing"] =
             "When something needs a person to try it by hand (a UI change, a build on their machine), ask with ask_to_test on the item you have " +
             "checked out or finished (or complete_item's test): a few short steps, what should happen, and files if they help. It waits in the " +

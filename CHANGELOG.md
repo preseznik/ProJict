@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Agents ask multiple-choice questions you answer with a click.** When Claude Code asks you a question (its AskUserQuestion) and its requests come to ProJict Chat, you no longer get a "May I use AskUserQuestion?" message full of JSON: the question shows with its options (each with what it means) to click, any that apply where several may, or your own answer in words. Your answer goes straight back to the agent, which goes on without asking again in its own window; a 👎 declines to answer. Agents can also ask this way themselves with the new `ask_question` tool (up to 4 questions with 2 to 6 options each), and they're told your answers like approvals.
+
 ## 0.1.59 (2026-11-13)
 
 - **Shared machines calendar: a colour per machine.** With all machines shown, each day is one column again instead of a narrow lane per machine, and each machine has its own colour (named above the calendar). Where stretches overlap they go side by side, or in a crowded week overlap a step to the right of each other. An agent's many short holds in a row are one block, with a mark at each hold and the list of them inside (time, who, what for). When you drag over free time, pick which machine to book.

@@ -1332,6 +1332,16 @@ public sealed partial class ChatViewModel : ObservableObject
             RebuildMessages();
     }
 
+    /// <summary>Your answers to the questions an agent's message asks: one list per question, the options picked or your own words.</summary>
+    internal void AnswerQuestions(ChatMessageViewModel message, List<List<string>> picks)
+    {
+        if (!message.CanAnswer || Channel is not { } channel) return;
+        var json = new JsonArray([.. picks.Select(p => (JsonNode)new JsonArray([.. p.Select(x => (JsonNode)x)]))]);
+        if (Act(channel, (r, me) => r.AnswerQuestions(channel, me, message.Model.Id, [.. picks.Select(p => (IReadOnlyList<string>)p)]), "answer",
+                ("message", message.Model.Id.ToString()), ("picks", json)))
+            RebuildMessages();
+    }
+
     /// <summary>"Are you sure?" and your PIN, before approving what can't be taken back; tests answer for you (null: the dialog).</summary>
     public Func<ChatMessageViewModel, bool>? ConfirmWithPin { get; set; }
 
@@ -1760,6 +1770,7 @@ public sealed partial class ChatMessageViewModel : ObservableObject
         HasReply = replied != null;
         ReplyBy = replied?.By;
         ReplySnippet = replied == null ? null : replied.Deleted ? "(deleted)" : ChatTimeline.Snippet(replied.Text);
+        foreach (var question in _questions ?? []) question.Refresh();
         OnPropertyChanged(string.Empty);
     }
 
@@ -1793,6 +1804,50 @@ public sealed partial class ChatMessageViewModel : ObservableObject
     public bool IsDeclined => Model.Decision is { Approved: false };
     [RelayCommand] private void Approve() => _owner.Decide(this, true);
     [RelayCommand] private void Decline() => _owner.Decide(this, false);
+
+    // Questions the message asks (ask_question, or Claude Code's AskUserQuestion): options to click, or your own words;
+    // one question with one answer goes with the click, otherwise Send answers. Then who answered, and what.
+    private List<ChatQuestionViewModel>? _questions;
+    public IReadOnlyList<ChatQuestionViewModel> Questions => _questions ??= [.. (Model.Questions ?? []).Select(q => new ChatQuestionViewModel(this, q))];
+    public bool HasQuestions => Model.Questions is { Count: > 0 } && !Model.Deleted;
+    /// <summary>It waits for an answer, and you may give it (it isn't yours, and you can write here).</summary>
+    public bool CanAnswer => HasQuestions && Model.Answered == null && !Model.QuestionsClosed && CanReact;
+    /// <summary>The answers go with a button: several questions, any that apply, or your own words.</summary>
+    public bool ShowsSend => CanAnswer && (Questions.Count > 1 || Questions.Any(q => q.Multiple || q.OwnWords.Trim().Length > 0));
+    public string? QuestionsStatus => Model.Answered is { } a
+        ? $"Answered by {a.By} · " + a.At.ToString(a.At.Date == DateTime.Today ? "HH:mm" : "d MMM HH:mm", CultureInfo.CurrentCulture)
+        : Model.QuestionsClosed ? $"{Model.By} isn't waiting for the answer here any more"
+        : CanAnswer ? null : "Waiting for an answer";
+    public bool QuestionsAnswered => Model.Answered != null;
+
+    private bool CanSendAnswers() => CanAnswer && Questions.All(q => q.Picks.Count > 0);
+
+    /// <summary>An option clicked: a lone question with one answer is sent with it.</summary>
+    internal void Picked(ChatQuestionViewModel question)
+    {
+        if (Questions.Count == 1 && !question.Multiple) SendAnswers();
+        else PicksChanged();
+    }
+
+    internal void PicksChanged()
+    {
+        OnPropertyChanged(nameof(ShowsSend));
+        SendAnswersCommand.NotifyCanExecuteChanged();
+    }
+
+    [RelayCommand(CanExecute = nameof(CanSendAnswers))]
+    private void SendAnswers()
+    {
+        if (CanSendAnswers()) _owner.AnswerQuestions(this, [.. Questions.Select(q => q.Picks)]);
+    }
+
+    /// <summary>The agent's suggestion (the first option) for every question.</summary>
+    [RelayCommand]
+    private void UseSuggestions()
+    {
+        if (!CanAnswer) return;
+        _owner.AnswerQuestions(this, [.. Questions.Select(q => new List<string> { q.Model.Options[0].Label })]);
+    }
 
     [RelayCommand] private void Reply() => _owner.StartReply(this);
     [RelayCommand] private void Edit() => _owner.StartEdit(this);

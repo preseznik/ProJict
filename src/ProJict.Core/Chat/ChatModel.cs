@@ -68,6 +68,18 @@ public sealed class ChatMessage
     /// <summary>Who approved or declined what the message asks, and when; null while nobody has.</summary>
     public ChatDecision? Decision { get; set; }
     /// <summary>
+    /// Questions the message asks, answered with a click (ask_question, or Claude Code's AskUserQuestion through the
+    /// permission hook); null for other messages. The first person to answer them all answers.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<ChatQuestion>? Questions { get; set; }
+    /// <summary>Who answered the questions, and when; null while nobody has.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ChatAnswer? Answered { get; set; }
+    /// <summary>The agent stopped waiting for the answer (it was asked where it runs instead): they can't be answered any more.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool QuestionsClosed { get; set; }
+    /// <summary>
     /// On a person's message: the agent answering it (claim_reply, or its first reply), so the others leave it (#1581da50);
     /// null while none has said it is.
     /// </summary>
@@ -82,6 +94,36 @@ public sealed class ChatDecision
 {
     public string By { get; set; } = "";
     public bool Approved { get; set; }
+    public DateTime At { get; set; } = DateTime.Now;
+}
+
+/// <summary>A question an agent asks in Chat, with options to click (the shape of Claude Code's AskUserQuestion).</summary>
+public sealed class ChatQuestion
+{
+    public string Question { get; set; } = "";
+    /// <summary>A short label for it ("Cockpit"), shown as a chip; null without.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Header { get; set; }
+    public List<ChatOption> Options { get; set; } = [];
+    /// <summary>Several options may be picked.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Multiple { get; set; }
+    /// <summary>The answer: the options picked, or the person's own words; null while unanswered.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<string>? Answer { get; set; }
+}
+
+public sealed class ChatOption
+{
+    public string Label { get; set; } = "";
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Description { get; set; }
+}
+
+/// <summary>Who answered a message's questions.</summary>
+public sealed class ChatAnswer
+{
+    public string By { get; set; } = "";
     public DateTime At { get; set; } = DateTime.Now;
 }
 

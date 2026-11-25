@@ -377,6 +377,101 @@
                                     </TextBlock>
                                 </StackPanel>
                             </Border>
+                            <!-- Questions it asks (ask_question, Claude Code's AskUserQuestion): options to click or your own words; then the answers -->
+                            <Border x:Name="QuestionsBox" Margin="0,5,0,0" Padding="10,7" CornerRadius="6" HorizontalAlignment="Left" MaxWidth="640"
+                                    Background="{DynamicResource SubtleFillColorSecondaryBrush}" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}" BorderThickness="1"
+                                    Visibility="{Binding HasQuestions, Converter={StaticResource BoolToVis}}">
+                                <StackPanel>
+                                    <ItemsControl ItemsSource="{Binding Questions}" Focusable="False">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate DataType="{x:Type vm:ChatQuestionViewModel}">
+                                                <StackPanel Margin="0,0,0,8">
+                                                    <TextBlock TextWrapping="Wrap" Margin="0,0,0,4">
+                                                        <Border Padding="6,0" CornerRadius="3" Margin="0,0,6,0" Background="{DynamicResource AccentFillColorDefaultBrush}"
+                                                                Visibility="{Binding HasHeader, Converter={StaticResource BoolToVis}}">
+                                                            <TextBlock Text="{Binding Header}" FontSize="11" Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+                                                        </Border><Run Text="{Binding Question, Mode=OneWay}" FontWeight="SemiBold" />
+                                                    </TextBlock>
+                                                    <TextBlock Text="Pick any that apply" FontSize="11" Margin="0,0,0,4" Foreground="{DynamicResource TextFillColorTertiaryBrush}">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock">
+                                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                                <Style.Triggers>
+                                                                    <MultiDataTrigger>
+                                                                        <MultiDataTrigger.Conditions>
+                                                                            <Condition Binding="{Binding Multiple}" Value="True" />
+                                                                            <Condition Binding="{Binding IsAnswered}" Value="False" />
+                                                                        </MultiDataTrigger.Conditions>
+                                                                        <Setter Property="Visibility" Value="Visible" />
+                                                                    </MultiDataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
+                                                    <!-- The options, each with what it means; the picked ones stand out -->
+                                                    <ItemsControl ItemsSource="{Binding Options}" Focusable="False">
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate DataType="{x:Type vm:ChatOptionViewModel}">
+                                                                <Button x:Name="Option" Command="{Binding PickCommand}" Margin="0,0,0,4" Padding="10,4" HorizontalAlignment="Stretch"
+                                                                        HorizontalContentAlignment="Left" ToolTip="{Binding ToolTip}" AutomationProperties.Name="{Binding Label}">
+                                                                    <Grid>
+                                                                        <Grid.ColumnDefinitions>
+                                                                            <ColumnDefinition Width="18" />
+                                                                            <ColumnDefinition Width="*" />
+                                                                        </Grid.ColumnDefinitions>
+                                                                        <TextBlock Style="{StaticResource Icon}" Text="&#xE73E;" FontSize="11" VerticalAlignment="Top" Margin="0,3,0,0"
+                                                                                   Visibility="{Binding IsPicked, Converter={StaticResource BoolToVis}}" />
+                                                                        <StackPanel Grid.Column="1">
+                                                                            <TextBlock Text="{Binding Label}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                                                            <TextBlock x:Name="Description" Text="{Binding Description}" FontSize="12" TextWrapping="Wrap" Opacity="0.8"
+                                                                                       Visibility="{Binding HasDescription, Converter={StaticResource BoolToVis}}" />
+                                                                        </StackPanel>
+                                                                    </Grid>
+                                                                </Button>
+                                                                <DataTemplate.Triggers>
+                                                                    <DataTrigger Binding="{Binding IsPicked}" Value="True">
+                                                                        <Setter TargetName="Option" Property="Style" Value="{StaticResource AccentButtonStyle}" />
+                                                                    </DataTrigger>
+                                                                </DataTemplate.Triggers>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+                                                    <!-- Or your own answer, while it waits for one -->
+                                                    <DockPanel Margin="0,2,0,0" Visibility="{Binding DataContext.CanAnswer, RelativeSource={RelativeSource AncestorType=ItemsControl, AncestorLevel=1}, Converter={StaticResource BoolToVis}}">
+                                                        <TextBlock DockPanel.Dock="Left" Text="Or your own answer:" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0"
+                                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                                        <TextBox Text="{Binding OwnWords, UpdateSourceTrigger=PropertyChanged}" TextWrapping="Wrap" AcceptsReturn="False"
+                                                                 AutomationProperties.Name="Your own answer" />
+                                                    </DockPanel>
+                                                    <TextBlock TextWrapping="Wrap" Margin="0,2,0,0" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                                                               Visibility="{Binding AnsweredInOwnWords, Converter={StaticResource BoolToVis}}">
+                                                        <Run Text="&#xE73E;" FontFamily="{StaticResource IconFont}" FontSize="11" /><Run Text="  " /><Run Text="{Binding AnswerText, Mode=OneWay}" />
+                                                    </TextBlock>
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <StackPanel Orientation="Horizontal" Visibility="{Binding ShowsSend, Converter={StaticResource BoolToVis}}">
+                                        <Button x:Name="SendAnswersButton" Style="{StaticResource AccentButtonStyle}" Content="Send answers" Padding="14,4"
+                                                Command="{Binding SendAnswersCommand}" ToolTip="The agent gets your answers" />
+                                        <Button Style="{StaticResource SubtleButton}" Content="Use all suggestions" Margin="6,0,0,0" Command="{Binding UseSuggestionsCommand}"
+                                                ToolTip="The first option of each question" />
+                                    </StackPanel>
+                                    <TextBlock x:Name="QuestionsLine" Text="{Binding QuestionsStatus}" FontSize="12" Margin="0,2,0,0"
+                                               Visibility="{Binding QuestionsStatus, Converter={StaticResource EmptyToVis}}">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding QuestionsAnswered}" Value="True">
+                                                        <Setter Property="Foreground" Value="{DynamicResource SystemFillColorSuccessBrush}" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </StackPanel>
+                            </Border>
                             <!-- Thumbs given: a yes or no to the message -->
                             <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
                                 <Button Style="{StaticResource SubtleButton}" Padding="6,1" Margin="0,0,4,0" Command="{Binding ThumbUpCommand}" ToolTip="{Binding UpsToolTip}"

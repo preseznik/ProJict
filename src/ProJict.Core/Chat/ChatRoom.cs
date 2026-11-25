@@ -507,8 +507,9 @@ public sealed class ChatRoom
     /// <summary>Posts a message; posting in an Open channel joins it.</summary>
     /// <param name="approval">The one change the message asks a person to approve (ask_approval), e.g. "commit #9113ea6a".</param>
     /// <param name="withPin">It can't be taken back: only the owner answers it, approving with their PIN (#8793323e).</param>
+    /// <param name="questions">Questions it asks, answered with a click (ask_question); checked with <see cref="ChatQuestions.Check"/>.</param>
     public ChatMessage Post(ChatChannel channel, ChatActor actor, string text, Guid? replyTo = null, List<Attachment>? files = null, string? approval = null,
-        bool withPin = false)
+        bool withPin = false, List<ChatQuestion>? questions = null)
     {
         text = text.Trim();
         if (text.Length == 0 && files is not { Count: > 0 }) throw new ChatException("The message is empty.");
@@ -530,10 +531,16 @@ public sealed class ChatRoom
         if (approval is { Length: 0 }) approval = null;
         if (approval is { Length: > MaxApproval }) throw new ChatException($"Say what you ask to do in {MaxApproval} characters at most.");
         if (withPin && approval == null) throw new ChatException("Only a request for approval asks for the PIN.");
+        if (questions is { Count: 0 }) questions = null;
+        if (questions != null)
+        {
+            if (approval != null) throw new ChatException("Ask for approval or ask questions, not both in one message.");
+            ChatQuestions.Check(questions);
+        }
         var message = new ChatMessage
         {
             By = actor.Name, Agent = actor.Agent, At = NextTime(channel), Text = text, ReplyTo = replyTo, Attachments = files is { Count: > 0 } ? files : null,
-            Approval = approval, WithPin = withPin,
+            Approval = approval, WithPin = withPin, Questions = questions,
         };
         channel.Messages.Add(message);
         if (answered is { Agent: false, Notice: false })
@@ -606,6 +613,34 @@ public sealed class ChatRoom
             if (approve && !pinChecked) throw new ChatException("Approving this one takes your PIN.");
         }
         message.Decision = new ChatDecision { By = actor.Name, Approved = approve, At = Now };
+        Changed?.Invoke(channel);
+    }
+
+    /// <summary>
+    /// A person's answers to the questions a message asks (one list per question: the options picked, or their own words);
+    /// the first person to answer them answers. Agents don't answer them.
+    /// </summary>
+    public void AnswerQuestions(ChatChannel channel, ChatActor actor, Guid id, IReadOnlyList<IReadOnlyList<string>> picks)
+    {
+        var message = Message(channel, id);
+        if (message.Questions is not { Count: > 0 } questions || message.Deleted) throw new ChatException("That message doesn't ask anything to answer.");
+        if (!CanSee(channel, actor)) throw new ChatException($"You can't answer in #{channel.Name}.");
+        if (actor.Agent) throw new ChatException("Only people answer what agents ask.");
+        if (message.Answered is { } answered) throw new ChatException($"{answered.By} already answered it.");
+        if (message.QuestionsClosed) throw new ChatException($"{message.By} isn't waiting for the answer here any more.");
+        var answers = ChatQuestions.CheckAnswers(questions, picks);
+        for (var i = 0; i < questions.Count; i++) questions[i].Answer = answers[i];
+        message.Answered = new ChatAnswer { By = actor.Name, At = Now };
+        Changed?.Invoke(channel);
+    }
+
+    /// <summary>The asker stops waiting for the answers to its questions (it asked elsewhere): they can't be answered here any more.</summary>
+    public void CloseQuestions(ChatChannel channel, ChatActor actor, Guid id)
+    {
+        var message = Message(channel, id);
+        if (!string.Equals(message.By, actor.Name, StringComparison.OrdinalIgnoreCase)) throw new ChatException("Only who asked can stop waiting for the answer.");
+        if (message.Questions == null || message.Answered != null || message.QuestionsClosed) return;
+        message.QuestionsClosed = true;
         Changed?.Invoke(channel);
     }
 

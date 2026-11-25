@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using ProJict.Core.Chat;
 
 namespace ProJict.Core.Agents;
 
@@ -66,6 +67,48 @@ public static class PermissionAsk
             text += string.Concat(shown.Replace("\r\n", "\n").Split('\n').Select(line => "\n› " + line));
         }
         return text + $"\n👍 allows it, 👎 refuses. {client} asked; you can also answer there.";
+    }
+
+    /// <summary>
+    /// Claude Code's AskUserQuestion: its questions, to answer with a click in Chat instead of being asked "May I use
+    /// AskUserQuestion?" over its JSON; null for any other request, or questions that don't fit.
+    /// </summary>
+    public static List<ChatQuestion>? Questions(JsonObject hook)
+    {
+        if (Text(hook["tool_name"]) != "AskUserQuestion" || hook["tool_input"] is not JsonObject input) return null;
+        try { return ChatQuestions.Parse(input["questions"]?.DeepClone()); }
+        catch (ChatException) { return null; }
+    }
+
+    /// <summary>The agent's private message above its questions.</summary>
+    public static string QuestionsText(int count, string client) =>
+        $"{(count == 1 ? "A question" : "Some questions")} for you: pick an answer, or write your own. " +
+        $"{client} asked; you can also answer there, and 👎 declines to answer.";
+
+    /// <summary>
+    /// Your answers as the hook's decision: AskUserQuestion allowed, its input given the answers ({"question": "label"},
+    /// several labels joined with commas, your own words as they are), so Claude Code takes them without asking again.
+    /// </summary>
+    public static JsonObject AnswerOutput(JsonObject hook, IReadOnlyList<ChatQuestion> answered)
+    {
+        var input = hook["tool_input"]?.DeepClone() as JsonObject ?? [];
+        var answers = new JsonObject();
+        var asked = input["questions"] as JsonArray;
+        for (var i = 0; i < answered.Count; i++)
+        {
+            // Keyed by the question exactly as Claude Code sent it.
+            var key = asked?.ElementAtOrDefault(i)?["question"] is JsonValue q && q.TryGetValue<string>(out var exact) ? exact : answered[i].Question;
+            answers[key] = ChatQuestions.AnswerLine(answered[i]);
+        }
+        input["answers"] = answers;
+        return new JsonObject
+        {
+            ["hookSpecificOutput"] = new JsonObject
+            {
+                ["hookEventName"] = "PermissionRequest",
+                ["decision"] = new JsonObject { ["behavior"] = "allow", ["updatedInput"] = input },
+            },
+        };
     }
 
     /// <summary>What the hook prints for Claude Code (and Codex): your answer as its decision.</summary>

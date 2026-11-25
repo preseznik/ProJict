@@ -509,6 +509,7 @@ public sealed partial class AgentTools : IMcpToolHost
                 "read_channel" => $"Read {name}",
                 "post_message" => $"Wrote in {name}",
                 "ask_approval" => $"Asked for approval in {name}",
+                "ask_question" => $"Asked a question in {name}",
                 "edit_message" => args.Bool("delete") == true ? $"Deleted a message in {name}" : $"Edited a message in {name}",
                 "join_channel" => args.Bool("leave") == true ? $"Left {name}" : $"Joined {name}",
                 "invite_to_channel" => $"Invited {args.String("who")} to {name}",

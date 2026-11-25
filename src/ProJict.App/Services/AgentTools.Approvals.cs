@@ -9,7 +9,8 @@ namespace ProJict.App.Services;
 /// <summary>
 /// Approving agents' requests in ProJict Chat (#54ef1c15): Claude Code's or Codex's PermissionRequest hook
 /// (<c>ProJictBridge.exe --permission-hook</c>) brings a request here, the agent asks you privately what it wants to do,
-/// and only your 👍 or 👎 (as this ProJict's owner) answers it. Unanswered, the usual prompt decides.
+/// and only your 👍 or 👎 (as this ProJict's owner) answers it. Unanswered, the usual prompt decides. Claude Code's
+/// AskUserQuestion comes as its questions, to answer with a click; your answers go back as the tool's answers.
 /// </summary>
 public sealed partial class AgentTools
 {
@@ -19,8 +20,10 @@ public sealed partial class AgentTools
         public ChatChannel Channel { get; } = channel;
         public ChatMessage Message { get; } = message;
         public ChatActor Agent { get; } = agent;
+        /// <summary>Your 👍 (true) or 👎 (false); for questions, true once you answered them.</summary>
         public TaskCompletionSource<bool> Answer { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public Action<ChatChannel>? Listener { get; set; }
+        public bool AsksQuestions => Message.Questions != null;
     }
 
     /// <summary>The bridge's request on the pipe: asks you in Chat, waits for your answer, and sends it back as the hook's decision.</summary>
@@ -40,9 +43,16 @@ public sealed partial class AgentTools
         bool? answer;
         try { answer = await asked.Answer.Task.WaitAsync(gone.Token); }
         catch (OperationCanceledException) { answer = null; }
-        await _dispatcher.InvokeAsync(() => Settle(asked, answer));
-        if (answer is not { } allow) return;
-        var reply = new JsonObject { ["hookOutput"] = PermissionAsk.HookOutput(allow, allow ? null : $"{_state.UserName} refused in ProJict Chat.") };
+        var output = await _dispatcher.InvokeAsync(() =>
+        {
+            Settle(asked, answer);
+            return answer is not { } allow ? null
+                : !asked.AsksQuestions ? PermissionAsk.HookOutput(allow, allow ? null : $"{_state.UserName} refused in ProJict Chat.")
+                : allow ? PermissionAsk.AnswerOutput(hook, asked.Message.Questions!)
+                : PermissionAsk.HookOutput(false, $"{_state.UserName} declined to answer in ProJict Chat: go on without the answer, or ask differently.");
+        });
+        if (output == null) return;
+        var reply = new JsonObject { ["hookOutput"] = output };
         try
         {
             await pipe.WriteAsync(Encoding.UTF8.GetBytes(reply.ToJsonString() + "\n"), stop);
@@ -66,33 +76,48 @@ public sealed partial class AgentTools
         try
         {
             var channel = Chat.OpenDirect(actor, _state.ChatMe.Name, otherIsAgent: false);
-            var message = Chat.Post(channel, actor, PermissionAsk.Question(hook, client));
+            // AskUserQuestion: its questions to click, not "May I use AskUserQuestion?" over its JSON.
+            var questions = PermissionAsk.Questions(hook);
+            var message = questions != null
+                ? Chat.Post(channel, actor, PermissionAsk.QuestionsText(questions.Count, client), questions: questions)
+                : Chat.Post(channel, actor, PermissionAsk.Question(hook, client));
             var asked = new Asked(channel, message, actor);
             asked.Listener = changed =>
             {
                 if (changed != channel || asked.Answer.Task.IsCompleted) return;
                 // Only you answer it, as this ProJict's owner: not an agent, nor someone you share with.
-                if (message.Reactions?.LastOrDefault(r => string.Equals(r.By, _state.ChatMe.Name, StringComparison.OrdinalIgnoreCase)) is { } yours)
+                bool Mine(string by) => string.Equals(by, _state.ChatMe.Name, StringComparison.OrdinalIgnoreCase);
+                if (message.Answered is { } answered && Mine(answered.By)) asked.Answer.TrySetResult(true);
+                // On questions only a 👎 answers (declines them); a 👍 isn't an answer to pick.
+                else if (message.Reactions?.LastOrDefault(r => Mine(r.By)) is { } yours && (questions == null || !yours.Up))
                     asked.Answer.TrySetResult(yours.Up);
             };
             Chat.Changed += asked.Listener;
-            _state.StatusText = $"{name} asks you in Chat: may it {PermissionAsk.Describe(hook).What}?";
+            _state.StatusText = questions != null
+                ? $"{name} asks you {(questions.Count == 1 ? "a question" : "some questions")} in Chat."
+                : $"{name} asks you in Chat: may it {PermissionAsk.Describe(hook).What}?";
             return asked;
         }
         catch (ChatException) { return null; }
     }
 
-    /// <summary>(UI thread.) The request's message says how it ended.</summary>
+    /// <summary>(UI thread.) The request's message says how it ended; questions nobody answered can't be answered any more.</summary>
     private void Settle(Asked asked, bool? answer)
     {
         if (asked.Listener != null) Chat.Changed -= asked.Listener;
-        var outcome = answer switch
+        var outcome = (answer, asked.AsksQuestions) switch
         {
-            true => $"✓ {_state.UserName} allowed it.",
-            false => $"✗ {_state.UserName} refused it.",
-            null => "No answer here in time, so it's asked in the agent's own window.",
+            (true, true) => null,   // the answers show under the questions
+            (true, false) => $"✓ {_state.UserName} allowed it.",
+            (false, true) => $"✗ {_state.UserName} declined to answer.",
+            (false, false) => $"✗ {_state.UserName} refused it.",
+            (null, _) => "No answer here in time, so it's asked in the agent's own window.",
         };
-        try { Chat.Edit(asked.Channel, asked.Agent, asked.Message.Id, asked.Message.Text + "\n\n" + outcome); }
+        try
+        {
+            if (asked.AsksQuestions && answer != true) Chat.CloseQuestions(asked.Channel, asked.Agent, asked.Message.Id);
+            if (outcome != null) Chat.Edit(asked.Channel, asked.Agent, asked.Message.Id, asked.Message.Text + "\n\n" + outcome);
+        }
         catch (ChatException) { }
     }
 

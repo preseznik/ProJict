@@ -56,6 +56,11 @@ internal static class RemoteChatOps
             case "react": room.React(channel, actor, messageId ?? Guid.Empty, (bool?)message["up"]); break;
             // Approve or Decline; "pin": the PIN was checked on the computer you clicked on (#8793323e), which only counts from yours.
             case "decide": room.Decide(channel, actor, messageId ?? Guid.Empty, (bool?)message["approve"] == true, (bool?)message["pin"] == true); break;
+            // Answers to an agent's questions: one list per question, the options picked or their own words.
+            case "answer":
+                room.AnswerQuestions(channel, actor, messageId ?? Guid.Empty, [.. (message["picks"] as JsonArray ?? []).Select(q =>
+                    (IReadOnlyList<string>)[.. (q as JsonArray ?? []).Select(p => p is JsonValue v && v.TryGetValue<string>(out var s) ? s : "")])]);
+                break;
             case "delete": room.DeleteMessage(channel, actor, messageId ?? Guid.Empty); break;
             case "join": room.Join(channel, actor); break;
             case "leave": room.Leave(channel, actor); break;
