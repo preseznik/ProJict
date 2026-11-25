@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.60 (2026-11-25)
 
 - **Agents ask multiple-choice questions you answer with a click.** When Claude Code asks you a question (its AskUserQuestion) and its requests come to ProJict Chat, you no longer get a "May I use AskUserQuestion?" message full of JSON: the question shows with its options (each with what it means) to click, any that apply where several may, or your own answer in words. Your answer goes straight back to the agent, which goes on without asking again in its own window; a 👎 declines to answer. Agents can also ask this way themselves with the new `ask_question` tool (up to 4 questions with 2 to 6 options each), and they're told your answers like approvals.
 
