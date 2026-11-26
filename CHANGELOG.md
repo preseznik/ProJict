@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.62 (2026-11-26)
 
 - **Agents see the web browser is theirs, and whether it's on.** Agents read ProJict's browser tools as Suno's alone, since every example named a tool. Now `browser_open` leads with the web browser and says whether you allow it right now: off, this computer's sites only, or the web too. `list_tools` and `get_started` say the same, along with whether image search is on. Changing either in **Settings → Tools** tells connected agents to read their tools again.
 
