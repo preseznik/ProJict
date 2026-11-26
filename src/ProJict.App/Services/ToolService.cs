@@ -103,6 +103,14 @@ public sealed class ToolService
     public string ProfileFolder(ExternalTool tool) =>
         Path.Combine(_path != null ? Path.GetDirectoryName(_path)! : Path.Combine(Path.GetTempPath(), "ProJict-tools"), "browser", tool.Id.ToString("N"));
 
+    private string BrowserFolder => Path.Combine(_path != null ? Path.GetDirectoryName(_path)! : Path.Combine(Path.GetTempPath(), "ProJict-tools"), "browser");
+
+    /// <summary>ProJict's web browser for agents (not a tool's): its browser folder, where agents' private profiles leave nothing behind.</summary>
+    public string WebFolder => Path.Combine(BrowserFolder, "web");
+
+    /// <summary>Screenshots and image search pictures for agents to look at, kept a day.</summary>
+    public string PicturesFolder => Path.Combine(BrowserFolder, "pictures");
+
     /// <summary>You signed in to it in ProJict's browser (Sign in… › Done).</summary>
     public void SignedIn(ExternalTool tool)
     {

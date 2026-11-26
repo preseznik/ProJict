@@ -51,6 +51,9 @@ public partial class SettingsWindow : Window
         ShowClaudeHook();
         ShowPin();
         ReadOnlyTokensUseChat.IsChecked = state.AppSettings.ReadOnlyTokensUseChat;
+        AgentsBrowseWeb.SelectedItem = AgentsBrowseWeb.Items.Cast<ComboBoxItem>().FirstOrDefault(i => (string)i.Tag == state.AppSettings.AgentsBrowseWeb.ToString())
+                                       ?? AgentsBrowseWeb.Items[0];
+        AgentsSearchImages.IsChecked = state.AppSettings.AgentsSearchImages;
         foreach (var box in AgentPriorities.Children.OfType<CheckBox>())
             box.IsChecked = s.AgentPriorities.Contains(Enum.Parse<Priority>((string)box.Tag));
         AgentInstructions.Text = s.AgentInstructions ?? "";
@@ -349,7 +352,12 @@ public partial class SettingsWindow : Window
             : "On · they may work on " + (AgentAccess.Describe(priorities) ?? "no items (they can still read and comment)") +
               (string.IsNullOrWhiteSpace(AgentInstructions.Text) ? "" : " · with your instructions");
         ApiSummary.Text = ApiStatus.Text;
-        ToolsSummary.Text = ToolsSummaryOf(App.Current.MainVm.Tools.Tools);
+        ToolsSummary.Text = ToolsSummaryOf(App.Current.MainVm.Tools.Tools) + (((AgentsBrowseWeb.SelectedItem as ComboBoxItem)?.Tag as string) switch
+        {
+            "Web" => " · agents browse the web",
+            "ThisComputer" => " · agents browse this computer's sites",
+            _ => "",
+        }) + (AgentsSearchImages.IsChecked == true ? " · image search" : "");
         var kinds = NotifyKinds.Children.OfType<CheckBox>().Where(b => b.IsChecked == true).Select(b => (string)b.Content).ToList();
         NotificationsSummary.Text = NotifyEnabled.IsChecked != true ? "Off" : kinds.Count == 0 ? "On, but nothing is chosen" : "On · " + string.Join(", ", kinds);
         BoardSummary.Text = $"{(Theme.SelectedItem as ComboBoxItem)?.Content} theme, {SchemeName} colors · stale after {StaleDays.Text.Trim()} days" +
@@ -795,6 +803,9 @@ public partial class SettingsWindow : Window
         _state.AppSettings.AgentsUseChat = AgentsUseChat.IsChecked == true;
         _state.AppSettings.ApproveInChat = ApproveInChat.IsChecked == true;
         _state.AppSettings.ReadOnlyTokensUseChat = ReadOnlyTokensUseChat.IsChecked == true;
+        _state.AppSettings.AgentsBrowseWeb = Enum.TryParse<ProJict.Core.Tools.WebBrowsing>((AgentsBrowseWeb.SelectedItem as ComboBoxItem)?.Tag as string, out var browsing)
+            ? browsing : ProJict.Core.Tools.WebBrowsing.Off;
+        _state.AppSettings.AgentsSearchImages = AgentsSearchImages.IsChecked == true;
         _state.AppSettings.UserName = string.IsNullOrWhiteSpace(UserName.Text) || UserName.Text.Trim() == Environment.UserName ? null : UserName.Text.Trim();
         App.Current.SetAgentAccess(_state.AppSettings.AllowAgents);
         ApplyGitHubSettings();

@@ -475,16 +475,17 @@ public sealed partial class MainViewModel : ObservableObject
 
     /// <summary>The outside tools agents may use (Settings › Tools), and their requests for API keys.</summary>
     public Services.ToolService Tools { get; }
-    /// <summary>ProJict's browser for agents, a browser per tool in the browser (Suno, Tripo3D).</summary>
+    /// <summary>ProJict's browser for agents: a browser per tool in the browser (Suno, Tripo3D), and agents' own web browsers.</summary>
     public Services.BrowserService Browsers { get; }
     /// <summary>The ComfyUI workflows of the tools (in the data folder, so they're on every computer).</summary>
     public ProJict.Core.Tools.WorkflowLibrary Workflows { get; }
 
-    /// <summary>An agent is using a tool's browser: the bar at the bottom says who and which, with Watch and Stop.</summary>
+    /// <summary>An agent is using ProJict's browser: the bar at the bottom says who and where, with Watch and Stop.</summary>
     public Services.BrowserSession? BrowserInUse => Browsers.Sessions.OrderByDescending(s => s.LastUsed).FirstOrDefault();
     public bool HasBrowserInUse => BrowserInUse != null;
     public string BrowserInUseText => BrowserInUse is { } s
-        ? $"{s.Agent} is using {s.Tool.Name} in ProJict's browser" + (Browsers.Sessions.Count > 1 ? $" (and {Browsers.Sessions.Count - 1} more)." : ".")
+        ? (s.Tool is { } tool ? $"{s.Agent} is using {tool.Name} in ProJict's browser" : $"{s.Agent} is browsing {s.Where} in ProJict's browser") +
+          (Browsers.Sessions.Count > 1 ? $" (and {Browsers.Sessions.Count - 1} more)." : ".")
         : "";
 
     /// <summary>Shared things agents hold now (claim_resource, #bb95b66d): the bar at the bottom says who has what and until when, with Free.</summary>
@@ -613,7 +614,7 @@ public sealed partial class MainViewModel : ObservableObject
     {
         if (BrowserInUse is not { } session) return;
         Browsers.Stop(session);
-        State.StatusText = $"Stopped {session.Agent}'s use of {session.Tool.Name}'s browser; it's told on its next try.";
+        State.StatusText = $"Stopped {session.Agent}'s use of {(session.Tool is { } tool ? $"{tool.Name}'s browser" : "ProJict's web browser")}; it's told on its next try.";
     }
 
     /// <summary>An agent asks for a tool's API key: the bar at the bottom asks you.</summary>

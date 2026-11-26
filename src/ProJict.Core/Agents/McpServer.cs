@@ -361,7 +361,8 @@ public static class McpServer
         {
             session.Replaying = false;
         }
-        var result = new JsonObject { ["content"] = new JsonArray(new JsonObject { ["type"] = "text", ["text"] = text }) };
+        var images = McpImages.Take(ref text);
+        var result = new JsonObject { ["content"] = new JsonArray([new JsonObject { ["type"] = "text", ["text"] = text }, .. images]) };
         // The same JSON as structured content too, so clients needn't parse the text; the text stays for those that don't read it.
         if (!isError && session.TakesStructuredResults && Structured(text, tool) is { } structured) result["structuredContent"] = structured;
         result["isError"] = isError;

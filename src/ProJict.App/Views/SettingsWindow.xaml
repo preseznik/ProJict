@@ -163,6 +163,17 @@
                 </DockPanel>
                 <TextBlock Style="{StaticResource MutedText}" Margin="2,4,0,0" TextWrapping="Wrap"
                            Text="Keys are protected for your Windows user and stay on this computer. An agent gets one only when you allow it: ProJict asks you each time, unless you let that agent have it always." />
+                <TextBlock Text="Agents browse the web in ProJict's browser" Margin="0,14,0,4" FontWeight="SemiBold" />
+                <ComboBox x:Name="AgentsBrowseWeb" Width="420" HorizontalAlignment="Left"
+                          AutomationProperties.Name="Agents browse the web in ProJict's browser">
+                    <ComboBoxItem Content="Not at all" Tag="Off" />
+                    <ComboBoxItem Content="Only this computer's own sites (localhost)" Tag="ThisComputer" />
+                    <ComboBoxItem Content="The web, and this computer's own sites" Tag="Web" />
+                </ComboBox>
+                <TextBlock Style="{StaticResource MutedText}" Margin="2,4,0,0" TextWrapping="Wrap"
+                           Text="For agents without a browser of their own: each gets a private one that runs unseen and keeps nothing (no sign-ins or cookies). They read pages, click, type, take screenshots and read the console, so they can try the sites they build. They never reach other devices on your network, and on websites password and card fields and paying stay yours. The bar at the bottom shows who's browsing, with Watch and Stop." />
+                <CheckBox x:Name="AgentsSearchImages" Content="Agents may search for images and save the ones they pick" Margin="0,10,0,0"
+                          ToolTip="image_search: Bing Images for anything on the web, Openverse for pictures free to use (with their licences). Agents see the results on a contact sheet, and save pictures onto an item or into their project's folder, with where each came from." />
             </StackPanel>
         </Expander>
 

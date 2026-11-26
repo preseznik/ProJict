@@ -188,6 +188,7 @@ public sealed partial class AgentTools : IMcpToolHost
         AddWikiTools();
         AddToolTools();
         AddBrowserTools();
+        AddImageTools();
         AddCallTools();
         AddResourceTools();
         AddSessionTools();
@@ -586,6 +587,11 @@ public sealed partial class AgentTools : IMcpToolHost
             "ask_to_test" => $"Asked you to test {what}",
             "list_tests" => "Looked at the tests",
             "close_test" => "Closed a test",
+            "browser_open" => $"Opened {(args.String("tool") is { Length: > 0 } t ? t : args.String("url") ?? "a page")} in ProJict's browser",
+            "browser_screenshot" => "Looked at a page in ProJict's browser",
+            "image_search" => $"Searched for images of “{Short(args.String("query") ?? "")}”",
+            "image_view" => "Looked at images",
+            "image_save" => item != null ? $"Saved pictures from the web to {what}" : "Saved pictures from the web",
             _ => tool.Replace('_', ' '),
         };
         Remember(session, new AgentAction(DateTime.Now, text, project?.Id, item?.Id, tool));
@@ -1713,7 +1719,7 @@ public sealed partial class AgentTools : IMcpToolHost
         _asyncHandlers[name] = run;
     }
 
-    /// <summary>Types: string, integer, boolean, string[] or enum:a|b|c.</summary>
+    /// <summary>Types: string, integer, boolean, string[], integer[] or enum:a|b|c.</summary>
     private static JsonObject Schema(params (string Name, string Type, string Description, bool Required)[] properties)
     {
         var props = new JsonObject();
@@ -1722,6 +1728,7 @@ public sealed partial class AgentTools : IMcpToolHost
             JsonObject property = type switch
             {
                 "string[]" => new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string" } },
+                "integer[]" => new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "integer" } },
                 _ when type.StartsWith("enum:", StringComparison.Ordinal) => new JsonObject
                 {
                     ["type"] = "string",
@@ -1768,6 +1775,10 @@ public sealed partial class AgentTools : IMcpToolHost
         public List<string> Strings(string name) => Get(name) is not { } v ? []
             : v.ValueKind == JsonValueKind.Array ? v.EnumerateArray().Select(e => e.ToString()).Where(s => s.Trim().Length > 0).ToList()
             : [v.ToString()];
+
+        /// <summary>Numbers: an array, or "1, 3 5" as words.</summary>
+        public List<int> Ints(string name) => [.. Strings(name).SelectMany(s => s.Split([',', ' ', ';'], StringSplitOptions.RemoveEmptyEntries))
+            .Select(s => int.TryParse(s.Trim('[', ']', '#', '(', ')'), out var n) ? n : throw new McpToolException($"\"{s}\" in {name} isn't a number."))];
 
         /// <summary>Files sent over the API: objects with a name and the content in base64.</summary>
         public List<(string Name, byte[] Content)> Uploads(string name)

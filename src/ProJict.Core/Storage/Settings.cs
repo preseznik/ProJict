@@ -67,6 +67,13 @@ public sealed class AppSettings
     /// </summary>
     public bool ApproveInChat { get; set; } = true;
     /// <summary>
+    /// How far agents may go in ProJict's web browser, one not tied to a tool (Settings › Tools): not at all, this
+    /// computer's own sites (localhost), or the web too. Off until you choose.
+    /// </summary>
+    public ProJict.Core.Tools.WebBrowsing AgentsBrowseWeb { get; set; }
+    /// <summary>Let agents search for images (image_search: Bing Images and Openverse) and save the ones they pick (Settings › Tools).</summary>
+    public bool AgentsSearchImages { get; set; } = true;
+    /// <summary>
     /// The PIN you approve with what can't be taken back on this computer (ask_approval pin=true, #8793323e), hashed;
     /// null until you set it (at the first start, your first ship that publishes, or in Settings).
     /// </summary>

@@ -422,6 +422,7 @@ public sealed class ApiServer
         try
         {
             var text = await _tools.CallAsync(session, route.Tool, args);
+            ProJict.Core.Agents.McpImages.Take(ref text);
             await Reply(context, route.Status, text);
         }
         catch (McpToolException ex)
