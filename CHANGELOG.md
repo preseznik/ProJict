@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Agents see the web browser is theirs, and whether it's on.** Agents read ProJict's browser tools as Suno's alone, since every example named a tool. Now `browser_open` leads with the web browser and says whether you allow it right now: off, this computer's sites only, or the web too. `list_tools` and `get_started` say the same, along with whether image search is on. Changing either in **Settings → Tools** tells connected agents to read their tools again.
+
 ## 0.1.61 (2026-11-26)
 
 - **A web browser for agents that have none of their own.** `browser_open` without a tool now opens the agent's own private browser in ProJict, which runs unseen on your computer and keeps nothing (no sign-ins, cookies or history). **Settings → Tools → Agents browse the web** chooses how far it goes: not at all (the default), only this computer's own sites (`localhost`, so agents can try what they build), or the web too. Agents read pages, click, type, pick options and press keys as before. New: `browser_screenshot` shows them the page (or the whole page, or one element), `browser_console` gives them its errors and logs, and `browser_press` presses keys, scrolls and goes back. `browser_open size=phone` shows a page as on a phone. The browser never reaches other devices on your network (your router, a printer, 192.168.…), and a website can't reach this computer's own sites. On websites, password and card fields and paying stay yours. On your own `localhost` sites agents may fill in test passwords. Up to 3 agents browse at once, each in its own browser. The bar at the bottom shows who's browsing where, with **Watch** and **Stop**.

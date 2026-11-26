@@ -135,6 +135,7 @@ public sealed partial class AgentTools
         json["userStatus"] = Presence.Word(_main.Agents.MyState);
         if (Presence.UnavailableNotice(_state.UserName, _main.Agents.MyStatus, _main.Agents.MyState) is { } unavailable)
             json["userUnavailable"] = unavailable;
+        json["webTools"] = WebToolsJson();
         json["guide"] = Guide(session);
         return Json(json);
     }

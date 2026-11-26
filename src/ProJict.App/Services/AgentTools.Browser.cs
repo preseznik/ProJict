@@ -20,18 +20,19 @@ namespace ProJict.App.Services;
 public sealed partial class AgentTools
 {
     private static readonly (string, string, string, bool) BrowserToolArg =
-        ("tool", "string", "A tool used in the browser (list_tools), e.g. Suno, for its website where the user signed in; leave it out for the web browser.", false);
+        ("tool", "string", "Leave it out for the web browser (any page, or your sites on localhost). Only to use a tool's website where the user " +
+                           "signed in (a tool used in the browser in list_tools).", false);
 
     private void AddBrowserTools()
     {
         _main.Browsers.WebAllowed = () => _state.AppSettings.AgentsBrowseWeb;
         _main.Browsers.Downloaded += OnBrowserDownload;
         const string rules = "On a website, paying (buy, upgrade, subscribe…), password and card fields, and signing in are the user's: ask them.";
-        AddAsync("browser_open", "Open a page in ProJict's browser",
-            "Opens a page in ProJict's own browser, which runs unseen on the user's computer, and reads it: its title, text and numbered links, " +
-            "buttons and fields. Without tool it's your own private web browser (nothing is kept: no sign-ins or cookies), for when you have no " +
-            "browser of your own: the sites you're building on this computer (http://localhost:…) and, where the user allows it, the web. With tool " +
-            "it's that tool's website (Suno, Tripo3D: list_tools says which), where the user signed in once. Then use browser_click, browser_type, " +
+        AddAsync("browser_open", "Open a web page in ProJict's browser",
+            "A web browser for agents without one of their own: opens any web page (https://…) or a site you build on this computer " +
+            "(http://localhost:…) in your own private browser in ProJict, which runs unseen and keeps nothing (no sign-ins or cookies), and " +
+            "reads it: its title, text and numbered links, buttons and fields. (With tool, it opens instead the website of a tool used in the " +
+            "browser, from list_tools, where the user signed in once.) Then use browser_click, browser_type, " +
             "browser_press and browser_wait by those numbers, browser_read after the page changes, browser_screenshot to see it, browser_console for " +
             "its errors, and browser_close when you're done. Name an item and what you download goes onto it. " + rules,
             Schema(BrowserToolArg,
@@ -40,7 +41,7 @@ public sealed partial class AgentTools
                 ("size", "string", "The page's size: phone, tablet, desktop (the usual 1400×900) or WIDTHxHEIGHT like 1280x720.", false)),
             BrowserOpen);
         AddAsync("browser_read", "Read the page in ProJict's browser",
-            $"The page the browser is on now: its title, address, text ({BrowserSession.PartLength} characters at a time: part for the rest) and " +
+            $"The page ProJict's browser is on now (the web, or a tool's website): its title, address, text ({BrowserSession.PartLength} characters at a time: part for the rest) and " +
             "numbered links, buttons and fields; images lists its pictures (to look at or save with image_view and image_save).",
             Schema(BrowserToolArg, ("part", "integer", "Which part of a long page's text (1 if left out); the answer says how many there are.", false),
                 ("images", "boolean", "List the page's pictures too, with their addresses and sizes.", false)), BrowserRead, readOnly: true);

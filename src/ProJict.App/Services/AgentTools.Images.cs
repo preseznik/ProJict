@@ -100,6 +100,26 @@ public sealed partial class AgentTools
             ImageSave);
     }
 
+    private const string ImagesOff = "Right now the user has image search off (Settings › Tools): ask them if you need it.";
+
+    /// <summary>What the user lets agents do in ProJict's web browser now, in words for them.</summary>
+    private string WebBrowsingNow => _state.AppSettings.AgentsBrowseWeb switch
+    {
+        WebBrowsing.Web => "Right now the user lets you open the web and this computer's own sites.",
+        WebBrowsing.ThisComputer => "Right now the user lets you open only this computer's own sites (localhost), not the web: ask them if you need it.",
+        _ => "Right now the user has ProJict's web browser off (Settings › Tools › Agents browse the web): ask them to turn it on if you need it. " +
+             "Tools' websites work either way.",
+    };
+
+    /// <summary>ProJict's web browser and image search as list_tools and get_started describe them: whether the user allows them now.</summary>
+    private JsonObject WebToolsJson() => new()
+    {
+        ["webBrowser"] = "browser_open url=… without a tool: a private web browser in ProJict for agents without their own. " + WebBrowsingNow,
+        ["imageSearch"] = _state.AppSettings.AgentsSearchImages
+            ? "image_search finds pictures (source=web: Bing Images; source=free: Openverse, with licences); image_view and image_save."
+            : ImagesOff,
+    };
+
     private void RequireImageSearch()
     {
         if (!_state.AppSettings.AgentsSearchImages)

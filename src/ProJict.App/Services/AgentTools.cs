@@ -203,7 +203,25 @@ public sealed partial class AgentTools : IMcpToolHost
         AddStudioTools();
     }
 
-    public IReadOnlyList<McpTool> Tools => _tools;
+    /// <summary>The tools, with what the user allows right now added to those it changes (ProJict's web browser, image search).</summary>
+    public IReadOnlyList<McpTool> Tools => [.. _tools.Select(t => t.Name switch
+    {
+        "browser_open" => t with { Description = t.Description + " " + WebBrowsingNow },
+        "image_search" when !_state.AppSettings.AgentsSearchImages => t with { Description = t.Description + " " + ImagesOff },
+        _ => t,
+    })];
+
+    /// <summary>
+    /// The user changed what agents may do (Settings › Tools): connected agents are told their tools changed, so their
+    /// client reads the descriptions again.
+    /// </summary>
+    public void ToolsChanged()
+    {
+        List<McpSession> live;
+        lock (_live) live = [.. _live];
+        foreach (var session in live)
+            if (session.SendLine is { } send) _ = SendQuietly(send, "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/tools/list_changed\"}");
+    }
 
     /// <summary>
     /// Your own projects (projects shown from another ProJict aren't open to agents), and of those only the ones the

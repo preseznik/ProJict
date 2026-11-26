@@ -803,9 +803,11 @@ public partial class SettingsWindow : Window
         _state.AppSettings.AgentsUseChat = AgentsUseChat.IsChecked == true;
         _state.AppSettings.ApproveInChat = ApproveInChat.IsChecked == true;
         _state.AppSettings.ReadOnlyTokensUseChat = ReadOnlyTokensUseChat.IsChecked == true;
+        var browsedBefore = (_state.AppSettings.AgentsBrowseWeb, _state.AppSettings.AgentsSearchImages);
         _state.AppSettings.AgentsBrowseWeb = Enum.TryParse<ProJict.Core.Tools.WebBrowsing>((AgentsBrowseWeb.SelectedItem as ComboBoxItem)?.Tag as string, out var browsing)
             ? browsing : ProJict.Core.Tools.WebBrowsing.Off;
         _state.AppSettings.AgentsSearchImages = AgentsSearchImages.IsChecked == true;
+        if (browsedBefore != (_state.AppSettings.AgentsBrowseWeb, _state.AppSettings.AgentsSearchImages)) App.Current.MainVm.AgentTools.ToolsChanged();
         _state.AppSettings.UserName = string.IsNullOrWhiteSpace(UserName.Text) || UserName.Text.Trim() == Environment.UserName ? null : UserName.Text.Trim();
         App.Current.SetAgentAccess(_state.AppSettings.AllowAgents);
         ApplyGitHubSettings();

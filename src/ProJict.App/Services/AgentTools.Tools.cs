@@ -87,6 +87,7 @@ public sealed partial class AgentTools
         {
             ["tools"] = new JsonArray(tools.Select(t => (JsonNode)ToolJson(t, project)).ToArray()),
             ["project"] = project?.Name,
+            ["builtIn"] = WebToolsJson(),
         };
         result["note"] = tools.Count == 0
             ? "The user hasn't set up any tools (Settings › Tools)."
